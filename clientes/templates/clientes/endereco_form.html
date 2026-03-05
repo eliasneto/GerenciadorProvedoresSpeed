@@ -1,0 +1,122 @@
+{% extends "core/base.html" %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto p-6 md:p-10">
+    <div class="mb-10 flex items-center gap-4">
+        <div class="w-14 h-14 bg-ageis-yellow rounded-2xl flex items-center justify-center shadow-2xl shadow-ageis-yellow/20">
+            <i data-lucide="{% if object %}edit-3{% else %}map-pin{% endif %}" class="text-black w-7 h-7"></i>
+        </div>
+        <div>
+            <h1 class="text-3xl font-black text-gray-900 uppercase italic leading-none tracking-tighter">
+                {% if object %}Editar{% else %}Cadastrar{% endif %} <span class="text-ageis-yellow">Unidade</span>
+            </h1>
+            <p class="text-xs text-gray-500 mt-2 font-bold uppercase tracking-widest italic">
+                Cliente: {{ cliente.nome_fantasia|default:cliente.razao_social|default:"Carregando..." }}
+            </p>
+        </div>
+    </div>
+
+    {% if form.errors %}
+    <div class="bg-red-50 border-l-4 border-red-500 p-6 rounded-2xl mb-8 shadow-sm animate-in fade-in slide-in-from-top duration-300">
+        <div class="flex items-center gap-3 mb-2">
+            <i data-lucide="alert-circle" class="text-red-500 w-5 h-5"></i>
+            <h3 class="text-red-800 font-black uppercase text-xs italic">Atenção na validação dos campos</h3>
+        </div>
+        <ul class="text-red-600 text-[10px] font-bold space-y-1 ml-8 uppercase">
+            {% for field, errors in form.errors.items %}
+                <li>{{ field }}: {{ errors|striptags }}</li>
+            {% endfor %}
+        </ul>
+    </div>
+    {% endif %}
+
+    <form method="POST" action="" class="space-y-6">
+        {% csrf_token %}
+        
+        <div class="bg-white p-8 rounded-[2.5rem] border border-gray-100 shadow-xl">
+            <div class="grid grid-cols-1 md:grid-cols-6 gap-6">
+                
+                <div class="md:col-span-4 space-y-1">
+                    <label class="text-[10px] font-black uppercase text-gray-400 ml-1 tracking-widest italic">Identificação (Ex: Matriz, Filial Centro)</label>
+                    {{ form.tipo }}
+                </div>
+
+                <div class="md:col-span-2 space-y-1">
+                    <label class="text-[10px] font-black uppercase text-gray-500 ml-1 tracking-widest italic font-bold">Status Operacional</label>
+                    {{ form.status }}
+                </div>
+
+                <div class="md:col-span-2 space-y-1">
+                    <label class="text-[10px] font-black uppercase text-gray-400 ml-1 tracking-widest italic">CEP (Busca Automática)</label>
+                    {{ form.cep }}
+                </div>
+
+                <div class="md:col-span-3 space-y-1">
+                    <label class="text-[10px] font-black uppercase text-gray-400 ml-1 tracking-widest italic">Logradouro / Endereço</label>
+                    {{ form.logradouro }}
+                </div>
+
+                <div class="md:col-span-1 space-y-1">
+                    <label class="text-[10px] font-black uppercase text-gray-400 ml-1 tracking-widest italic">Nº</label>
+                    {{ form.numero }}
+                </div>
+
+                <div class="md:col-span-2 space-y-1">
+                    <label class="text-[10px] font-black uppercase text-gray-400 ml-1 tracking-widest italic">Bairro</label>
+                    {{ form.bairro }}
+                </div>
+
+                <div class="md:col-span-3 space-y-1">
+                    <label class="text-[10px] font-black uppercase text-gray-400 ml-1 tracking-widest italic">Cidade</label>
+                    {{ form.cidade }}
+                </div>
+
+                <div class="md:col-span-1 space-y-1">
+                    <label class="text-[10px] font-black uppercase text-gray-400 ml-1 tracking-widest italic">UF</label>
+                    {{ form.estado }}
+                </div>
+
+                <div class="md:col-span-6 flex items-center gap-4 p-5 bg-gray-50 rounded-2xl border border-dashed border-gray-200 group hover:border-ageis-yellow transition-all mt-2">
+                    {{ form.principal }}
+                    <label class="text-xs font-bold text-gray-700 cursor-pointer group-hover:text-black italic">
+                        Definir esta unidade como endereço principal de instalação
+                    </label>
+                </div>
+            </div>
+        </div>
+
+        <div class="flex items-center justify-end gap-6">
+            <a href="javascript:history.back()" class="text-xs font-black uppercase italic text-gray-400 hover:text-gray-900 transition tracking-widest">Cancelar</a>
+            
+            <button type="submit" class="bg-ageis-black text-ageis-yellow px-14 py-5 rounded-2xl font-black uppercase italic shadow-2xl hover:scale-[1.03] active:scale-95 transition-all flex items-center gap-3">
+                <i data-lucide="save" class="w-5 h-5"></i>
+                {% if object %}Salvar Alterações{% else %}Salvar Unidade{% endif %}
+            </button>
+        </div>
+    </form>
+</div>
+
+<script>
+    document.querySelector('input[name="cep"]').addEventListener('blur', function() {
+        let cep = this.value.replace(/\D/g, '');
+        if (cep.length === 8) {
+            const cepInput = this;
+            cepInput.classList.add('opacity-50');
+
+            fetch(`https://viacep.com.br/ws/${cep}/json/`)
+                .then(response => response.json())
+                .then(data => {
+                    cepInput.classList.remove('opacity-50');
+                    if (!data.erro) {
+                        document.querySelector('input[name="logradouro"]').value = data.logradouro;
+                        document.querySelector('input[name="bairro"]').value = data.bairro;
+                        document.querySelector('input[name="cidade"]').value = data.localidade;
+                        document.querySelector('select[name="estado"]').value = data.uf;
+                        document.querySelector('input[name="numero"]').focus();
+                    }
+                })
+                .catch(() => cepInput.classList.remove('opacity-50'));
+        }
+    });
+</script>
+{% endblock %}

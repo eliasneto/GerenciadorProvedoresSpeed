@@ -1,0 +1,130 @@
+{% extends "core/base.html" %}
+
+{% block content %}
+<div class="p-6 md:p-10 max-w-7xl mx-auto">
+    <div class="flex flex-col md:flex-row md:items-center justify-between mb-8 gap-4">
+        <div>
+            <h1 class="text-2xl font-bold text-gray-900">Base de Parceiros</h1>
+            <p class="text-sm text-gray-500">Gestão de contratos e ativação técnica.</p>
+        </div>
+        <div class="bg-blue-50 text-blue-700 px-4 py-2 rounded-lg font-semibold text-sm border border-blue-100">
+            {{ total_partners }} Parceiros Ativos
+        </div>
+    </div>
+
+    <div class="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
+        <div class="overflow-x-auto">
+            <table class="w-full text-left">
+                <thead class="bg-gray-50 border-b border-gray-100">
+                    <tr class="text-xs font-bold uppercase text-gray-400">
+                        <th class="px-6 py-4">Empresa</th>
+                        <th class="px-6 py-4">Status</th>
+                        <th class="px-6 py-4">Vencimento</th>
+                        <th class="px-6 py-4 text-right">Ações</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-50">
+                    {% for partner in page_obj %}
+                    <tr class="hover:bg-gray-50/50 transition">
+                        <td class="px-6 py-4">
+                            <div class="font-semibold text-gray-900">{{ partner.nome_fantasia|default:partner.razao_social }}</div>
+                            <div class="text-[10px] text-gray-400">CNPJ: {{ partner.cnpj_cpf }}</div>
+                        </td>
+                        <td class="px-6 py-4">
+                            <span class="px-3 py-1 rounded-full text-[10px] font-bold uppercase 
+                                {% if partner.status == 'ativo' %} bg-green-100 text-green-700 {% else %} bg-yellow-100 text-yellow-700 {% endif %}">
+                                {{ partner.status }}
+                            </span>
+                        </td>
+                        <td class="px-6 py-4 text-sm font-medium {% if partner.data_vencimento %} text-blue-600 {% else %} text-gray-300 {% endif %}">
+                            <i data-lucide="calendar" class="w-3 h-3 inline mr-1"></i>
+                            {{ partner.data_vencimento|date:"d/m/Y"|default:"Pendente" }}
+                        </td>
+                        <td class="px-6 py-4 text-right">
+                            <div class="flex justify-end gap-2">
+                                {% if partner.status != 'ativo' %}
+                                <button onclick="openActivationModal('{{ partner.pk }}', '{{ partner.nome_fantasia|default:partner.razao_social }}')" 
+                                        class="p-2 bg-ageis-yellow text-black rounded-lg hover:shadow-md transition" title="Ativar Parceiro">
+                                    <i data-lucide="zap" class="w-5 h-5"></i>
+                                </button>
+                                {% endif %}
+                                <a href="{% url 'partner_detail' partner.pk %}" class="p-2 text-gray-400 hover:text-blue-600 transition">
+                                    <i data-lucide="external-link" class="w-5 h-5"></i>
+                                </a>
+                            </div>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr><td colspan="4" class="px-6 py-20 text-center text-gray-400">Nenhum parceiro encontrado.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<div id="activationModal" class="fixed inset-0 bg-black/60 z-[70] hidden flex items-center justify-center backdrop-blur-sm p-4">
+    <div class="bg-white rounded-[2.5rem] p-8 max-w-2xl w-full shadow-2xl border border-gray-100 transform transition-all">
+        <div class="flex items-center gap-4 mb-8">
+            <div class="w-12 h-12 bg-ageis-yellow rounded-2xl flex items-center justify-center">
+                <i data-lucide="zap" class="text-black w-6 h-6"></i>
+            </div>
+            <div>
+                <h3 class="text-2xl font-black text-gray-900 italic uppercase leading-tight">Ativar Parceiro</h3>
+                <p id="modalPartnerName" class="text-sm text-gray-500 font-bold"></p>
+            </div>
+        </div>
+
+        <form id="activationForm" method="POST">
+            {% csrf_token %}
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+                <div class="space-y-1">
+                    <label class="text-[10px] font-black uppercase text-gray-400 ml-1">Ordem de Serviço (OS)</label>
+                    <input type="text" name="os_numero" placeholder="Ex: 016EILD2025" class="w-full p-4 bg-gray-50 border border-gray-100 rounded-2xl outline-none focus:ring-2 focus:ring-ageis-yellow transition-all">
+                </div>
+                <div class="space-y-1">
+                    <label class="text-[10px] font-black uppercase text-gray-400 ml-1">Data de Ativação</label>
+                    <input type="date" name="data_ativacao" required class="w-full p-4 bg-gray-50 border border-gray-100 rounded-2xl outline-none focus:ring-2 focus:ring-ageis-yellow transition-all">
+                </div>
+                <div class="space-y-1">
+                    <label class="text-[10px] font-black uppercase text-gray-400 ml-1">Tempo de Contrato (Meses)</label>
+                    <input type="number" name="tempo_contrato" value="24" class="w-full p-4 bg-gray-50 border border-gray-100 rounded-2xl outline-none focus:ring-2 focus:ring-ageis-yellow transition-all">
+                </div>
+                <div class="space-y-1">
+                    <label class="text-[10px] font-black uppercase text-gray-400 ml-1">Velocidade</label>
+                    <input type="text" name="velocidade" value="50 Mbps" class="w-full p-4 bg-gray-50 border border-gray-100 rounded-2xl outline-none focus:ring-2 focus:ring-ageis-yellow transition-all">
+                </div>
+                <div class="space-y-1 md:col-span-2">
+                    <label class="text-[10px] font-black uppercase text-gray-400 ml-1">Valor Mensal (R$)</label>
+                    <input type="text" name="valor_mensal" placeholder="Ex: 700,00" class="w-full p-4 bg-gray-50 border border-gray-100 rounded-2xl outline-none focus:ring-2 focus:ring-ageis-yellow transition-all">
+                </div>
+            </div>
+
+            <div class="flex justify-end gap-3">
+                <button type="button" onclick="closeActivationModal()" class="px-8 py-4 text-gray-500 font-bold hover:bg-gray-50 rounded-2xl transition">Cancelar</button>
+                <button type="submit" class="px-10 py-4 bg-ageis-black text-ageis-yellow font-black rounded-2xl hover:shadow-xl transition-all uppercase italic">Confirmar Ativação</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+function openActivationModal(pk, name) {
+    const modal = document.getElementById('activationModal');
+    const form = document.getElementById('activationForm');
+    document.getElementById('modalPartnerName').innerText = name;
+    
+    // Define o endpoint de ativação
+    form.action = `/parceiros/ativar/${pk}/`;
+
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+}
+
+function closeActivationModal() {
+    const modal = document.getElementById('activationModal');
+    modal.classList.add('hidden');
+    modal.classList.remove('flex');
+}
+</script>
+{% endblock %}

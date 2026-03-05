@@ -1,0 +1,43 @@
+{% extends "core/base.html" %}
+
+{% block content %}
+<div class="w-full max-w-[900px] mx-auto"> <div class="flex flex-col md:flex-row bg-white rounded-[2.5rem] overflow-hidden shadow-2xl">
+        <div class="w-full md:w-1/2 bg-ageis-black p-12 flex flex-col justify-between text-white">
+            <div>
+                <div class="flex items-center gap-2 mb-8">
+                    <div class="w-6 h-6 bg-ageis-yellow rounded-md"></div>
+                    <span class="text-xl font-bold italic">AGEIS</span>
+                </div>
+                <h1 class="text-4xl font-black italic uppercase leading-none mb-4">Portal de Gestão 👋</h1>
+                <p class="text-gray-400 text-sm">Acesse de forma centralizada a gestão de parceiros, fornecedores e prospecções da empresa.</p>
+            </div>
+            <div class="mt-8">
+                <span class="text-[10px] py-1 px-3 bg-white/10 rounded-full text-ageis-yellow font-bold uppercase tracking-widest border border-ageis-yellow/20">
+                    Ambiente Corporativo Autenticado
+                </span>
+            </div>
+        </div>
+
+        <div class="w-full md:w-1/2 p-12 bg-white">
+            <h2 class="text-2xl font-bold text-gray-900 mb-2">Entrar</h2>
+            <p class="text-sm text-gray-400 mb-8">Credenciais necessárias para acesso ao painel.</p>
+
+            <form method="POST" class="space-y-6">
+                {% csrf_token %}
+                <div class="space-y-1">
+                    <label class="text-xs font-bold text-gray-700">E-mail</label>
+                    <input type="email" name="username" required class="w-full p-4 bg-gray-50 border border-gray-100 rounded-2xl outline-none focus:ring-2 focus:ring-ageis-yellow transition-all">
+                </div>
+                <div class="space-y-1">
+                    <label class="text-xs font-bold text-gray-700">Senha</label>
+                    <input type="password" name="password" required class="w-full p-4 bg-gray-50 border border-gray-100 rounded-2xl outline-none focus:ring-2 focus:ring-ageis-yellow transition-all">
+                </div>
+                
+                <button type="submit" class="w-full bg-ageis-yellow text-black font-black py-4 rounded-2xl shadow-lg hover:scale-[1.02] transition-all">
+                    Entrar no Painel
+                </button>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

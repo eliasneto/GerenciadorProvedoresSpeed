@@ -1,0 +1,114 @@
+{% extends "core/base.html" %}
+
+{% block content %}
+<div class="p-6 md:p-10 max-w-4xl mx-auto">
+    <div class="mb-8">
+        <a href="{% url 'lead_list' %}" class="text-sm text-gray-500 hover:text-ageis-black flex items-center gap-2 mb-2">
+            <i data-lucide="arrow-left" class="w-4 h-4"></i> Voltar para a lista
+        </a>
+        <h1 class="text-2xl font-bold text-gray-900">Novo Cadastro de Lead</h1>
+    </div>
+
+    <form method="post" class="bg-white p-8 rounded-3xl shadow-sm border border-gray-100">
+        {% csrf_token %}
+        
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div class="md:col-span-2">
+                <label class="text-xs font-bold uppercase text-gray-400 mb-2 block">Razão Social</label>
+                {{ form.razao_social }}
+            </div>
+            
+            <div>
+                <label class="text-xs font-bold uppercase text-gray-400 mb-2 block">Nome Fantasia</label>
+                {{ form.nome_fantasia }}
+            </div>
+            
+            <div>
+                <label class="text-xs font-bold uppercase text-gray-400 mb-2 block">CNPJ/CPF</label>
+                {{ form.cnpj_cpf }}
+            </div>
+
+            <div>
+                <label class="text-xs font-bold uppercase text-gray-400 mb-2 block">Site</label>
+                {{ form.site }}
+            </div>
+
+            <div>
+                <label class="text-xs font-bold uppercase text-gray-400 mb-2 block text-ageis-yellow">Status do Lead</label>
+                {{ form.status }}
+            </div>
+
+            <div class="md:col-span-2 border-t border-gray-100 pt-6 mt-4">
+                <p class="text-sm font-bold text-gray-800 mb-4 flex items-center gap-2">
+                    <i data-lucide="map-pin" class="w-4 h-4 text-ageis-yellow"></i> Localização
+                </p>
+            </div>
+
+            <div class="md:col-span-2">
+                <label class="text-xs font-bold uppercase text-gray-400 mb-2 block">Endereço</label>
+                {{ form.endereco }}
+            </div>
+
+            <div class="grid grid-cols-3 gap-4 md:col-span-2">
+                <div class="col-span-2">
+                    <label class="text-xs font-bold uppercase text-gray-400 mb-2 block">Cidade</label>
+                    {{ form.cidade }}
+                </div>
+                <div>
+                    <label class="text-xs font-bold uppercase text-gray-400 mb-2 block">Estado (UF)</label>
+                    {{ form.estado }}
+                </div>
+            </div>
+
+            <div class="md:col-span-2 border-t border-gray-100 pt-6 mt-4">
+                <p class="text-sm font-bold text-gray-800 mb-4 flex items-center gap-2">
+                    <i data-lucide="phone" class="w-4 h-4 text-ageis-yellow"></i> Contato Direto
+                </p>
+            </div>
+
+            <div>
+                <label class="text-xs font-bold uppercase text-gray-400 mb-2 block">Nome do Contato</label>
+                {{ form.contato_nome }}
+            </div>
+            <div>
+                <label class="text-xs font-bold uppercase text-gray-400 mb-2 block">Telefone Comercial</label>
+                {{ form.telefone }}
+            </div>
+            <div class="md:col-span-2">
+                <label class="text-xs font-bold uppercase text-gray-400 mb-2 block">E-mail Corporativo</label>
+                {{ form.email }}
+            </div>
+        </div>
+
+        <div class="mt-10 flex gap-4">
+            <button type="submit" class="flex-1 bg-ageis-black text-ageis-yellow font-bold py-4 rounded-xl hover:bg-gray-800 transition shadow-lg">
+                Salvar Cadastro
+            </button>
+        </div>
+    </form>
+</div>
+
+<script src="https://unpkg.com/imask"></script>
+<script>
+    // Inicializa ícones do Lucide
+    lucide.createIcons();
+
+    // Máscara Telefone (Celular e Fixo)
+    const phoneElement = document.querySelector('input[name="telefone"]');
+    IMask(phoneElement, {
+        mask: [
+            { mask: '(00) 0000-0000' },
+            { mask: '(00) 00000-0000' }
+        ]
+    });
+
+    // Máscara CNPJ/CPF Dinâmica
+    const docElement = document.querySelector('input[name="cnpj_cpf"]');
+    IMask(docElement, {
+        mask: [
+            { mask: '000.000.000-00' },
+            { mask: '00.000.000/0000-00' }
+        ]
+    });
+</script>
+{% endblock %}

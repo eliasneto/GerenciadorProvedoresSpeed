@@ -1,0 +1,18 @@
+
+# Rode este comando para instalar o Django e o REST Framework (essencial para sistemas de gestão):
+pip install django djangorestframework python-decouple
+
+# Criar o Projeto Principal
+python -m django startproject config .
+
+# Criar a pasta para os Módulos
+mkdir apps
+
+# Criar o Módulo Core
+python manage.py startapp core apps/core
+
+# 1. Cria os arquivos de migração para o módulo core
+python manage.py makemigrations core
+
+# 2. Aplica as mudanças no banco de dados
+python manage.py migrate

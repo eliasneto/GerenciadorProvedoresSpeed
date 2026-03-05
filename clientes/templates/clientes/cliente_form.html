@@ -1,0 +1,54 @@
+{% extends "core/base.html" %}
+
+{% block content %}
+<div class="max-w-3xl mx-auto p-6 md:p-10">
+    <div class="mb-10 flex items-center gap-4">
+        <div class="w-12 h-12 bg-ageis-black rounded-2xl flex items-center justify-center shadow-lg">
+            <i data-lucide="{% if object %}edit-3{% else %}user-plus{% endif %}" class="text-ageis-yellow w-6 h-6"></i>
+        </div>
+        <div>
+            <h1 class="text-2xl font-black text-gray-900 uppercase italic leading-none">
+                {% if object %}Editar{% else %}Novo{% endif %} Cliente
+            </h1>
+            <p class="text-sm text-gray-500 mt-1">
+                {% if object %}
+                    Atualize os dados cadastrais desta conta.
+                {% else %}
+                    Cadastre as informações básicas da nova conta.
+                {% endif %}
+            </p>
+        </div>
+    </div>
+
+    <form method="POST" class="space-y-6">
+        {% csrf_token %}
+        
+        <div class="bg-white p-8 rounded-[2.5rem] border border-gray-100 shadow-sm space-y-6">
+            <div class="space-y-1">
+                <label class="text-[10px] font-black uppercase text-gray-400 ml-1">{{ form.razao_social.label }}</label>
+                {{ form.razao_social }}
+                {% if form.razao_social.errors %}<p class="text-[10px] text-red-500 mt-1 ml-1">{{ form.razao_social.errors.0 }}</p>{% endif %}
+            </div>
+
+            <div class="space-y-1">
+                <label class="text-[10px] font-black uppercase text-gray-400 ml-1">{{ form.nome_fantasia.label }}</label>
+                {{ form.nome_fantasia }}
+            </div>
+
+            <div class="space-y-1">
+                <label class="text-[10px] font-black uppercase text-gray-400 ml-1">{{ form.cnpj_cpf.label }}</label>
+                {{ form.cnpj_cpf }}
+                {% if form.cnpj_cpf.errors %}<p class="text-[10px] text-red-500 mt-1 ml-1">{{ form.cnpj_cpf.errors.0 }}</p>{% endif %}
+            </div>
+        </div>
+
+        <div class="flex items-center justify-end gap-4">
+            <a href="javascript:history.back()" class="text-sm font-bold text-gray-400 hover:text-gray-600 transition">Cancelar</a>
+            
+            <button type="submit" class="bg-ageis-black text-ageis-yellow px-10 py-4 rounded-2xl font-black uppercase italic shadow-xl hover:bg-gray-800 hover:scale-[1.02] active:scale-95 transition-all">
+                {% if object %}Salvar Alterações{% else %}Salvar Cliente{% endif %}
+            </button>
+        </div>
+    </form>
+</div>
+{% endblock %}

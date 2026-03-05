@@ -1,0 +1,122 @@
+{% extends "core/base.html" %}
+
+{% block title %}Speed | Central do Parceiro{% endblock %}
+
+{% block content %}
+<div class="p-6 md:p-10 max-w-6xl mx-auto">
+    <div class="flex flex-col md:flex-row md:items-center justify-between mb-10 gap-4">
+        <div class="flex items-center gap-4">
+            <a href="{% url 'partner_list' %}" class="p-3 bg-white border border-gray-100 rounded-2xl hover:bg-gray-50 transition shadow-sm">
+                <i data-lucide="chevron-left" class="w-6 h-6 text-gray-400"></i>
+            </a>
+            <div>
+                <h1 class="text-3xl font-black text-gray-900 uppercase italic leading-none">
+                    {{ partner.nome_fantasia|default:partner.razao_social }}
+                </h1>
+                <p class="text-sm text-gray-500 mt-1 font-bold uppercase tracking-widest">Base de Parceiros <span class="text-ageis-yellow">/</span> ID #{{ partner.id }}</p>
+            </div>
+        </div>
+        
+        <a href="{% url 'proposal_create' partner.pk %}" class="flex items-center gap-3 bg-ageis-yellow text-black font-black px-8 py-4 rounded-2xl shadow-xl shadow-yellow-500/20 hover:scale-[1.02] active:scale-95 transition-all uppercase italic tracking-tighter">
+            <i data-lucide="plus-circle" class="w-5 h-5"></i> Nova Proposta / OS
+        </a>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <div class="space-y-6">
+            <div class="bg-white p-8 rounded-[2.5rem] border border-gray-100 shadow-sm">
+                <h2 class="text-xs font-black uppercase tracking-widest text-gray-400 mb-8 flex items-center gap-2">
+                    <i data-lucide="info" class="w-4 h-4 text-ageis-yellow"></i> Informações Cadastrais
+                </h2>
+                <div class="space-y-6">
+                    <div>
+                        <p class="text-[10px] font-black text-gray-400 uppercase">Razão Social</p>
+                        <p class="font-bold text-gray-900">{{ partner.razao_social }}</p>
+                    </div>
+                    <div>
+                        <p class="text-[10px] font-black text-gray-400 uppercase">CNPJ / CPF</p>
+                        <p class="font-bold text-gray-900">{{ partner.cnpj_cpf|default:"--" }}</p>
+                    </div>
+                    <div class="pt-4 border-t border-gray-50">
+                        <p class="text-[10px] font-black text-gray-400 uppercase">Contato</p>
+                        <p class="font-bold text-gray-900">{{ partner.contato_nome }}</p>
+                        <p class="text-sm text-gray-500">{{ partner.email }}</p>
+                        <p class="text-sm font-bold text-ageis-yellow mt-1">{{ partner.telefone }}</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-ageis-black p-8 rounded-[2.5rem] shadow-xl text-white">
+                <div class="flex justify-between items-center">
+                    <div>
+                        <p class="text-[10px] font-black text-gray-500 uppercase">Status Global</p>
+                        <p class="text-xl font-bold uppercase italic">{{ partner.status }}</p>
+                    </div>
+                    <div class="w-3 h-3 rounded-full bg-green-500 animate-pulse"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="lg:col-span-2">
+            <div class="bg-white rounded-[2.5rem] border border-gray-100 shadow-sm overflow-hidden">
+                <div class="p-8 border-b border-gray-50 flex items-center justify-between bg-gray-50/30">
+                    <h2 class="text-xs font-black uppercase tracking-widest text-gray-400 flex items-center gap-2">
+                        <i data-lucide="layers" class="w-4 h-4"></i> Propostas e Links Ativos
+                    </h2>
+                    <span class="text-[10px] font-black px-3 py-1 bg-white rounded-full border border-gray-100 text-gray-500">
+                        {{ proposals.count }} REGISTRO(S)
+                    </span>
+                </div>
+
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left border-collapse">
+                        <thead>
+                            <tr class="text-[10px] font-black uppercase text-gray-400 border-b border-gray-50">
+                                <th class="px-8 py-4">OS nº</th>
+                                <th class="px-4 py-4">Velocidade</th>
+                                <th class="px-4 py-4">Vencimento</th>
+                                <th class="px-4 py-4">Valor</th>
+                                <th class="px-8 py-4 text-right">Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-gray-50">
+                            {% for proposal in proposals %}
+                            <tr class="hover:bg-gray-50/50 transition-all group">
+                                <td class="px-8 py-5 font-black text-gray-900 italic">#{{ proposal.os_numero|default:"--" }}</td>
+                                <td class="px-4 py-5">
+                                    <p class="text-sm font-bold">{{ proposal.velocidade }}</p>
+                                    <p class="text-[10px] text-gray-400 font-bold uppercase">{{ proposal.tecnologia }}</p>
+                                </td>
+                                <td class="px-4 py-5 text-sm font-medium text-gray-600">
+                                    {{ proposal.data_vencimento|date:"d/m/Y"|default:"--" }}
+                                </td>
+                                <td class="px-4 py-5 font-black text-green-600">R$ {{ proposal.valor_mensal }}</td>
+                                <td class="px-8 py-5 text-right">
+                                    <div class="flex items-center justify-end gap-3">
+                                        <a href="{% url 'proposal_update' proposal.pk %}" class="p-2 text-gray-400 hover:text-ageis-yellow transition-colors">
+                                            <i data-lucide="settings-2" class="w-5 h-5"></i>
+                                        </a>
+                                        <a href="{% url 'proposal_delete' proposal.pk %}" class="p-2 text-gray-400 hover:text-red-500 transition-colors">
+                                            <i data-lucide="trash-2" class="w-5 h-5"></i>
+                                        </a>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="5" class="px-8 py-20 text-center">
+                                    <div class="flex flex-col items-center gap-3 opacity-20">
+                                        <i data-lucide="folder-search" class="w-12 h-12"></i>
+                                        <p class="font-black uppercase italic text-sm">Nenhuma proposta encontrada</p>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

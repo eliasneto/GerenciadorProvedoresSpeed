@@ -1,0 +1,157 @@
+{% extends "core/base.html" %}
+
+{% block title %}Speed | Links da Unidade{% endblock %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto p-6">
+    <div class="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-10">
+        <div class="flex items-center gap-4">
+            <a href="javascript:history.back()" class="p-3 bg-white border border-gray-100 rounded-2xl hover:bg-gray-50 transition shadow-sm text-gray-400">
+                <i data-lucide="chevron-left" class="w-6 h-6"></i>
+            </a>
+            <div>
+                <nav class="flex mb-1" aria-label="Breadcrumb">
+                    <ol class="flex items-center space-x-2 text-[10px] font-black uppercase tracking-widest text-gray-400">
+                        <li>{{ endereco.cliente.nome_fantasia|default:"Cliente" }}</li>
+                        <li><i data-lucide="chevron-right" class="w-2 h-2"></i></li>
+                        <li class="text-gray-900">Links Ativos na Unidade</li>
+                    </ol>
+                </nav>
+                <h1 class="text-3xl font-black text-gray-900 uppercase italic leading-none">
+                    Contratos <span class="text-ageis-yellow">/</span> Serviços
+                </h1>
+                <p class="text-sm text-gray-500 mt-2 flex items-center gap-2">
+                    <i data-lucide="map-pin" class="w-4 h-4 text-ageis-yellow"></i>
+                    <span class="font-bold text-gray-700">{{ endereco.logradouro }}, {{ endereco.numero }}</span> 
+                    <span class="text-gray-400">— {{ endereco.cidade }}/{{ endereco.estado }}</span>
+                </p>
+            </div>
+        </div>
+
+        <div class="flex items-center gap-4">
+            <div class="hidden md:flex items-center gap-3 bg-white px-6 py-3 rounded-2xl border border-gray-100 shadow-sm">
+                <div class="text-right">
+                    <p class="text-[10px] font-black text-gray-400 uppercase leading-none mb-1">Total de Propostas</p>
+                    <p class="text-xl font-black italic text-gray-900">{{ proposals.count }} OS</p>
+                </div>
+                <div class="p-2 bg-ageis-yellow/10 rounded-xl text-ageis-yellow">
+                    <i data-lucide="activity" class="w-6 h-6"></i>
+                </div>
+            </div>
+            
+            <button onclick="document.getElementById('partnerSelectModal').classList.remove('hidden')" class="bg-ageis-black text-ageis-yellow px-6 py-4 rounded-2xl font-black uppercase italic shadow-xl shadow-black/10 hover:bg-gray-800 hover:scale-[1.03] active:scale-95 transition-all flex items-center gap-2">
+                <i data-lucide="plus-circle" class="w-5 h-5"></i> Novo Link
+            </button>
+        </div>
+    </div>
+
+    <div class="bg-white rounded-[2.5rem] border border-gray-100 shadow-sm overflow-hidden">
+        <div class="overflow-x-auto">
+            <table class="w-full text-left border-collapse">
+                <thead>
+                    <tr class="text-[10px] font-black uppercase text-gray-400 border-b border-gray-50 bg-gray-50/30">
+                        <th class="px-8 py-5">Identificação</th>
+                        <th class="px-4 py-5">Provedor (Parceiro)</th>
+                        <th class="px-4 py-5 text-center">Configuração Técnica</th>
+                        <th class="px-4 py-5">Financeiro</th>
+                        <th class="px-8 py-5 text-right">Ação</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-50">
+                    {% for proposal in proposals %}
+                    <tr class="hover:bg-gray-50/50 transition-all group">
+                        <td class="px-8 py-6">
+                            <span class="block font-black text-gray-900 italic text-lg">#{{ proposal.os_numero|default:"PENDENTE" }}</span>
+                            <span class="text-[10px] font-bold text-gray-400 uppercase">Emissão: {{ proposal.data_emissao|date:"d/m/y" }}</span>
+                        </td>
+
+                        <td class="px-4 py-6">
+                            {% if proposal.partner %}
+                            <div class="flex items-center gap-3">
+                                <div class="w-10 h-10 rounded-xl bg-gray-100 flex items-center justify-center text-gray-400">
+                                    <i data-lucide="building-2" class="w-5 h-5"></i>
+                                </div>
+                                <div>
+                                    <p class="font-bold text-gray-800 leading-none mb-1">{{ proposal.partner.nome_fantasia|default:proposal.partner.razao_social }}</p>
+                                    <p class="text-[10px] text-gray-400 font-bold uppercase tracking-tighter">{{ proposal.partner.telefone }}</p>
+                                </div>
+                            </div>
+                            {% else %}
+                            <span class="text-xs italic text-gray-400">Parceiro não identificado</span>
+                            {% endif %}
+                        </td>
+
+                        <td class="px-4 py-6 text-center">
+                            <div class="inline-flex flex-col items-center">
+                                <span class="px-4 py-1.5 bg-blue-50 text-blue-700 rounded-full text-[10px] font-black italic mb-1 border border-blue-100">
+                                    {{ proposal.velocidade }}
+                                </span>
+                                <span class="text-[9px] font-black text-gray-400 uppercase tracking-widest">{{ proposal.tecnologia }}</span>
+                            </div>
+                        </td>
+
+                        <td class="px-4 py-6">
+                            <p class="font-black text-gray-900 italic">R$ {{ proposal.valor_mensal|default:"0,00" }}</p>
+                            <div class="flex items-center gap-1.5 mt-1">
+                                <div class="w-1.5 h-1.5 rounded-full {% if proposal.vencido %} bg-red-500 {% else %} bg-green-500 {% endif %}"></div>
+                                <span class="text-[10px] font-bold uppercase {% if proposal.vencido %} text-red-500 {% else %} text-gray-400 {% endif %}">
+                                    Expira: {{ proposal.data_vencimento|date:"d/m/y"|default:"--" }}
+                                </span>
+                            </div>
+                        </td>
+
+                        <td class="px-8 py-6 text-right">
+                            <div class="flex items-center justify-end gap-2">
+                                <a href="{% url 'proposal_update' proposal.pk %}" 
+                                   class="inline-flex items-center justify-center w-12 h-12 bg-ageis-black text-ageis-yellow rounded-2xl hover:scale-105 active:scale-95 transition-all shadow-lg shadow-black/10"
+                                   title="Editar Configuração Técnica">
+                                    <i data-lucide="settings-2" class="w-5 h-5"></i>
+                                </a>
+                            </div>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="5" class="px-8 py-24 text-center">
+                            <div class="flex flex-col items-center gap-4 opacity-20">
+                                <i data-lucide="unplug" class="w-16 h-16"></i>
+                                <p class="text-gray-900 font-black uppercase italic tracking-widest text-sm">Nenhum link técnico espetado nesta unidade</p>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<div id="partnerSelectModal" class="fixed inset-0 z-[100] hidden flex items-center justify-center p-4">
+    <div class="absolute inset-0 bg-black/80 backdrop-blur-md" onclick="document.getElementById('partnerSelectModal').classList.add('hidden')"></div>
+    
+    <div class="relative bg-white rounded-[3rem] p-10 max-w-md w-full shadow-2xl animate-in zoom-in-95 duration-300">
+        <div class="flex items-center gap-4 mb-2">
+            <div class="p-3 bg-ageis-black rounded-2xl shadow-lg">
+                <i data-lucide="network" class="text-ageis-yellow w-6 h-6"></i>
+            </div>
+            <h3 class="font-black text-2xl italic uppercase tracking-tighter">Escolher <span class="text-ageis-yellow">Provedor</span></h3>
+        </div>
+        <p class="text-[10px] text-gray-500 font-bold uppercase tracking-widest mb-8">Qual parceiro fornecerá conectividade para esta unidade?</p>
+        
+        <div class="space-y-3 max-h-64 overflow-y-auto custom-scrollbar pr-2">
+            {% for p in partners %}
+                <a href="{% url 'proposal_create' p.id %}?endereco={{ endereco.id }}" class="flex items-center justify-between p-5 bg-gray-50 hover:bg-ageis-yellow hover:text-black border border-gray-100 rounded-2xl transition-all font-bold text-gray-800 uppercase italic text-sm group">
+                    <span>{{ p.nome_fantasia|default:p.razao_social }}</span>
+                    <i data-lucide="arrow-right" class="w-4 h-4 text-gray-400 group-hover:text-black transition-colors"></i>
+                </a>
+            {% empty %}
+                <p class="text-xs text-red-500 font-bold italic text-center p-4">Nenhum provedor cadastrado no sistema.</p>
+            {% endfor %}
+        </div>
+        
+        <button onclick="document.getElementById('partnerSelectModal').classList.add('hidden')" class="w-full mt-6 py-4 bg-gray-100 text-gray-500 font-black uppercase italic rounded-2xl hover:bg-gray-200 transition-all">
+            Cancelar
+        </button>
+    </div>
+</div>
+{% endblock %}
