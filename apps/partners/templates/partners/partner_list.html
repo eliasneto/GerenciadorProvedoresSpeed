@@ -41,14 +41,24 @@
                             {{ partner.data_vencimento|date:"d/m/Y"|default:"Pendente" }}
                         </td>
                         <td class="px-6 py-4 text-right">
-                            <div class="flex justify-end gap-2">
+                            <div class="flex justify-end items-center gap-2">
+                                
                                 {% if partner.status != 'ativo' %}
                                 <button onclick="openActivationModal('{{ partner.pk }}', '{{ partner.nome_fantasia|default:partner.razao_social }}')" 
                                         class="p-2 bg-ageis-yellow text-black rounded-lg hover:shadow-md transition" title="Ativar Parceiro">
                                     <i data-lucide="zap" class="w-5 h-5"></i>
                                 </button>
                                 {% endif %}
-                                <a href="{% url 'partner_detail' partner.pk %}" class="p-2 text-gray-400 hover:text-blue-600 transition">
+                                
+                                <a href="{% url 'partner_clients_list' partner.pk %}" class="p-2 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded-lg transition" title="Ver Clientes Atendidos">
+                                    <i data-lucide="users" class="w-5 h-5"></i>
+                                </a>
+
+                                <a href="{% url 'timeline_global' 'partners' 'partner' partner.pk %}" class="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition" title="Ver Histórico & Auditoria">
+                                    <i data-lucide="history" class="w-5 h-5"></i>
+                                </a>
+
+                                <a href="{% url 'partner_detail' partner.pk %}" class="p-2 text-gray-400 hover:text-blue-600 transition" title="Ver Detalhes do Parceiro">
                                     <i data-lucide="external-link" class="w-5 h-5"></i>
                                 </a>
                             </div>

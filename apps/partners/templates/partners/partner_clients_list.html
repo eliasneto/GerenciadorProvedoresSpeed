@@ -1,0 +1,74 @@
+{% extends "core/base.html" %}
+
+{% block content %}
+<div class="p-6 md:p-10 max-w-5xl mx-auto">
+    <div class="mb-8">
+        <a href="{% url 'partner_list' %}" class="text-sm text-gray-500 hover:text-ageis-black flex items-center gap-2 mb-2 w-fit">
+            <i data-lucide="arrow-left" class="w-4 h-4"></i> Voltar para Base de Parceiros
+        </a>
+        <div class="flex flex-col md:flex-row md:items-end justify-between gap-4 mt-4">
+            <div>
+                <h1 class="text-2xl font-black text-gray-900 uppercase italic">Clientes Atendidos</h1>
+                <p class="text-sm text-gray-500 font-medium">Rede de atendimento via <span class="text-ageis-yellow font-bold">{{ partner.nome_fantasia|default:partner.razao_social }}</span></p>
+            </div>
+            <div class="bg-blue-50 text-blue-700 px-4 py-2 rounded-xl font-bold text-sm border border-blue-100 flex items-center gap-2">
+                <i data-lucide="network" class="w-4 h-4"></i> {{ total_links }} Links Ativos
+            </div>
+        </div>
+    </div>
+
+    <div class="space-y-4">
+        {% for cliente, enderecos in clientes_agrupados.items %}
+        <details class="group bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden [&_summary::-webkit-details-marker]:hidden">
+            <summary class="flex items-center justify-between p-6 cursor-pointer hover:bg-gray-50 transition-colors">
+                <div class="flex items-center gap-4">
+                    <div class="w-10 h-10 {% if cliente %}bg-gray-100{% else %}bg-red-50{% endif %} rounded-xl flex items-center justify-center">
+                        <i data-lucide="{% if cliente %}building-2{% else %}alert-triangle{% endif %}" class="w-5 h-5 {% if cliente %}text-gray-600{% else %}text-red-500{% endif %}"></i>
+                    </div>
+                    <div>
+                        <h3 class="font-bold {% if cliente %}text-gray-900{% else %}text-red-600{% endif %}">
+                            {% if cliente %}
+                                {{ cliente.razao_social|default:cliente.nome_fantasia }}
+                            {% else %}
+                                Cliente Não Vinculado (OS Incompleta)
+                            {% endif %}
+                        </h3>
+                        <p class="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{{ enderecos|length }} Unidade(s)</p>
+                    </div>
+                </div>
+                <div class="flex items-center gap-3">
+                    <span class="text-xs font-bold text-ageis-yellow">Ver unidades</span>
+                    <i data-lucide="chevron-down" class="w-5 h-5 text-gray-400 transition-transform group-open:rotate-180"></i>
+                </div>
+            </summary>
+            
+            <div class="px-6 pb-6 pt-2 bg-gray-50/50 border-t border-gray-50">
+                <ul class="space-y-3 mt-4">
+                    {% for endereco in enderecos %}
+                    <li class="flex items-start gap-3 p-4 bg-white border border-gray-100 rounded-xl shadow-sm">
+                        <i data-lucide="map-pin" class="w-4 h-4 text-green-500 mt-0.5"></i>
+                        <div>
+                            <p class="text-sm font-bold text-gray-800">{% if endereco %}{{ endereco }}{% else %}Endereço não informado{% endif %}</p>
+                            {% if endereco %}
+                                <p class="text-[10px] font-bold text-gray-400 uppercase mt-1">ID da Unidade: #{{ endereco.pk }}</p>
+                            {% endif %}
+                        </div>
+                    </li>
+                    {% endfor %}
+                </ul>
+            </div>
+        </details>
+        {% empty %}
+        <div class="bg-white rounded-3xl p-12 text-center border border-gray-100 shadow-sm">
+            <i data-lucide="unplug" class="w-12 h-12 text-gray-300 mx-auto mb-4"></i>
+            <h3 class="text-lg font-bold text-gray-900">Nenhum cliente vinculado</h3>
+            <p class="text-sm text-gray-500 mt-2">Este parceiro ainda não possui Ordens de Serviço (Propostas) ativas.</p>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+<script>
+    lucide.createIcons();
+</script>
+{% endblock %}

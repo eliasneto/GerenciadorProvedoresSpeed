@@ -1,15 +1,16 @@
-# apps/leads/models.py
 from django.db import models
 
 class Lead(models.Model):
-    # Status atualizados - Adicionei 'negociacao' para bater com o seu default
+    # Status atualizados com as novas opções solicitadas
     STATUS_CHOICES = [
         ('novo', 'Novo'),
+        ('negociacao', 'Em Negociação'),
         ('andamento', 'Em Andamento'),
         ('ativo', 'Ativo'),
+        ('inviavel', 'Inviável / Não Avançou'),
     ]
 
-    # Identificação básica - Agora TUDO é opcional (blank=True, null=True)
+    # Identificação básica - Tudo é opcional (blank=True, null=True)
     razao_social = models.CharField('Razão Social / Nome', max_length=200, blank=True, null=True)
     cnpj_cpf = models.CharField('CNPJ/CPF', max_length=20, blank=True, null=True)
     nome_fantasia = models.CharField('Nome Fantasia', max_length=200, blank=True, null=True)
@@ -25,27 +26,11 @@ class Lead(models.Model):
     email = models.EmailField('E-mail', blank=True, null=True)
     telefone = models.CharField('Telefone/WhatsApp', max_length=20, blank=True, null=True)
     
-    # Status
+    # Controle de status com o padrão forçado para 'novo'
     status = models.CharField(
         max_length=20, 
         choices=STATUS_CHOICES, 
-        default='negociacao'
-    )
-    
-    # Metadados
-    data_criacao = models.DateTimeField(auto_now_add=True)
-
-    class Meta:
-        ordering = ['-data_criacao']
-
-    def __str__(self):
-        return self.nome_fantasia or self.razao_social or "Lead sem nome"
-    
-    # Controle de status com o padrão 'negociacao'
-    status = models.CharField(
-        max_length=20, 
-        choices=STATUS_CHOICES, 
-        default='negociacao'
+        default='novo'
     )
     
     # Metadados
@@ -57,4 +42,4 @@ class Lead(models.Model):
 
     def __str__(self):
         # Exibe o Nome Fantasia no Admin/Formulários; se vazio, usa Razão Social
-        return self.nome_fantasia or self.razao_social
+        return self.nome_fantasia or self.razao_social or "Lead sem nome"

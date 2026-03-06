@@ -1,5 +1,8 @@
 from django.contrib.auth.models import AbstractUser, BaseUserManager
 from django.db import models
+from django.conf import settings
+from django.contrib.contenttypes.fields import GenericForeignKey
+from django.contrib.contenttypes.models import ContentType
 
 class UserManager(BaseUserManager):
     def create_user(self, email, password=None, **extra_fields):
@@ -27,4 +30,39 @@ class User(AbstractUser):
     REQUIRED_FIELDS = []
     
     objects = UserManager()
-    # ... resto do código
+
+# =========================================================
+# MÓDULO SPEED: TIMELINE & AUDIT TRAIL (HISTÓRICO)
+# =========================================================
+
+class RegistroHistorico(models.Model):
+    """
+    Modelo Polimórfico: Conecta-se a qualquer tabela do sistema (Lead, Parceiro, OS, etc.)
+    para registrar comentários, anexos e logs automáticos.
+    """
+    TIPO_CHOICES = [
+        ('comentario', 'Comentário Manual'),
+        ('anexo', 'Documento Anexado'),
+        ('sistema', 'Log Automático do Sistema'),
+    ]
+
+    tipo = models.CharField(max_length=20, choices=TIPO_CHOICES, default='comentario')
+    descricao = models.TextField(blank=True, null=True, help_text="Texto do comentário ou descrição do log") 
+    arquivo = models.FileField(upload_to='historicos_anexos/%Y/%m/', blank=True, null=True)
+    
+    criado_por = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True)
+    criado_em = models.DateTimeField(auto_now_add=True)
+
+    # --- A MÁGICA DA CHAVE GENÉRICA ---
+    # Estes três campos formam a ponte universal para qualquer lugar da Speed
+    content_type = models.ForeignKey(ContentType, on_delete=models.CASCADE)
+    object_id = models.PositiveIntegerField()
+    content_object = GenericForeignKey('content_type', 'object_id')
+
+    class Meta:
+        ordering = ['-criado_em'] # O mais recente sempre aparece no topo
+        verbose_name = 'Registro de Histórico'
+        verbose_name_plural = 'Registros de Histórico'
+
+    def __str__(self):
+        return f"{self.get_tipo_display()} - {self.criado_em.strftime('%d/%m/%Y')}"

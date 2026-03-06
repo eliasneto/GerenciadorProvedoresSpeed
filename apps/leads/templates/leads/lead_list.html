@@ -59,7 +59,8 @@
                             <button onclick="openStatusModal('{{ lead.pk }}', '{{ lead.nome_fantasia|default:lead.razao_social }}', '{{ lead.status }}')" 
                                     class="flex items-center gap-2 px-3 py-1 rounded-full text-[10px] font-bold uppercase transition hover:ring-2 hover:ring-offset-2
                                 {% if lead.status == 'ativo' %} bg-green-100 text-green-700 hover:ring-green-200
-                                {% elif lead.status == 'andamento' %} bg-blue-100 text-blue-700 hover:ring-blue-200
+                                {% elif lead.status == 'andamento' or lead.status == 'negociacao' %} bg-blue-100 text-blue-700 hover:ring-blue-200
+                                {% elif lead.status == 'inviavel' %} bg-red-100 text-red-700 hover:ring-red-200
                                 {% else %} bg-gray-100 text-gray-700 hover:ring-gray-200 {% endif %}">
                                 {{ lead.get_status_display }}
                                 <i data-lucide="chevron-down" class="w-3 h-3"></i>
@@ -68,6 +69,11 @@
 
                         <td class="px-6 py-4 text-right">
                             <div class="flex justify-end items-center gap-2">
+                                
+                                <a href="{% url 'timeline_global' 'leads' 'lead' lead.pk %}" class="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition" title="Ver Histórico & Auditoria">
+                                    <i data-lucide="history" class="w-5 h-5"></i>
+                                </a>
+
                                 <a href="{% url 'lead_update' lead.pk %}" class="p-2 text-gray-400 hover:text-ageis-black hover:bg-gray-100 rounded-lg transition" title="Editar Prospecção">
                                     <i data-lucide="edit-3" class="w-5 h-5"></i>
                                 </a>
@@ -104,27 +110,65 @@
             </div>
         </div>
 
-        <form id="statusForm" method="POST">
+        <form id="statusForm" method="POST" enctype="multipart/form-data">
             {% csrf_token %}
             <div class="space-y-4 mb-8">
                 <label class="text-[10px] font-extrabold uppercase text-gray-400 tracking-widest">Novo estágio</label>
-                <select name="status" id="modalStatusSelect" class="w-full p-4 bg-gray-50 border border-gray-100 rounded-2xl focus:ring-2 focus:ring-ageis-yellow outline-none font-medium text-sm transition-all">
+                
+                <select name="status" id="modalStatusSelect" onchange="toggleInviavelFields()" class="w-full p-4 bg-gray-50 border border-gray-100 rounded-2xl focus:ring-2 focus:ring-ageis-yellow outline-none font-medium text-sm transition-all">
                     <option value="andamento">Em Andamento (Vira Parceiro)</option>
-                    <option value="ativo">Ativo</option>
-                    <option value="inativo">Inativo</option>
+                    <option value="inviavel">Inviável / Não Avançou</option>
                 </select>
-                <p class="text-[9px] text-blue-500 font-medium">💡 Ao confirmar "Em Andamento", este lead irá para a base de Parceiros.</p>
+                
+                <p id="modalHelperText" class="text-[9px] text-blue-500 font-medium">💡 Ao confirmar "Em Andamento", este lead irá para a base de Parceiros.</p>
+
+                <div id="inviavelFields" class="hidden space-y-3 pt-4 border-t border-gray-100 mt-4 animate-in fade-in slide-in-from-top-2">
+                    <label class="text-[10px] font-extrabold uppercase text-red-400 tracking-widest">Motivo do Encerramento</label>
+                    <textarea name="observacao" id="inviavelObservacao" rows="3" placeholder="Por que a negociação não avançou? (Ex: Achou caro, fechou com concorrente...)" class="w-full p-4 bg-red-50/50 border border-red-100 rounded-2xl focus:ring-2 focus:ring-red-400 outline-none font-medium text-sm transition-all resize-none"></textarea>
+                    
+                    <div class="relative w-full mt-2">
+                        <input type="file" name="arquivo" id="inviavelArquivo" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer" onchange="document.getElementById('inviavel-file-name').innerText = this.files[0] ? this.files[0].name : 'Anexar evidência (Ex: Print, E-mail)'">
+                        <div class="flex items-center gap-2 px-4 py-3 bg-white border border-gray-200 rounded-xl text-xs font-bold text-gray-500 hover:bg-gray-50 transition cursor-pointer shadow-sm">
+                            <i data-lucide="paperclip" class="w-4 h-4 text-gray-400"></i>
+                            <span id="inviavel-file-name" class="truncate">Anexar evidência (Ex: Print, E-mail)</span>
+                        </div>
+                    </div>
+                </div>
             </div>
 
             <div class="grid grid-cols-2 gap-3">
                 <button type="button" onclick="closeStatusModal()" class="py-4 text-gray-500 font-bold hover:bg-gray-50 rounded-2xl transition">Cancelar</button>
-                <button type="submit" class="py-4 bg-ageis-black text-ageis-yellow font-bold rounded-2xl hover:shadow-lg transition-all">Atualizar</button>
+                <button type="submit" id="btnSubmitModal" class="py-4 bg-ageis-black text-ageis-yellow font-bold rounded-2xl hover:shadow-lg transition-all">Atualizar</button>
             </div>
         </form>
     </div>
 </div>
 
 <script>
+function toggleInviavelFields() {
+    const select = document.getElementById('modalStatusSelect');
+    const inviavelFields = document.getElementById('inviavelFields');
+    const obsInput = document.getElementById('inviavelObservacao');
+    const helperText = document.getElementById('modalHelperText');
+    const btnSubmit = document.getElementById('btnSubmitModal');
+
+    if (select.value === 'inviavel') {
+        inviavelFields.classList.remove('hidden');
+        obsInput.required = true; // Torna o motivo obrigatório!
+        helperText.innerText = "⚠️ O Lead continuará na lista, mas será marcado como perdido.";
+        helperText.className = "text-[9px] text-red-500 font-medium";
+        btnSubmit.classList.replace('bg-ageis-black', 'bg-red-600');
+        btnSubmit.classList.replace('text-ageis-yellow', 'text-white');
+    } else {
+        inviavelFields.classList.add('hidden');
+        obsInput.required = false;
+        helperText.innerText = '💡 Ao confirmar "Em Andamento", este lead irá para a base de Parceiros.';
+        helperText.className = "text-[9px] text-blue-500 font-medium";
+        btnSubmit.classList.replace('bg-red-600', 'bg-ageis-black');
+        btnSubmit.classList.replace('text-white', 'text-ageis-yellow');
+    }
+}
+
 function openStatusModal(pk, name, currentStatus) {
     const modal = document.getElementById('statusModal');
     const form = document.getElementById('statusForm');
@@ -133,7 +177,15 @@ function openStatusModal(pk, name, currentStatus) {
 
     form.action = `/prospeccao/status/${pk}/`;
     nameDisplay.innerText = name;
-    select.value = currentStatus;
+    
+    // Tenta setar o valor
+    if (currentStatus === 'andamento' || currentStatus === 'inviavel') {
+        select.value = currentStatus;
+    } else {
+        select.value = 'andamento'; // Valor default seguro
+    }
+
+    toggleInviavelFields(); // Roda a checagem visual ao abrir o modal
 
     modal.classList.remove('hidden');
     modal.classList.add('flex');
