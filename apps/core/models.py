@@ -46,6 +46,9 @@ class RegistroHistorico(models.Model):
         ('sistema', 'Log Automático do Sistema'),
     ]
 
+    # NOVO CAMPO: Separa o histórico de ciclos passados
+    arquivado = models.BooleanField(default=False)
+
     tipo = models.CharField(max_length=20, choices=TIPO_CHOICES, default='comentario')
     descricao = models.TextField(blank=True, null=True, help_text="Texto do comentário ou descrição do log") 
     arquivo = models.FileField(upload_to='historicos_anexos/%Y/%m/', blank=True, null=True)

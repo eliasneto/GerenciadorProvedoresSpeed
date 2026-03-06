@@ -6,13 +6,24 @@ class Partner(models.Model):
     """
     DADOS MESTRE: Informações fixas da empresa parceira.
     """
+    STATUS_CHOICES = [
+        ('ativo', 'Ativo'),
+        ('inativo', 'Inativo / Novo'),
+        ('negociacao', 'Em Negociação'),
+        ('andamento', 'Em Andamento (Reativar)'),
+        ('inviavel', 'Inviável / Não Avançou'),
+    ]
+
     razao_social = models.CharField('Razão Social', max_length=200, blank=True, null=True)
     cnpj_cpf = models.CharField('CNPJ/CPF', max_length=20, blank=True, null=True, unique=True)
     nome_fantasia = models.CharField('Nome Fantasia', max_length=200, blank=True, null=True)
     contato_nome = models.CharField('Contato Principal', max_length=100, blank=True, null=True)
     email = models.EmailField('E-mail Corporativo', blank=True, null=True)
     telefone = models.CharField('Telefone Comercial', max_length=20, blank=True, null=True)
-    status = models.CharField('Status', max_length=20, default='ativo')
+    
+    # Campo status atualizado recebendo as novas escolhas
+    status = models.CharField('Status', max_length=20, choices=STATUS_CHOICES, default='ativo')
+    
     data_cadastro = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -73,7 +84,6 @@ class Proposal(models.Model):
     tempo_contrato = models.IntegerField('Tempo Contrato (meses)', default=24)
     email_faturamento = models.EmailField('E-mail Faturamento', blank=True, null=True)
     valor_parceiro = models.DecimalField('Valor Pago ao parceiro', max_digits=10, decimal_places=2, null=True, blank=True)
-    #taxa_instalacao_parceiro = models.DecimalField('Valor Pago pela instalação ao parceiro', max_digits=10, decimal_places=2, null=True, blank=True)
 
     # --- CONTROLE DE DATAS ---
     data_ativacao = models.DateField('Data de Ativação', null=True, blank=True)

@@ -13,12 +13,14 @@ from clientes.models import Endereco
 # --- IMPORTAÇÃO DO HISTÓRICO SPEED ---
 from core.models import RegistroHistorico
 
-# --- VIEWS DE PARCEIROS (DADOS MESTRE) ---
+# ==============================================================================
+# VIEWS DE PARCEIROS (DADOS MESTRE E ESTEIRAS)
+# ==============================================================================
 
 @login_required
 def partner_list(request):
-    """Lista todos os parceiros cadastrados com paginação."""
-    partners_queryset = Partner.objects.all().order_by('-id')
+    """Lista APENAS os parceiros ATIVOS (A operação real)."""
+    partners_queryset = Partner.objects.filter(status='ativo').order_by('-id')
     
     paginator = Paginator(partners_queryset, 10)
     page_number = request.GET.get('page')
@@ -26,7 +28,22 @@ def partner_list(request):
     
     return render(request, 'partners/partner_list.html', {
         'page_obj': page_obj,
-        'total_partners': Partner.objects.count()
+        'total_partners': partners_queryset.count()
+    })
+
+@login_required
+def partner_inactive_list(request):
+    """Esteira de Reativação (Win-back) para parceiros inativos."""
+    # Traz todo mundo que NÃO está ativo (inativo, negociacao, inviavel)
+    partners_inativos = Partner.objects.exclude(status='ativo').order_by('-data_cadastro')
+    
+    paginator = Paginator(partners_inativos, 10)
+    page_number = request.GET.get('page')
+    page_obj = paginator.get_page(page_number)
+
+    return render(request, 'partners/partner_inactive_list.html', {
+        'page_obj': page_obj,
+        'total_inativos': partners_inativos.count()
     })
 
 @login_required
@@ -35,14 +52,27 @@ def partner_detail(request, pk):
     partner = get_object_or_404(Partner, pk=pk)
     proposals = partner.proposals.all().order_by('-id')
     
-    # --- MÁGICA SPEED: Busca o histórico que veio do Lead + novos registros ---
     partner_type = ContentType.objects.get_for_model(Partner)
-    historico = RegistroHistorico.objects.filter(content_type=partner_type, object_id=partner.id)
+    
+    # MÁGICA SPEED: Leitura de Histórico "Ativo" x "Arquivado"
+    ver_antigos = request.GET.get('ver_antigos') == 'true'
+    
+    if ver_antigos:
+        # Traz tudo, ordenado do mais novo pro mais velho
+        historico = RegistroHistorico.objects.filter(content_type=partner_type, object_id=partner.id).order_by('-id')
+    else:
+        # Traz só os do ciclo atual
+        historico = RegistroHistorico.objects.filter(content_type=partner_type, object_id=partner.id, arquivado=False).order_by('-id')
+        
+    # Conta quantos são antigos para exibir o botão
+    qtd_antigo = RegistroHistorico.objects.filter(content_type=partner_type, object_id=partner.id, arquivado=True).count()
     
     return render(request, 'partners/partner_detail.html', {
         'partner': partner,
         'proposals': proposals,
-        'historico': historico # Injeta o histórico na tela
+        'historico': historico,
+        'qtd_antigo': qtd_antigo,
+        'mostrando_antigos': ver_antigos
     })
 
 @login_required
@@ -56,7 +86,6 @@ def partner_add_historico(request, pk):
         
         if descricao or arquivo:
             tipo = 'anexo' if arquivo else 'comentario'
-            
             RegistroHistorico.objects.create(
                 tipo=tipo,
                 descricao=descricao,
@@ -69,11 +98,99 @@ def partner_add_historico(request, pk):
             
     return redirect('partner_detail', pk=pk)
 
-# --- VIEWS DE PROPOSTAS / ORDEM DE SERVIÇO ---
+# ==============================================================================
+# MUDANÇAS DE STATUS (MODAIS)
+# ==============================================================================
+
+@login_required
+def update_partner_status(request, pk):
+    """Inativa o parceiro a partir da lista de Ativos."""
+    if request.method == 'POST':
+        partner = get_object_or_404(Partner, pk=pk)
+        novo_status = request.POST.get('status')
+        observacao = request.POST.get('observacao') 
+        arquivo = request.FILES.get('arquivo')      
+        
+        if novo_status in ['ativo', 'inativo']:
+            status_antigo = partner.status
+            partner.status = novo_status
+            partner.save()
+            
+            if status_antigo != novo_status:
+                if novo_status == 'inativo':
+                    tipo_hist = 'anexo' if arquivo else 'sistema'
+                    texto_historico = f"🚫 PARCEIRO INATIVADO\n\nMotivo / Observação:\n{observacao}" if observacao else "🚫 PARCEIRO INATIVADO"
+                else:
+                    tipo_hist = 'sistema'
+                    texto_historico = f"✅ PARCEIRO REATIVADO\n\nStatus operacional alterado para [ATIVO]."
+
+                RegistroHistorico.objects.create(
+                    tipo=tipo_hist, descricao=texto_historico, arquivo=arquivo,
+                    criado_por=request.user, content_type=ContentType.objects.get_for_model(Partner), object_id=partner.id
+                )
+            messages.success(request, f"O status da {partner.nome_fantasia or partner.razao_social} foi atualizado para {novo_status.upper()}.")
+            
+    return redirect('partner_list')
+
+@login_required
+def update_winback_status(request, pk):
+    """Avança o estágio na esteira de reativação (Win-back)."""
+    if request.method == 'POST':
+        partner = get_object_or_404(Partner, pk=pk)
+        novo_status = request.POST.get('status')
+        observacao = request.POST.get('observacao')
+
+        if novo_status == 'andamento':
+            from core.models import RegistroHistorico
+            from django.contrib.contenttypes.models import ContentType
+            tipo_parceiro = ContentType.objects.get_for_model(Partner)
+
+            # 1. FORÇA BRUTA NO ARQUIVAMENTO (Salva um por um para não falhar)
+            historicos_antigos = RegistroHistorico.objects.filter(content_type=tipo_parceiro, object_id=partner.id)
+            for hist in historicos_antigos:
+                hist.arquivado = True
+                hist.save()
+
+            # 2. FORÇA BRUTA NA LIMPEZA (Deleta OS uma por uma)
+            for prop in partner.proposals.all():
+                prop.delete()
+
+            # 3. REATIVA O PARCEIRO
+            partner.status = 'ativo'
+            partner.save()
+            
+            # 4. GERA O LOG INICIAL DO NOVO CICLO (Blindado)
+            RegistroHistorico.objects.create(
+                tipo='sistema',
+                descricao="🎉 NOVO CICLO DE PARCERIA!\nO parceiro foi reativado na esteira Win-back. O histórico antigo foi arquivado e o perfil foi limpo para a inclusão de novas OS.",
+                criado_por=request.user,
+                content_type=tipo_parceiro,
+                object_id=partner.id,
+                arquivado=False
+            )
+            
+            messages.success(request, f"Show! {partner.nome_fantasia or partner.razao_social} reativado e histórico arquivado com sucesso!")
+            return redirect('partner_detail', pk=partner.pk)
+
+        elif novo_status in ['negociacao', 'inviavel']:
+            partner.status = novo_status
+            partner.save()
+            
+            texto = "🤝 Negociação de reativação iniciada." if novo_status == 'negociacao' else f"❌ Tentativa de reativação recusada/inviável.\nMotivo: {observacao}"
+            RegistroHistorico.objects.create(
+                tipo='sistema', descricao=texto, criado_por=request.user,
+                content_type=ContentType.objects.get_for_model(Partner), object_id=partner.id, arquivado=False
+            )
+            messages.info(request, f"Estágio atualizado para: {partner.get_status_display()}")
+            
+    return redirect('partner_inactive_list')
+
+# ==============================================================================
+# VIEWS DE PROPOSTAS / ORDEM DE SERVIÇO
+# ==============================================================================
 
 @login_required
 def proposal_create(request, partner_pk):
-    """Inicia uma nova proposta técnica vinculada a um parceiro e auto-preenche a unidade."""
     partner = get_object_or_404(Partner, pk=partner_pk)
     proposal = Proposal(partner=partner)
     
@@ -88,13 +205,9 @@ def proposal_create(request, partner_pk):
     return redirect('proposal_update', pk=proposal.pk)
 
 @login_required
-@login_required
 def proposal_update(request, pk):
-    """Tela técnica para edição da OS e Geração em Lote."""
     proposal = get_object_or_404(Proposal, pk=pk)
     partner = proposal.partner
-    
-    # Captura o link (endereço) atual antes de qualquer alteração
     endereco_atual = proposal.client_address
 
     if request.method == 'POST':
@@ -102,22 +215,14 @@ def proposal_update(request, pk):
         enderecos_ids = request.POST.getlist('enderecos_selecionados')
 
         if form.is_valid():
-            
-            # =================================================================
-            # MÁGICA SPEED: RASTREAMENTO SPLIT DIFF (ATUALIZADO x ANTES)
-            # =================================================================
-            valores_novos = []
-            valores_antigos = []
-
+            valores_novos, valores_antigos = [], []
             if form.has_changed():
                 for campo in form.changed_data:
                     if campo not in ['enderecos_selecionados', 'partner', 'cliente', 'client_address']:
                         valor_antigo = form.initial.get(campo)
                         valor_novo = form.cleaned_data.get(campo)
-                        
                         nome_campo = campo.replace('_', ' ').title()
                         
-                        # Formatação de dinheiro e meses
                         if any(p in campo for p in ['valor', 'taxa', 'custo', 'pago']):
                             str_antigo = f"R$ {valor_antigo}" if valor_antigo else 'Vazio'
                             str_novo = f"R$ {valor_novo}" if valor_novo else 'Vazio'
@@ -131,21 +236,14 @@ def proposal_update(request, pk):
                         valores_novos.append(f"• {nome_campo}: {str_novo}")
                         valores_antigos.append(f"• {nome_campo}: {str_antigo}")
 
-            # =================================================================
-            # LÓGICA DE SALVAMENTO E IDENTIFICAÇÃO DE NOVOS LINKS
-            # =================================================================
-            mudou_unidade = False
-            novas_unidades = []
-
+            mudou_unidade, novas_unidades = False, []
             if enderecos_ids:
                 lista_ids_historico = list(enderecos_ids)
                 proposta_base = form.save(commit=False)
                 
-                # A primeira caixinha atualiza a OS atual
                 primeiro_endereco_id = enderecos_ids.pop(0) 
                 primeiro_endereco = get_object_or_404(Endereco, pk=primeiro_endereco_id)
                 
-                # Se o usuário trocou a unidade principal
                 if endereco_atual != primeiro_endereco:
                     mudou_unidade = True
                     valores_antigos.append(f"• Unidade Base: {endereco_atual}")
@@ -154,7 +252,6 @@ def proposal_update(request, pk):
                 proposta_base.client_address = primeiro_endereco
                 proposta_base.save() 
                 
-                # O resto das caixinhas gera CLONES (novos links)
                 for end_id in enderecos_ids:
                     endereco_extra = get_object_or_404(Endereco, pk=end_id)
                     clone = Proposal.objects.get(pk=proposta_base.pk)
@@ -162,59 +259,33 @@ def proposal_update(request, pk):
                     clone.client_address = endereco_extra 
                     clone.save()
                     novas_unidades.append(f"• {endereco_extra}")
-                    
             else:
                 form.save()
 
-            # =================================================================
-            # GRAVAÇÃO DO RELATÓRIO NO HISTÓRICO NO FORMATO SPLIT DIFF
-            # =================================================================
             if valores_novos or valores_antigos or novas_unidades:
-                from django.contrib.contenttypes.models import ContentType
-                from core.models import RegistroHistorico
-                
                 texto_snapshot = f"✏️ Edição de Proposta/OS realizada.\n\n"
-                
-                # 1. MOSTRA SE O USUÁRIO CLONOU NOVOS LINKS NA EDIÇÃO
                 if novas_unidades:
-                    texto_snapshot += f"➕ {len(novas_unidades)} NOVO(S) LINK(S) ADICIONADO(S):\n"
-                    texto_snapshot += "\n".join(novas_unidades) + "\n\n"
-                
-                # 2. MOSTRA O DIFF DOS DADOS TÉCNICOS/FINANCEIROS
+                    texto_snapshot += f"➕ {len(novas_unidades)} NOVO(S) LINK(S) ADICIONADO(S):\n" + "\n".join(novas_unidades) + "\n\n"
                 if valores_novos or mudou_unidade:
                     if not mudou_unidade and endereco_atual:
-                        # Se não trocou de unidade, diz exatamente em qual link mexeu
                         texto_snapshot += f"🔗 REFERÊNCIA: {endereco_atual}\n\n"
-                         
-                    texto_snapshot += "✅ Atualizado:\n"
-                    texto_snapshot += "\n".join(valores_novos) + "\n\n"
-                    texto_snapshot += "--------------------------------------\n\n"
-                    texto_snapshot += "⏳ Antes:\n"
-                    texto_snapshot += "\n".join(valores_antigos)
+                    texto_snapshot += "✅ Atualizado:\n" + "\n".join(valores_novos) + "\n\n--------------------------------------\n\n"
+                    texto_snapshot += "⏳ Antes:\n" + "\n".join(valores_antigos)
 
                 RegistroHistorico.objects.create(
-                    tipo='sistema',
-                    descricao=texto_snapshot.strip(),
-                    criado_por=request.user,
-                    content_type=ContentType.objects.get_for_model(Partner),
-                    object_id=partner.id
+                    tipo='sistema', descricao=texto_snapshot.strip(), criado_por=request.user,
+                    content_type=ContentType.objects.get_for_model(Partner), object_id=partner.id
                 )
 
             messages.success(request, f"Sucesso! Atualizações salvas para a Speed.")
             return redirect('partner_detail', pk=partner.pk)
-            
     else:
         form = ProposalForm(instance=proposal)
 
-    return render(request, 'partners/proposal_form.html', {
-        'form': form,
-        'proposal': proposal,
-        'partner': partner
-    })
+    return render(request, 'partners/proposal_form.html', {'form': form, 'proposal': proposal, 'partner': partner})
 
 @login_required
 def proposal_delete(request, pk):
-    """Remove uma OS do sistema."""
     proposal = get_object_or_404(Proposal, pk=pk)
     partner_pk = proposal.partner.pk
     proposal.delete()
@@ -223,50 +294,33 @@ def proposal_delete(request, pk):
 
 @login_required
 def proposal_global_list(request):
-    """A Central de Comando: Lista todas as OS e calcula a receita total."""
     proposals = Proposal.objects.all().select_related('partner', 'cliente').order_by('-id')
     total_receita = proposals.aggregate(Sum('valor_mensal'))['valor_mensal__sum'] or 0
-    return render(request, 'partners/proposal_global_list.html', {
-        'proposals': proposals,
-        'total_receita': total_receita
-    })
+    return render(request, 'partners/proposal_global_list.html', {'proposals': proposals, 'total_receita': total_receita})
 
-# --- VIEWS DE RASTREABILIDADE (UNIDADES) ---
+# ==============================================================================
+# VIEWS DE RASTREABILIDADE (UNIDADES E CLIENTES)
+# ==============================================================================
 
 @login_required
 def address_proposals_list(request, address_id):
-    """Rastreabilidade: Filtra as propostas técnicas de uma unidade específica."""
     endereco = get_object_or_404(Endereco, pk=address_id)
     proposals = Proposal.objects.filter(client_address=endereco).select_related('partner', 'cliente')
     partners = Partner.objects.all().order_by('nome_fantasia')
-
-    return render(request, 'partners/address_proposals_list.html', {
-        'endereco': endereco,
-        'proposals': proposals,
-        'partners': partners
-    })
+    return render(request, 'partners/address_proposals_list.html', {'endereco': endereco, 'proposals': proposals, 'partners': partners})
 
 @login_required
 def partner_clients_list(request, pk):
-    """Exibe todos os clientes e unidades atendidas por um parceiro específico."""
     partner = get_object_or_404(Partner, pk=pk)
-    
-    # Busca todas as propostas desse parceiro (trazendo cliente e endereço junto para ficar rápido)
     proposals = Proposal.objects.filter(partner=partner).select_related('cliente', 'client_address')
-    
-    # Agrupa os endereços por cliente
     clientes_agrupados = {}
     for prop in proposals:
         cliente = prop.cliente
         if cliente not in clientes_agrupados:
             clientes_agrupados[cliente] = []
-            
-        # Adiciona a unidade à lista do cliente (evitando duplicidade caso tenha 2 OS no mesmo endereço)
         if prop.client_address not in clientes_agrupados[cliente]:
             clientes_agrupados[cliente].append(prop.client_address)
 
     return render(request, 'partners/partner_clients_list.html', {
-        'partner': partner,
-        'clientes_agrupados': clientes_agrupados,
-        'total_links': proposals.count()
+        'partner': partner, 'clientes_agrupados': clientes_agrupados, 'total_links': proposals.count()
     })

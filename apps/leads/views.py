@@ -98,10 +98,13 @@ def lead_delete(request, pk):
 
 @login_required
 def update_lead_status(request, pk):
-    """Valida a intenção e redireciona para a conversão ou marca como Inviável"""
+    """Valida a intenção e redireciona para a conversão ou atualiza o status."""
     if request.method == 'POST':
         lead = get_object_or_404(Lead, pk=pk)
         novo_status = request.POST.get('status')
+        
+        # Guarda o status atual antes de salvar a mudança para o relatório
+        status_antigo = lead.status 
         
         if novo_status == 'andamento':
             # 1. Validação de campos obrigatórios para virar Parceiro
@@ -115,7 +118,8 @@ def update_lead_status(request, pk):
                 messages.error(request, f"Não é possível converter: Os campos [{msg}] são obrigatórios.")
                 return redirect('lead_list')
 
-            # 2. Evita duplicidade
+            # 2. Evita duplicidade (verificando na base de parceiros)
+            from partners.models import Partner
             if Partner.objects.filter(cnpj_cpf=lead.cnpj_cpf).exists():
                 messages.error(request, f"O CNPJ {lead.cnpj_cpf} já é um parceiro ativo.")
                 return redirect('lead_list')
@@ -124,9 +128,6 @@ def update_lead_status(request, pk):
             return redirect('lead_convert', pk=lead.pk)
             
         elif novo_status == 'inviavel':
-            # =========================================================
-            # LÓGICA DE INVIÁVEL: Muda status e grava no Histórico
-            # =========================================================
             observacao = request.POST.get('observacao')
             arquivo = request.FILES.get('arquivo')
             
@@ -134,6 +135,9 @@ def update_lead_status(request, pk):
             lead.save()
 
             if observacao:
+                from core.models import RegistroHistorico
+                from django.contrib.contenttypes.models import ContentType
+                
                 tipo_hist = 'anexo' if arquivo else 'sistema'
                 texto_historico = f"❌ NEGOCIAÇÃO ENCERRADA (INVIÁVEL)\n\nMotivo / Observação:\n{observacao}"
                 
@@ -149,11 +153,32 @@ def update_lead_status(request, pk):
             messages.warning(request, f"O Lead '{lead.nome_fantasia or lead.razao_social}' foi marcado como Inviável.")
             return redirect('lead_list')
             
-        # Fallback de segurança para outros status
-        if novo_status:
-            lead.status = novo_status
+        elif novo_status == 'negociacao':
+            # =========================================================
+            # LÓGICA DE NEGOCIAÇÃO: Salva e gera Histórico
+            # =========================================================
+            lead.status = 'negociacao'
             lead.save()
-            messages.info(request, f"Status atualizado para: {novo_status}")
+
+            # Só gera o log se realmente houve uma mudança de status
+            if status_antigo != 'negociacao':
+                from core.models import RegistroHistorico
+                from django.contrib.contenttypes.models import ContentType
+                
+                # Pega o nome bonitinho do status antigo para o log
+                status_dict = dict(Lead.STATUS_CHOICES)
+                nome_antigo = status_dict.get(status_antigo, status_antigo).upper()
+                
+                RegistroHistorico.objects.create(
+                    tipo='sistema',
+                    descricao=f"🔄 Status da prospecção alterado de [{nome_antigo}] para [EM NEGOCIAÇÃO].",
+                    criado_por=request.user,
+                    content_type=ContentType.objects.get_for_model(Lead),
+                    object_id=lead.id
+                )
+            
+            messages.info(request, "Lead movido para Em Negociação.")
+            return redirect('lead_list')
         
     return redirect('lead_list')
 
