@@ -29,7 +29,6 @@ INSTALLED_APPS = [
     # use o caminho completo aqui para casar com o que está no apps.py.
     'core',
     'leads',
-    'customers',
     'partners',
     'tickets',
     'clientes',
