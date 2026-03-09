@@ -18,4 +18,10 @@ urlpatterns = [
     # ROTA MÁGICA DA TIMELINE (Funciona para o sistema inteiro)
     # ==========================================================
     path('historico/<str:app_label>/<str:model_name>/<int:object_id>/', views.timeline_global, name='timeline_global'),
+
+    path('alterar-senha/', auth_views.PasswordChangeView.as_view(
+        # Adicionamos o "/includes/" no caminho abaixo
+        template_name='core/includes/alterar_senha.html', 
+        success_url='/' 
+    ), name='password_change'),
 ]

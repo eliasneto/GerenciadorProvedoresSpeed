@@ -2,7 +2,7 @@
 __pycache__/
 *.pyc
 db.sqlite3
-*/migrations/0*.py
+**/migrations/0*.py
 media/
 staticfiles/
 .env

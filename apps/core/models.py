@@ -5,31 +5,52 @@ from django.contrib.contenttypes.fields import GenericForeignKey
 from django.contrib.contenttypes.models import ContentType
 
 class UserManager(BaseUserManager):
-    def create_user(self, email, password=None, **extra_fields):
-        if not email:
-            raise ValueError('O e-mail é obrigatório')
+    # O create_user agora pede o 'username' primeiro
+    def create_user(self, username, email=None, password=None, **extra_fields):
+        if not username:
+            raise ValueError('O nome de usuário (username) é obrigatório')
         email = self.normalize_email(email)
-        user = self.model(email=email, **extra_fields)
+        user = self.model(username=username, email=email, **extra_fields)
         user.set_password(password)
         user.save(using=self._db)
         return user
 
-    def create_superuser(self, email, password=None, **extra_fields):
+    def create_superuser(self, username, email=None, password=None, **extra_fields):
         extra_fields.setdefault('is_staff', True)
         extra_fields.setdefault('is_superuser', True)
-        return self.create_user(email, password, **extra_fields)
+        return self.create_user(username, email, password, **extra_fields)
 
 class User(AbstractUser):
-    username = None
-    email = models.EmailField('Endereço de E-mail', unique=True) # O unique=True é obrigatório aqui
+    # 1. DEVOLVEMOS O USERNAME COMO CHAVE ÚNICA
+    username = models.CharField('Usuário', max_length=150, unique=True)
     
-    # Adicione os campos que você deseja usar no lugar dos antigos
+    # 2. O e-mail continua existindo e sendo único, mas não é mais a chave de login
+    email = models.EmailField('Endereço de E-mail', unique=True, blank=True, null=True) 
+    
     is_gestor = models.BooleanField('É Gestor?', default=False)
     
-    USERNAME_FIELD = 'email'
-    REQUIRED_FIELDS = []
+    # 3. MUDANÇA DE PODER: O Login agora é pelo username
+    USERNAME_FIELD = 'username'
+    REQUIRED_FIELDS = ['email'] 
     
     objects = UserManager()
+
+    # =================================================================
+    # MÁGICA SPEED: Resolve o conflito de e-mails vazios ANTES da validação
+    # =================================================================
+    def clean(self):
+        # Chama a limpeza padrão do Django
+        super().clean()
+        # Se o e-mail vier como texto vazio "", converte para NULL (None no Python)
+        # Isso evita que o MySQL ache que "" é um valor duplicado
+        if self.email == "":
+            self.email = None
+
+    def save(self, *args, **kwargs):
+        # Garantimos a limpeza também no momento do save para segurança total
+        if self.email == "":
+            self.email = None
+        super().save(*args, **kwargs)
 
 # =========================================================
 # MÓDULO SPEED: TIMELINE & AUDIT TRAIL (HISTÓRICO)

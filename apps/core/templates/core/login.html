@@ -1,7 +1,9 @@
 {% extends "core/base.html" %}
 
 {% block content %}
-<div class="w-full max-w-[900px] mx-auto"> <div class="flex flex-col md:flex-row bg-white rounded-[2.5rem] overflow-hidden shadow-2xl">
+<div class="w-full max-w-[900px] mx-auto"> 
+    <div class="flex flex-col md:flex-row bg-white rounded-[2.5rem] overflow-hidden shadow-2xl">
+        
         <div class="w-full md:w-1/2 bg-ageis-black p-12 flex flex-col justify-between text-white">
             <div>
                 <div class="flex items-center gap-2 mb-8">
@@ -22,21 +24,43 @@
             <h2 class="text-2xl font-bold text-gray-900 mb-2">Entrar</h2>
             <p class="text-sm text-gray-400 mb-8">Credenciais necessárias para acesso ao painel.</p>
 
+            {% if form.errors or error %}
+                <div class="p-4 mb-6 text-sm text-red-700 bg-red-50 border border-red-100 rounded-2xl flex items-center gap-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                        <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+                    </svg>
+                    <span>Usuário ou senha incorretos.</span>
+                </div>
+            {% endif %}
+
             <form method="POST" class="space-y-6">
                 {% csrf_token %}
+                
                 <div class="space-y-1">
-                    <label class="text-xs font-bold text-gray-700">E-mail</label>
-                    <input type="email" name="username" required class="w-full p-4 bg-gray-50 border border-gray-100 rounded-2xl outline-none focus:ring-2 focus:ring-ageis-yellow transition-all">
+                    <label class="text-xs font-bold text-gray-700 uppercase tracking-wider">Usuário</label>
+                    <input type="text" name="username" required 
+                           class="w-full p-4 bg-gray-50 border border-gray-100 rounded-2xl outline-none focus:ring-2 focus:ring-ageis-yellow transition-all"
+                           placeholder="Digite seu usuário">
                 </div>
+
                 <div class="space-y-1">
-                    <label class="text-xs font-bold text-gray-700">Senha</label>
-                    <input type="password" name="password" required class="w-full p-4 bg-gray-50 border border-gray-100 rounded-2xl outline-none focus:ring-2 focus:ring-ageis-yellow transition-all">
+                    <label class="text-xs font-bold text-gray-700 uppercase tracking-wider">Senha</label>
+                    <input type="password" name="password" required 
+                           class="w-full p-4 bg-gray-50 border border-gray-100 rounded-2xl outline-none focus:ring-2 focus:ring-ageis-yellow transition-all"
+                           placeholder="••••••••">
                 </div>
                 
-                <button type="submit" class="w-full bg-ageis-yellow text-black font-black py-4 rounded-2xl shadow-lg hover:scale-[1.02] transition-all">
-                    Entrar no Painel
+                <button type="submit" class="w-full bg-ageis-yellow text-black font-black py-4 rounded-2xl shadow-lg hover:scale-[1.02] active:scale-[0.98] transition-all flex justify-center items-center gap-2">
+                    <span>Entrar no Painel</span>
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                        <path fill-rule="evenodd" d="M10.293 3.293a1 1 0 011.414 0l6 6a1 1 0 010 1.414l-6 6a1 1 0 01-1.414-1.414L14.586 11H3a1 1 0 110-2h11.586l-4.293-4.293a1 1 0 010-1.414z" clip-rule="evenodd" />
+                    </svg>
                 </button>
             </form>
+            
+            <p class="mt-8 text-center text-[10px] text-gray-400 uppercase tracking-widest">
+                Desenvolvido por Ageis Sistemas
+            </p>
         </div>
     </div>
 </div>
