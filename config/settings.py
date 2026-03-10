@@ -30,7 +30,7 @@ INSTALLED_APPS = [
     'core',
     'leads',
     'partners',
-    'tickets',
+    #'tickets',
     'clientes',
     'core_admin',
 ]
