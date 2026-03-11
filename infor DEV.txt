@@ -31,3 +31,6 @@ pip install -r requirements.txt
 
 #Criando o super usuario:
 python manage.py createsuperuser
+
+#docker limpando cache:
+docker compose build --no-cache
