@@ -1,0 +1,132 @@
+{% extends "core/base.html" %}
+
+{% block title %}Automações | Speed{% endblock %}
+
+{% block content %}
+<div class="p-6 md:p-10 max-w-7xl mx-auto">
+    <div class="flex flex-col md:flex-row md:items-center justify-between mb-8 gap-4">
+        <div>
+            <h1 class="text-2xl font-bold text-gray-900 leading-none">Módulo de Automação</h1>
+            <p class="text-sm text-gray-500 mt-2">Gerencie e execute robôs de processamento de dados para a Speed/HowBe.</p>
+        </div>
+        <div class="flex items-center gap-2 bg-white px-4 py-2 rounded-xl border border-gray-100 shadow-sm">
+            <span class="flex h-2 w-2 rounded-full bg-ageis-yellow animate-pulse"></span>
+            <span class="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Scanner Ativo</span>
+        </div>
+    </div>
+
+    <div class="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
+        <div class="overflow-x-auto">
+            <table class="w-full text-left">
+                <thead class="bg-gray-50 border-b border-gray-100">
+                    <tr>
+                        <th class="px-6 py-4 text-xs font-bold uppercase text-gray-400">Robô / Script</th>
+                        <th class="px-6 py-4 text-xs font-bold uppercase text-gray-400">Descrição</th>
+                        <th class="px-6 py-4 text-xs font-bold uppercase text-gray-400">Status / Progresso</th>
+                        <th class="px-6 py-4 text-xs font-bold uppercase text-gray-400 text-right">Ações</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-50">
+                    {% for robo in automacoes %}
+                    <tr class="hover:bg-gray-50/50 transition">
+                        <td class="px-6 py-4 font-semibold text-gray-900">
+                            <div class="flex items-center gap-3">
+                                <i data-lucide="bot" class="w-5 h-5 text-gray-400"></i>
+                                {{ robo.nome }}
+                            </div>
+                            <p class="text-[10px] font-normal text-gray-400 mt-1">Última execução: {{ robo.ultima_execucao|date:"d/m/Y H:i" }}</p>
+                        </td>
+
+                        <td class="px-6 py-4 text-gray-600">
+                            <p class="text-sm italic line-clamp-1 max-w-xs">{{ robo.descricao|default:"Nenhuma descrição definida." }}</p>
+                        </td>
+
+                        <td class="px-6 py-4">
+                            {% if robo.status == 'RODANDO' %}
+                                <div class="w-full max-w-[140px]">
+                                    <div class="flex justify-between items-center mb-1.5">
+                                        <span class="text-[9px] font-black text-blue-600 animate-pulse tracking-tighter">PROCESSANDO...</span>
+                                        <span class="text-[10px] font-bold text-blue-700">{{ robo.progresso }}%</span>
+                                    </div>
+                                    <div class="w-full bg-blue-100 rounded-full h-1.5 overflow-hidden">
+                                        <div class="bg-blue-500 h-full rounded-full transition-all duration-700 ease-in-out" 
+                                             style="width: {{ robo.progresso }}%"></div>
+                                    </div>
+                                </div>
+                            {% else %}
+                                <span class="px-3 py-1 rounded-full text-[10px] font-bold uppercase transition
+                                    {% if robo.status == 'ERRO' %} bg-red-100 text-red-700
+                                    {% elif robo.status == 'CONCLUIDO' %} bg-green-100 text-green-700
+                                    {% else %} bg-gray-100 text-gray-700 {% endif %}">
+                                    {{ robo.status }}
+                                </span>
+                            {% endif %}
+                        </td>
+
+                        <td class="px-6 py-4 text-right">
+                            <button onclick="openModal('{{ robo.id }}', '{{ robo.nome }}')" 
+                                {% if robo.status == 'RODANDO' %} disabled class="p-2 text-gray-200 cursor-not-allowed" 
+                                {% else %} class="p-2 text-gray-400 hover:text-ageis-black hover:bg-gray-100 rounded-lg transition" {% endif %}>
+                                <i data-lucide="play" class="w-5 h-5"></i>
+                            </button>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="4" class="px-6 py-20 text-center text-gray-400">Nenhum robô encontrado.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<div id="modal-automacao" class="fixed inset-0 z-[100] hidden flex items-center justify-center p-4">
+    <div class="absolute inset-0 bg-black/60 backdrop-blur-sm" onclick="closeModal()"></div>
+    <div class="bg-white w-full max-w-md rounded-[2rem] p-8 shadow-2xl relative animate-in fade-in zoom-in-95 duration-200">
+        <h3 id="modal-title" class="text-xl font-bold text-gray-900 italic uppercase mb-2">Iniciar Automação</h3>
+        <p class="text-xs text-gray-500 mb-6 font-medium">Selecione o arquivo Excel para processamento.</p>
+        
+        <form id="form-iniciar" method="POST" enctype="multipart/form-data">
+            {% csrf_token %}
+            <div class="mb-6">
+                <label class="text-[10px] font-extrabold uppercase text-gray-400 tracking-widest mb-3 block">Arquivo de Entrada</label>
+                <input type="file" name="arquivo" required
+                    class="w-full text-xs text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-[10px] file:font-bold file:uppercase file:bg-ageis-yellow file:text-black hover:file:bg-yellow-400 cursor-pointer bg-gray-50 rounded-2xl border border-gray-100 p-2">
+            </div>
+
+            <div class="flex gap-3">
+                <button type="button" onclick="closeModal()" class="flex-1 py-3 text-sm font-bold text-gray-400 hover:text-gray-900 transition">Cancelar</button>
+                <button type="submit" class="flex-[2] py-3 bg-ageis-black text-ageis-yellow rounded-xl text-sm font-bold shadow-lg hover:bg-gray-800 transition">
+                    Começar Agora
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+function openModal(id, nome) {
+    const modal = document.getElementById('modal-automacao');
+    const form = document.getElementById('form-iniciar');
+    const title = document.getElementById('modal-title');
+    title.innerText = nome;
+    form.action = `/automacoes/iniciar/${id}/`;
+    modal.classList.remove('hidden');
+}
+function closeModal() {
+    document.getElementById('modal-automacao').classList.add('hidden');
+}
+
+// AUTO REFRESH LOGIC
+// Verifica se existe algum robô rodando no momento (pelo texto PROCESSANDO)
+const isRunning = document.body.innerText.includes("PROCESSANDO");
+if (isRunning) {
+    console.log("🤖 Robô em execução detectado. Agendando atualização...");
+    setTimeout(function(){
+        window.location.reload();
+    }, 10000); // 10 segundos
+}
+</script>
+{% endblock %}

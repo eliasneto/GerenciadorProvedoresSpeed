@@ -10,6 +10,10 @@ from .models import Partner, Proposal
 from .forms import PartnerForm, ProposalForm
 from clientes.models import Endereco 
 
+# Adicione isto lá no topo do seu apps/partners/views.py
+from core.models import RegistroHistorico
+from leads.models import Lead
+
 # --- IMPORTAÇÃO DO HISTÓRICO SPEED ---
 from core.models import RegistroHistorico
 
@@ -134,57 +138,90 @@ def update_partner_status(request, pk):
 
 @login_required
 def update_winback_status(request, pk):
-    """Avança o estágio na esteira de reativação (Win-back)."""
+    parceiro = get_object_or_404(Partner, pk=pk)
+    
     if request.method == 'POST':
-        partner = get_object_or_404(Partner, pk=pk)
-        novo_status = request.POST.get('status')
-        observacao = request.POST.get('observacao')
-
-        if novo_status == 'andamento':
-            from core.models import RegistroHistorico
-            from django.contrib.contenttypes.models import ContentType
-            tipo_parceiro = ContentType.objects.get_for_model(Partner)
-
-            # 1. FORÇA BRUTA NO ARQUIVAMENTO (Salva um por um para não falhar)
-            historicos_antigos = RegistroHistorico.objects.filter(content_type=tipo_parceiro, object_id=partner.id)
-            for hist in historicos_antigos:
-                hist.arquivado = True
-                hist.save()
-
-            # 2. FORÇA BRUTA NA LIMPEZA (Deleta OS uma por uma)
-            for prop in partner.proposals.all():
-                prop.delete()
-
-            # 3. REATIVA O PARCEIRO
-            partner.status = 'ativo'
-            partner.save()
+        novo_status = request.POST.get('status') 
+        
+        # 1. TRANSFERÊNCIA PARA PROSPECÇÃO (LEADS)
+        if novo_status in ['negociacao', 'em_negociacao', 'Em Negociação']:
             
-            # 4. GERA O LOG INICIAL DO NOVO CICLO (Blindado)
+            # Cria o cliente de volta no funil de Prospecção com TODOS os dados nativos
+            novo_lead = Lead.objects.create(
+                razao_social=parceiro.razao_social,
+                nome_fantasia=parceiro.nome_fantasia,
+                cnpj_cpf=parceiro.cnpj_cpf,
+                contato_nome=parceiro.contato_nome,
+                email=parceiro.email,
+                telefone=parceiro.telefone,
+                site=parceiro.site,         # ✅ Vem direto do Parceiro
+                endereco=parceiro.endereco, # ✅ Vem direto do Parceiro
+                cidade=parceiro.cidade,     # ✅ Vem direto do Parceiro
+                estado=parceiro.estado,     # ✅ Vem direto do Parceiro
+                status='negociacao' 
+            )
+            
+            # ==========================================================
+            # A MÁGICA DA MIGRAÇÃO DE HISTÓRICO 
+            # ==========================================================
+            partner_ctype = ContentType.objects.get_for_model(Partner)
+            lead_ctype = ContentType.objects.get_for_model(Lead)
+            
+            historicos_antigos = RegistroHistorico.objects.filter(
+                content_type=partner_ctype, 
+                object_id=parceiro.id
+            )
+            historicos_antigos.update(
+                content_type=lead_ctype, 
+                object_id=novo_lead.id
+            )
+            # ==========================================================
+            
             RegistroHistorico.objects.create(
                 tipo='sistema',
-                descricao="🎉 NOVO CICLO DE PARCERIA!\nO parceiro foi reativado na esteira Win-back. O histórico antigo foi arquivado e o perfil foi limpo para a inclusão de novas OS.",
+                descricao=f"🔄 Lead recuperado da esteira de Win-back (Ex-parceiro). Retornou para negociação.",
                 criado_por=request.user,
-                content_type=tipo_parceiro,
-                object_id=partner.id,
-                arquivado=False
+                content_type=lead_ctype,
+                object_id=novo_lead.id
             )
             
-            messages.success(request, f"Show! {partner.nome_fantasia or partner.razao_social} reativado e histórico arquivado com sucesso!")
-            return redirect('partner_detail', pk=partner.pk)
-
-        elif novo_status in ['negociacao', 'inviavel']:
-            partner.status = novo_status
-            partner.save()
+            parceiro.delete()
             
-            texto = "🤝 Negociação de reativação iniciada." if novo_status == 'negociacao' else f"❌ Tentativa de reativação recusada/inviável.\nMotivo: {observacao}"
+            messages.success(request, "Parceiro movido com sucesso para Prospecção com todos os dados e histórico!")
+            return redirect('partner_inactive_list')
+            
+        else:
+            # 2. ATUALIZAÇÃO DE STATUS DO PARCEIRO
+            status_antigo = parceiro.status
+            
+            if novo_status in ['ativo', 'andamento']:
+                parceiro.status = 'ativo'
+                texto_historico = f"✅ Parceiro REATIVADO. Status alterado de [{status_antigo}] para [ativo]."
+                msg_sucesso = "Parceiro REATIVADO com sucesso e movido para a lista de Ativos!"
+            else:
+                parceiro.status = novo_status 
+                texto_historico = f"⚠️ Status de Win-back atualizado de [{status_antigo}] para [{novo_status}]."
+                msg_sucesso = f"Status do parceiro atualizado para {novo_status.upper()}!"
+                
+            parceiro.save()
+            
             RegistroHistorico.objects.create(
-                tipo='sistema', descricao=texto, criado_por=request.user,
-                content_type=ContentType.objects.get_for_model(Partner), object_id=partner.id, arquivado=False
+                tipo='sistema',
+                descricao=texto_historico,
+                criado_por=request.user,
+                content_type=ContentType.objects.get_for_model(Partner),
+                object_id=parceiro.id
             )
-            messages.info(request, f"Estágio atualizado para: {partner.get_status_display()}")
             
-    return redirect('partner_inactive_list')
+            messages.success(request, msg_sucesso)
+            
+            # 3. REATIVAÇÃO AUTOMÁTICA (Vai para a OS)
+            if novo_status in ['ativo', 'andamento']:
+                return redirect('proposal_create', partner_pk=parceiro.pk)
 
+            return redirect('partner_inactive_list')
+
+    return redirect('partner_inactive_list')
 # ==============================================================================
 # VIEWS DE PROPOSTAS / ORDEM DE SERVIÇO
 # ==============================================================================

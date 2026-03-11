@@ -21,6 +21,12 @@ class Partner(models.Model):
     email = models.EmailField('E-mail Corporativo', blank=True, null=True)
     telefone = models.CharField('Telefone Comercial', max_length=20, blank=True, null=True)
     
+    # ➕ NOVOS CAMPOS ESPELHADOS DA PROSPECÇÃO (LEAD)
+    site = models.URLField('Site', max_length=200, blank=True, null=True)
+    endereco = models.CharField('Endereço', max_length=255, blank=True, null=True)
+    cidade = models.CharField('Cidade', max_length=100, blank=True, null=True)
+    estado = models.CharField('Estado', max_length=2, blank=True, null=True) 
+    
     # Campo status atualizado recebendo as novas escolhas
     status = models.CharField('Status', max_length=20, choices=STATUS_CHOICES, default='ativo')
     

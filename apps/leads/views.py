@@ -187,11 +187,20 @@ def lead_convert(request, pk):
     """Tela Oficial de Conversão: Salva Parceiro, Proposta e TRANSFERE HISTÓRICO"""
     lead = get_object_or_404(Lead, pk=pk)
     
+    # =========================================================
+    # 1. CRIA O RASCUNHO DO PARCEIRO (Com todos os dados do Lead)
+    # =========================================================
     partner_draft = Partner(
         nome_fantasia=lead.nome_fantasia or lead.razao_social,
         razao_social=lead.razao_social or lead.nome_fantasia,
         cnpj_cpf=lead.cnpj_cpf,
-        telefone=lead.telefone
+        contato_nome=lead.contato_nome, # ✅ Adicionado
+        email=lead.email,               # ✅ Adicionado
+        telefone=lead.telefone,
+        site=lead.site,                 # ✅ Adicionado
+        endereco=lead.endereco,         # ✅ Adicionado
+        cidade=lead.cidade,             # ✅ Adicionado
+        estado=lead.estado              # ✅ Adicionado
     )
 
     if request.method == 'POST':
@@ -207,7 +216,7 @@ def lead_convert(request, pk):
             lista_ids_historico = list(enderecos_ids)
 
             # SALVAMENTO EM CASCATA
-            partner_draft.save() # Cria Parceiro
+            partner_draft.save() # Cria Parceiro de fato no banco
 
             proposta_base = form.save(commit=False)
             primeiro_endereco_id = enderecos_ids.pop(0)

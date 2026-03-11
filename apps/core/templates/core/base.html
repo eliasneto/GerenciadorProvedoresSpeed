@@ -108,6 +108,12 @@
                 <i data-lucide="database-backup" class="w-5 h-5 group-hover:scale-110 transition-transform"></i>
                 <span class="text-sm font-semibold">Importar Dados</span>
             </a>
+
+            <a href="{% url 'lista_automacoes' %}" class="flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 group
+                {% if 'automacoes' in request.path %} text-ageis-yellow bg-white/5 sidebar-link-active {% else %} text-gray-400 hover:text-white hover:bg-white/5 {% endif %}">
+                <i data-lucide="cpu" class="w-5 h-5 group-hover:scale-110 transition-transform {% if 'automacoes' in request.path %} text-ageis-yellow {% endif %}"></i>
+                <span class="text-sm font-semibold">Automação</span>
+            </a>
         </nav>
 
         <div class="mt-auto mb-8 px-6">
@@ -125,7 +131,7 @@
                 </div>
                 <div class="space-y-2">
                     <a href="{% url 'password_change' %}" class="flex items-center gap-2 text-[10px] font-bold text-gray-500 hover:text-ageis-yellow transition-colors group px-1">
-                        <i data-lucide="shield-lock" class="w-3.5 h-3.5 group-hover:rotate-12 transition-transform"></i> SEGURANÇA DA CONTA
+                        <i data-lucide="shield-lock" class="w-3.5 h-3.5 group-hover:rotate-12 transition-transform"></i> ALTERAÇÃO SENHA
                     </a>
                     <form action="{% url 'logout' %}" method="post">
                         {% csrf_token %}

@@ -12,7 +12,7 @@ python -m django startproject config .
 mkdir apps
 
 # Criar o Módulo Core
-python manage.py startapp core apps/core
+python manage.py startapp core apps/automacoes
 
 # 1. Cria os arquivos de migração para o módulo core
 python manage.py makemigrations core
@@ -28,3 +28,6 @@ pip freeze > requirements.txt
 
 #Instalar apartir do arquivo requirements:
 pip install -r requirements.txt
+
+#Criando o super usuario:
+python manage.py createsuperuser

@@ -12,6 +12,7 @@ urlpatterns = [
     path('parceiros/', include('partners.urls')), 
     path('clientes/', include('clientes.urls')),
     path('ferramentas/', include('apps.core_admin.urls')),
+    path('automacoes/', include('automacoes.urls')),
 ]
 
 # ==========================================
