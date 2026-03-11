@@ -1,0 +1,197 @@
+{% extends "core/base.html" %}
+
+{% block content %}
+<div class="p-6 md:p-10 max-w-[90rem] mx-auto">
+    <div class="mb-8">
+        <a href="{% url 'lead_list' %}" class="text-sm text-gray-500 hover:text-ageis-black flex items-center gap-2 mb-2 w-fit">
+            <i data-lucide="arrow-left" class="w-4 h-4"></i> Voltar para a lista
+        </a>
+        <h1 class="text-2xl font-bold text-gray-900">
+            {% if lead %}Editando: <span class="text-ageis-yellow">{{ lead.nome_fantasia|default:lead.razao_social }}</span>{% else %}Novo Cadastro de Lead{% endif %}
+        </h1>
+    </div>
+
+    <div class="grid grid-cols-1 {% if lead %} lg:grid-cols-5 {% else %} lg:grid-cols-1 max-w-4xl mx-auto {% endif %} gap-8">
+        
+        <div class="{% if lead %} lg:col-span-3 {% endif %}">
+            <form method="post" class="bg-white p-8 rounded-3xl shadow-sm border border-gray-100">
+                {% csrf_token %}
+                
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div class="md:col-span-2">
+                        <label class="text-xs font-bold uppercase text-gray-400 mb-2 block">Razão Social</label>
+                        {{ form.razao_social }}
+                    </div>
+                    
+                    <div class="md:col-span-2">
+                        <label class="text-xs font-bold uppercase text-gray-400 mb-2 block">Nome Fantasia</label>
+                        {{ form.nome_fantasia }}
+                    </div>
+                    
+                    <div>
+                        <label class="text-xs font-bold uppercase text-gray-400 mb-2 block">CNPJ/CPF</label>
+                        {{ form.cnpj_cpf }}
+                    </div>
+
+                    <div>
+                        <label class="text-xs font-bold uppercase text-gray-400 mb-2 block">Site</label>
+                        {{ form.site }}
+                    </div>
+
+                    {% if lead %}
+                    <div class="md:col-span-2 p-5 bg-gray-50/80 border border-gray-100 rounded-2xl mt-2">
+                        <label class="text-xs font-black tracking-widest uppercase text-ageis-yellow mb-2 block">Status da Prospecção</label>
+                        {{ form.status }}
+                    </div>
+                    {% endif %}
+
+                    <div class="md:col-span-2 border-t border-gray-100 pt-6 mt-4">
+                        <p class="text-sm font-bold text-gray-800 mb-4 flex items-center gap-2">
+                            <i data-lucide="map-pin" class="w-4 h-4 text-ageis-yellow"></i> Localização
+                        </p>
+                    </div>
+
+                    <div class="md:col-span-2">
+                        <label class="text-xs font-bold uppercase text-gray-400 mb-2 block">Endereço</label>
+                        {{ form.endereco }}
+                    </div>
+
+                    <div class="grid grid-cols-3 gap-4 md:col-span-2">
+                        <div class="col-span-2">
+                            <label class="text-xs font-bold uppercase text-gray-400 mb-2 block">Cidade</label>
+                            {{ form.cidade }}
+                        </div>
+                        <div>
+                            <label class="text-xs font-bold uppercase text-gray-400 mb-2 block">Estado (UF)</label>
+                            {{ form.estado }}
+                        </div>
+                    </div>
+
+                    <div class="md:col-span-2 border-t border-gray-100 pt-6 mt-4">
+                        <p class="text-sm font-bold text-gray-800 mb-4 flex items-center gap-2">
+                            <i data-lucide="phone" class="w-4 h-4 text-ageis-yellow"></i> Contato Direto
+                        </p>
+                    </div>
+
+                    <div>
+                        <label class="text-xs font-bold uppercase text-gray-400 mb-2 block">Nome do Contato</label>
+                        {{ form.contato_nome }}
+                    </div>
+                    <div>
+                        <label class="text-xs font-bold uppercase text-gray-400 mb-2 block">Telefone Comercial</label>
+                        {{ form.telefone }}
+                    </div>
+                    <div class="md:col-span-2">
+                        <label class="text-xs font-bold uppercase text-gray-400 mb-2 block">E-mail Corporativo</label>
+                        {{ form.email }}
+                    </div>
+                </div>
+
+                <div class="mt-10 flex gap-4">
+                    <button type="submit" class="flex-1 bg-ageis-black text-ageis-yellow font-bold py-4 rounded-xl hover:bg-gray-800 transition shadow-lg">
+                        Salvar Cadastro
+                    </button>
+                </div>
+            </form>
+        </div>
+
+        {% if lead %}
+        <div class="lg:col-span-2 flex flex-col h-[800px] bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
+            
+            <div class="bg-gray-50/80 px-6 py-5 border-b border-gray-100 flex items-center justify-between">
+                <div class="flex items-center gap-3">
+                    <div class="p-2 bg-blue-100 text-blue-600 rounded-lg"><i data-lucide="history" class="w-5 h-5"></i></div>
+                    <h3 class="font-bold text-gray-900 tracking-tight">Linha do Tempo</h3>
+                </div>
+                <span class="text-[10px] font-black uppercase text-gray-400">{{ historico.count }} Registros</span>
+            </div>
+
+            <div class="p-6 border-b border-gray-100 bg-white">
+                <form action="{% url 'lead_add_historico' lead.pk %}" method="POST" enctype="multipart/form-data" class="space-y-3">
+                    {% csrf_token %}
+                    <textarea name="descricao" rows="2" placeholder="Descreva a negociação, reunião ou anotação..." class="w-full p-4 bg-gray-50 border border-gray-200 rounded-2xl outline-none focus:ring-2 focus:ring-ageis-yellow text-sm resize-none" required></textarea>
+                    
+                    <div class="flex items-center justify-between gap-4">
+                        <div class="relative flex-1">
+                            <input type="file" name="arquivo" id="arquivo_historico" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer" onchange="document.getElementById('file-name').innerText = this.files[0] ? this.files[0].name : 'Anexar documento (PDF, Imagem)'">
+                            <div class="flex items-center gap-2 px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold text-gray-500 hover:bg-gray-100 transition cursor-pointer">
+                                <i data-lucide="paperclip" class="w-4 h-4"></i>
+                                <span id="file-name" class="truncate">Anexar documento...</span>
+                            </div>
+                        </div>
+                        
+                        <button type="submit" class="bg-blue-600 text-white px-5 py-2.5 rounded-xl text-xs font-bold hover:bg-blue-700 transition flex items-center gap-2 shadow-md shadow-blue-600/20">
+                            <i data-lucide="send" class="w-4 h-4"></i> Registrar
+                        </button>
+                    </div>
+                </form>
+            </div>
+
+            <div class="flex-1 p-6 overflow-y-auto custom-scrollbar space-y-6 bg-gray-50/30">
+                {% for item in historico %}
+                    <div class="relative pl-6 border-l-2 {% if item.tipo == 'sistema' %}border-gray-300{% elif item.tipo == 'anexo' %}border-ageis-yellow{% else %}border-blue-400{% endif %}">
+                        
+                        <div class="absolute -left-[9px] top-0 w-4 h-4 rounded-full border-4 border-white 
+                            {% if item.tipo == 'sistema' %}bg-gray-400
+                            {% elif item.tipo == 'anexo' %}bg-ageis-yellow
+                            {% else %}bg-blue-500{% endif %}">
+                        </div>
+
+                        <div class="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm">
+                            <div class="flex justify-between items-start mb-2">
+                                <span class="text-[10px] font-black uppercase text-gray-400 tracking-widest">{{ item.get_tipo_display }}</span>
+                                <span class="text-[10px] font-bold text-gray-400">{{ item.criado_em|date:"d/m/Y H:i" }}</span>
+                            </div>
+                            
+                            {% if item.descricao %}
+                                <p class="text-sm text-gray-700 font-medium mb-3">{{ item.descricao|linebreaksbr }}</p>
+                            {% endif %}
+
+                            {% if item.arquivo %}
+                                <a href="{{ item.arquivo.url }}" target="_blank" class="inline-flex items-center gap-2 px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-xs font-bold text-blue-600 hover:bg-blue-50 hover:border-blue-200 transition">
+                                    <i data-lucide="download-cloud" class="w-4 h-4"></i> Baixar Anexo
+                                </a>
+                            {% endif %}
+                            
+                            <p class="text-[9px] font-bold text-gray-400 uppercase text-right mt-2 border-t border-gray-50 pt-2">
+                                Por: {{ item.criado_por.email|default:"Sistema Speed" }}
+                            </p>
+                        </div>
+                    </div>
+                {% empty %}
+                    <div class="flex flex-col items-center justify-center h-full opacity-30 text-center">
+                        <i data-lucide="message-square" class="w-12 h-12 mb-3"></i>
+                        <p class="text-sm font-bold uppercase tracking-widest italic">Nenhum histórico</p>
+                    </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<script src="https://unpkg.com/imask"></script>
+<script>
+    lucide.createIcons();
+
+    const phoneElement = document.querySelector('input[name="telefone"]');
+    if(phoneElement) {
+        IMask(phoneElement, {
+            mask: [
+                { mask: '(00) 0000-0000' },
+                { mask: '(00) 00000-0000' }
+            ]
+        });
+    }
+
+    const docElement = document.querySelector('input[name="cnpj_cpf"]');
+    if(docElement) {
+        IMask(docElement, {
+            mask: [
+                { mask: '000.000.000-00' },
+                { mask: '00.000.000/0000-00' }
+            ]
+        });
+    }
+</script>
+{% endblock %}

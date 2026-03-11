@@ -1,0 +1,129 @@
+{% extends "core/base.html" %}
+
+{% block title %}Speed | Gestão de Contratos{% endblock %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto p-6">
+    <div class="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-10">
+        <div>
+            <nav class="flex mb-2" aria-label="Breadcrumb">
+                <ol class="flex items-center space-x-2 text-xs font-black uppercase tracking-widest text-gray-400">
+                    <li><a href="/" class="hover:text-ageis-yellow transition">Dashboard</a></li>
+                    <li><i data-lucide="chevron-right" class="w-3 h-3"></i></li>
+                    <li class="text-gray-900">Central de Operações</li>
+                </ol>
+            </nav>
+            <h1 class="text-4xl font-black text-gray-900 italic uppercase tracking-tighter">
+                Gestão Contratos <span class="text-ageis-yellow">/</span> Serviços
+            </h1>
+        </div>
+
+        <div class="flex gap-4">
+            <div class="bg-white px-6 py-3 rounded-2xl border border-gray-100 shadow-sm">
+                <p class="text-[10px] font-black text-gray-400 uppercase leading-none mb-1">Total de Links</p>
+                <p class="text-xl font-black italic">{{ proposals.count }}</p>
+            </div>
+            <div class="bg-ageis-black px-6 py-3 rounded-2xl shadow-lg text-white">
+                <p class="text-[10px] font-black text-gray-500 uppercase leading-none mb-1">Receita Total</p>
+                <p class="text-xl font-black italic text-ageis-yellow">
+                    {% if total_receita %} R$ {{ total_receita }} {% else %} -- {% endif %}
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <div class="bg-white p-4 rounded-[2rem] border border-gray-100 shadow-sm mb-8 flex flex-col md:flex-row gap-4 items-center">
+        <div class="relative flex-grow">
+            <i data-lucide="search" class="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-300"></i>
+            <input type="text" placeholder="Buscar por OS, Parceiro ou Cliente..." class="w-full pl-12 pr-4 py-4 bg-gray-50 border-none rounded-2xl outline-none focus:ring-2 focus:ring-ageis-yellow transition-all">
+        </div>
+        <div class="flex gap-2">
+            <button class="px-6 py-4 bg-gray-100 text-gray-600 font-bold rounded-2xl hover:bg-gray-200 transition">
+                Filtros <i data-lucide="sliders-horizontal" class="w-4 h-4 inline ml-1"></i>
+            </button>
+        </div>
+    </div>
+
+    <div class="bg-white rounded-[2.5rem] border border-gray-100 shadow-sm overflow-hidden">
+        <div class="overflow-x-auto">
+            <table class="w-full text-left border-collapse">
+                <thead>
+                    <tr class="text-[10px] font-black uppercase text-gray-400 border-b border-gray-50 bg-gray-50/30">
+                        <th class="px-8 py-5">Identificação</th>
+                        <th class="px-4 py-5">Parceiro (Provedor)</th>
+                        <th class="px-4 py-5">Cliente Final</th>
+                        <th class="px-4 py-5 text-center">Técnico</th>
+                        <th class="px-4 py-5">Financeiro</th>
+                        <th class="px-8 py-5 text-right">Ação</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-50">
+                    {% for proposal in proposals %}
+                    <tr class="hover:bg-gray-50/50 transition-all group">
+                        <td class="px-8 py-6">
+                            <span class="block font-black text-gray-900 italic">#{{ proposal.os_numero|default:"S/OS" }}</span>
+                            <span class="text-[10px] font-bold text-gray-400 uppercase">Emissão: {{ proposal.data_emissao|date:"d/m/y"|default:"--" }}</span>
+                        </td>
+
+                        <td class="px-4 py-6">
+                            {% if proposal.partner %}
+                                <a href="{% url 'partner_detail' proposal.partner.pk %}" class="font-bold text-gray-800 hover:text-ageis-yellow transition">
+                                    {{ proposal.partner.nome_fantasia|default:proposal.partner.razao_social }}
+                                </a>
+                                <span class="block text-[10px] text-gray-400 font-medium uppercase">{{ proposal.partner.cnpj_cpf }}</span>
+                            {% else %}
+                                <span class="text-xs italic text-gray-400 font-bold uppercase">Sem Parceiro</span>
+                            {% endif %}
+                        </td>
+
+                        <td class="px-4 py-6">
+                            {% if proposal.cliente %}
+                                <span class="block font-bold text-gray-800">
+                                    {{ proposal.cliente.nome_fantasia|default:proposal.cliente.razao_social }}
+                                </span>
+                                <span class="block text-[10px] text-gray-400 truncate w-40" title="{{ proposal.inst_endereco }}">
+                                    <i data-lucide="map-pin" class="w-3 h-3 inline"></i> {{ proposal.inst_cidade|default:"Cidade não inf." }}
+                                </span>
+                            {% else %}
+                                <span class="text-xs italic text-red-400 font-black uppercase italic">Pendente de Vínculo</span>
+                            {% endif %}
+                        </td>
+
+                        <td class="px-4 py-6 text-center">
+                            <div class="inline-flex flex-col items-center">
+                                <span class="px-3 py-1 bg-blue-50 text-blue-700 rounded-full text-[10px] font-black italic mb-1">
+                                    {{ proposal.velocidade }}
+                                </span>
+                                <span class="text-[9px] font-black text-gray-400 uppercase">{{ proposal.tecnologia }}</span>
+                            </div>
+                        </td>
+
+                        <td class="px-4 py-6">
+                            <span class="block font-black text-gray-900 italic">R$ {{ proposal.valor_mensal|default:"0,00" }}</span>
+                            <span class="text-[10px] font-bold {% if proposal.vencido %} text-red-500 {% else %} text-green-600 {% endif %} uppercase">
+                                Venc: {{ proposal.data_vencimento|date:"d/m/y"|default:"--" }}
+                            </span>
+                        </td>
+
+                        <td class="px-8 py-6 text-right">
+                            <a href="{% url 'proposal_update' proposal.pk %}" class="inline-flex items-center justify-center w-10 h-10 bg-gray-50 text-gray-400 rounded-xl hover:bg-ageis-yellow hover:text-black transition-all">
+                                <i data-lucide="external-link" class="w-5 h-5"></i>
+                            </a>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="6" class="px-8 py-20 text-center">
+                            <div class="flex flex-col items-center gap-4 opacity-30">
+                                <i data-lucide="layers-2" class="w-16 h-16"></i>
+                                <p class="font-black italic uppercase">Nenhuma OS cadastrada no sistema</p>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

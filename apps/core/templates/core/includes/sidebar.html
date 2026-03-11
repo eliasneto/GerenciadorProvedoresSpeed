@@ -1,0 +1,42 @@
+<div class="flex flex-col h-full py-6">
+    <div class="px-6 mb-10">
+        <h2 class="text-xl font-bold text-ageis-yellow bg-ageis-black px-4 py-2 rounded-lg inline-block">
+            AGEIS
+        </h2>
+    </div>
+
+    <nav class="flex-1 space-y-2 px-4">
+        <a href="{% url 'home' %}" class="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-gray-100 text-gray-700 transition group">
+            <i data-lucide="layout-dashboard" class="w-5 h-5 text-gray-400 group-hover:text-ageis-black"></i>
+            <span class="font-medium">Dashboard</span>
+        </a>
+
+        <a href="{% url 'lead_list' %}" class="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-gray-100 text-gray-700 transition group">
+            <i data-lucide="target" class="w-5 h-5 text-gray-400 group-hover:text-ageis-black"></i>
+            <span class="font-medium">Prospecção</span>
+        </a>
+
+        <a href="{% url 'partner_list' %}" class="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-gray-100 text-gray-700 transition group">
+            <i data-lucide="users" class="w-5 h-5 text-gray-400 group-hover:text-ageis-black"></i>
+            <span class="font-medium">Parceiros</span>
+        </a>
+    </nav>
+
+    <div class="px-4 mt-auto space-y-1">
+        
+        <a href="{% url 'password_change' %}" class="flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 hover:bg-gray-100 transition group">
+            <i data-lucide="key-round" class="w-5 h-5 text-gray-400 group-hover:text-ageis-black"></i>
+            <span class="font-medium text-sm">Alterar Senha</span>
+        </a>
+
+        <hr class="border-gray-100 my-2 mx-4">
+
+        <form action="{% url 'logout' %}" method="post">
+            {% csrf_token %}
+            <button type="submit" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-red-600 hover:bg-red-50 transition">
+                <i data-lucide="log-out" class="w-5 h-5"></i>
+                <span class="font-medium">Sair</span>
+            </button>
+        </form>
+    </div>
+</div>

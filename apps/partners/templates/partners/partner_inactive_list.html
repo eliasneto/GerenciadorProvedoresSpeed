@@ -1,0 +1,167 @@
+{% extends "core/base.html" %}
+
+{% block content %}
+<div class="p-6 md:p-10 max-w-7xl mx-auto">
+    <div class="flex items-center gap-6 border-b border-gray-200 mb-8 pb-4">
+        <a href="{% url 'partner_list' %}" class="text-sm font-bold text-gray-400 hover:text-gray-900 transition flex items-center gap-2">
+            Parceiros Ativos
+        </a>
+        <a href="{% url 'partner_inactive_list' %}" class="text-sm font-black text-ageis-yellow border-b-2 border-ageis-yellow pb-4 -mb-[18px] flex items-center gap-2">
+            Esteira de Reativação (Win-back)
+            <span class="bg-red-100 text-red-700 px-2 py-0.5 rounded-full text-[10px]">{{ total_inativos }}</span>
+        </a>
+    </div>
+
+    <div class="flex flex-col md:flex-row md:items-center justify-between mb-8 gap-4">
+        <div>
+            <h1 class="text-2xl font-bold text-gray-900">Reconquista de Parceiros</h1>
+            <p class="text-sm text-gray-500">Acompanhe negociações para reativar operações suspensas.</p>
+        </div>
+    </div>
+
+    <div class="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
+        <div class="overflow-x-auto">
+            <table class="w-full text-left">
+                <thead class="bg-gray-50 border-b border-gray-100">
+                    <tr class="text-xs font-bold uppercase text-gray-400">
+                        <th class="px-6 py-4">Empresa (Inativa)</th>
+                        <th class="px-6 py-4">Estágio da Reconquista</th>
+                        <th class="px-6 py-4 text-right">Ações</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-50">
+                    {% for partner in page_obj %}
+                    <tr class="hover:bg-gray-50/50 transition">
+                        <td class="px-6 py-4">
+                            <div class="font-semibold text-gray-900">{{ partner.nome_fantasia|default:partner.razao_social }}</div>
+                            <div class="text-[10px] text-gray-400">CNPJ: {{ partner.cnpj_cpf }}</div>
+                        </td>
+                        
+                        <td class="px-6 py-4">
+                            <button onclick="openWinbackModal('{{ partner.pk }}', '{{ partner.nome_fantasia|default:partner.razao_social|escapejs }}', '{{ partner.status }}')" 
+                                    class="flex items-center gap-2 px-3 py-1 rounded-full text-[10px] font-bold uppercase transition hover:ring-2 hover:ring-offset-2
+                                {% if partner.status == 'negociacao' %} bg-blue-100 text-blue-700 hover:ring-blue-200
+                                {% elif partner.status == 'inviavel' %} bg-red-100 text-red-700 hover:ring-red-200
+                                {% else %} bg-gray-100 text-gray-700 hover:ring-gray-200 {% endif %}">
+                                {{ partner.get_status_display }}
+                                <i data-lucide="chevron-down" class="w-3 h-3"></i>
+                            </button>
+                        </td>
+
+                        <td class="px-6 py-4 text-right">
+                            <div class="flex justify-end items-center gap-2">
+                                <a href="{% url 'timeline_global' 'partners' 'partner' partner.pk %}" class="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition" title="Ver Histórico de Negociação">
+                                    <i data-lucide="history" class="w-5 h-5"></i>
+                                </a>
+                                <a href="{% url 'partner_detail' partner.pk %}" class="p-2 text-gray-400 hover:text-blue-600 transition" title="Ver Detalhes">
+                                    <i data-lucide="external-link" class="w-5 h-5"></i>
+                                </a>
+                            </div>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr><td colspan="3" class="px-6 py-20 text-center text-gray-400">Nenhum parceiro inativo na esteira.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<div id="winbackModal" class="fixed inset-0 bg-black/60 z-[80] hidden flex items-center justify-center backdrop-blur-sm p-4">
+    <div class="bg-white rounded-[2rem] p-8 max-w-sm w-full shadow-2xl border border-gray-100 transform transition-all">
+        <div class="flex items-center gap-3 mb-6">
+            <div class="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center">
+                <i data-lucide="arrow-up-right" class="w-5 h-5 text-blue-600"></i>
+            </div>
+            <div>
+                <h3 class="text-lg font-bold text-gray-900 leading-none">Negociação</h3>
+                <p id="modalWinbackPartnerName" class="text-xs text-gray-500 mt-1 truncate max-w-[200px]"></p>
+            </div>
+        </div>
+
+        <form id="winbackForm" method="POST" enctype="multipart/form-data">
+            {% csrf_token %}
+            <div class="space-y-4 mb-8">
+                <label class="text-[10px] font-extrabold uppercase text-gray-400 tracking-widest">Avançar Estágio</label>
+                <select name="status" id="modalWinbackSelect" onchange="toggleWinbackFields()" class="w-full p-4 bg-gray-50 border border-gray-100 rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none font-medium text-sm transition-all">
+                    <option value="negociacao">Em Negociação</option>
+                    <option value="andamento">Parceria Fechada (Reativar!)</option>
+                    <option value="inviavel">Inviável / Recusado</option>
+                </select>
+
+                <div id="winbackInviavelFields" class="hidden space-y-3 pt-4 border-t border-gray-100 mt-4 animate-in fade-in slide-in-from-top-2">
+                    <label class="text-[10px] font-extrabold uppercase text-red-400 tracking-widest">Motivo da Recusa</label>
+                    <textarea name="observacao" id="winbackObservacao" rows="3" placeholder="Por que não reativou?" class="w-full p-4 bg-red-50/50 border border-red-100 rounded-2xl focus:ring-2 focus:ring-red-400 outline-none font-medium text-sm transition-all resize-none"></textarea>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-2 gap-3">
+                <button type="button" onclick="closeWinbackModal()" class="py-4 text-gray-500 font-bold hover:bg-gray-50 rounded-2xl transition">Cancelar</button>
+                <button type="submit" id="btnSubmitWinback" class="py-4 bg-blue-600 text-white font-bold rounded-2xl hover:bg-blue-700 shadow-lg shadow-blue-600/20 transition-all">Atualizar</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+function toggleWinbackFields() {
+    const select = document.getElementById('modalWinbackSelect');
+    const inviavelFields = document.getElementById('winbackInviavelFields');
+    const obsInput = document.getElementById('winbackObservacao');
+    const btnSubmit = document.getElementById('btnSubmitWinback');
+
+    // Remove todas as classes de cor possíveis do botão para limpar
+    btnSubmit.classList.remove('bg-blue-600', 'bg-red-600', 'bg-green-600', 'shadow-blue-600/20', 'shadow-red-600/20', 'shadow-green-600/20', 'hover:bg-blue-700', 'hover:bg-red-700', 'hover:bg-green-700');
+
+    if (select.value === 'inviavel') {
+        inviavelFields.classList.remove('hidden');
+        obsInput.required = true;
+        btnSubmit.classList.add('bg-red-600', 'shadow-red-600/20', 'hover:bg-red-700');
+        btnSubmit.innerText = "Registrar Perda";
+    } else if (select.value === 'andamento') {
+        inviavelFields.classList.add('hidden');
+        obsInput.required = false;
+        btnSubmit.classList.add('bg-green-600', 'shadow-green-600/20', 'hover:bg-green-700');
+        btnSubmit.innerText = "Reativar Parceiro!";
+    } else {
+        inviavelFields.classList.add('hidden');
+        obsInput.required = false;
+        btnSubmit.classList.add('bg-blue-600', 'shadow-blue-600/20', 'hover:bg-blue-700');
+        btnSubmit.innerText = "Atualizar";
+    }
+}
+
+function openWinbackModal(pk, name, currentStatus) {
+    const modal = document.getElementById('winbackModal');
+    const form = document.getElementById('winbackForm');
+    document.getElementById('modalWinbackPartnerName').innerText = name;
+    
+    const select = document.getElementById('modalWinbackSelect');
+    if (currentStatus === 'negociacao' || currentStatus === 'inviavel') {
+        select.value = currentStatus;
+    } else {
+        select.value = 'negociacao';
+    }
+    
+    form.action = `/parceiros/winback/status/${pk}/`;
+    
+    toggleWinbackFields(); // Roda a checagem visual das cores e campos
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+}
+
+function closeWinbackModal() {
+    const modal = document.getElementById('winbackModal');
+    modal.classList.add('hidden');
+    modal.classList.remove('flex');
+}
+
+window.onclick = function(event) {
+    const modal = document.getElementById('winbackModal');
+    if (event.target == modal) {
+        closeWinbackModal();
+    }
+}
+</script>
+{% endblock %}

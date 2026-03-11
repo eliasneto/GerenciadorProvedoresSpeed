@@ -1,0 +1,30 @@
+
+# Criar maquina Virtual:
+python3 -m venv .venv
+
+# Rode este comando para instalar o Django e o REST Framework (essencial para sistemas de gestão):
+pip install django djangorestframework python-decouple
+
+# Criar o Projeto Principal
+python -m django startproject config .
+
+# Criar a pasta para os Módulos
+mkdir apps
+
+# Criar o Módulo Core
+python manage.py startapp core apps/core
+
+# 1. Cria os arquivos de migração para o módulo core
+python manage.py makemigrations core
+
+# 2. Aplica as mudanças no banco de dados
+python manage.py migrate
+
+#Clonar um repositorio:
+git clone -b dev https://github.com/eliasneto/GerenciadorProvedoresSpeed.git
+
+#Criar arquivo requirements:
+pip freeze > requirements.txt
+
+#Instalar apartir do arquivo requirements:
+pip install -r requirements.txt

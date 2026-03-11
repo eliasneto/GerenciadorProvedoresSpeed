@@ -1,0 +1,247 @@
+{% extends "core/base.html" %}
+
+{% block content %}
+<div class="p-6 md:p-10 max-w-7xl mx-auto">
+    <div class="flex flex-col md:flex-row md:items-center justify-between mb-8 gap-4">
+        <div>
+            <h1 class="text-2xl font-bold text-gray-900">Base de Parceiros</h1>
+            <p class="text-sm text-gray-500">Gestão de contratos e ativação técnica.</p>
+        </div>
+        <div class="bg-blue-50 text-blue-700 px-4 py-2 rounded-lg font-semibold text-sm border border-blue-100">
+            {{ total_partners }} Parceiros Ativos
+        </div>
+    </div>
+
+    <div class="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
+        <div class="overflow-x-auto">
+            <table class="w-full text-left">
+                <thead class="bg-gray-50 border-b border-gray-100">
+                    <tr class="text-xs font-bold uppercase text-gray-400">
+                        <th class="px-6 py-4">Empresa</th>
+                        <th class="px-6 py-4">Status</th>
+                        <th class="px-6 py-4">Vencimento</th>
+                        <th class="px-6 py-4 text-right">Ações</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-50">
+                    {% for partner in page_obj %}
+                    <tr class="hover:bg-gray-50/50 transition">
+                        <td class="px-6 py-4">
+                            <div class="font-semibold text-gray-900">{{ partner.nome_fantasia|default:partner.razao_social }}</div>
+                            <div class="text-[10px] text-gray-400">CNPJ: {{ partner.cnpj_cpf }}</div>
+                        </td>
+                        
+                        <td class="px-6 py-4">
+                            <button onclick="openStatusModal('{{ partner.pk }}', '{{ partner.nome_fantasia|default:partner.razao_social|escapejs }}', '{{ partner.status }}')" 
+                                    class="flex items-center gap-2 px-3 py-1 rounded-full text-[10px] font-bold uppercase transition hover:ring-2 hover:ring-offset-2
+                                {% if partner.status == 'ativo' %} bg-green-100 text-green-700 hover:ring-green-200
+                                {% elif partner.status == 'inativo' %} bg-red-100 text-red-700 hover:ring-red-200
+                                {% else %} bg-gray-100 text-gray-700 hover:ring-gray-200 {% endif %}">
+                                {{ partner.status }}
+                                <i data-lucide="chevron-down" class="w-3 h-3"></i>
+                            </button>
+                        </td>
+
+                        <td class="px-6 py-4 text-sm font-medium {% if partner.data_vencimento %} text-blue-600 {% else %} text-gray-300 {% endif %}">
+                            <i data-lucide="calendar" class="w-3 h-3 inline mr-1"></i>
+                            {{ partner.data_vencimento|date:"d/m/Y"|default:"Pendente" }}
+                        </td>
+                        <td class="px-6 py-4 text-right">
+                            <div class="flex justify-end items-center gap-2">
+                                
+                                {% if partner.status != 'ativo' %}
+                                <button onclick="openActivationModal('{{ partner.pk }}', '{{ partner.nome_fantasia|default:partner.razao_social|escapejs }}')" 
+                                        class="p-2 bg-ageis-yellow text-black rounded-lg hover:shadow-md transition" title="Ativar Parceiro">
+                                    <i data-lucide="zap" class="w-5 h-5"></i>
+                                </button>
+                                {% endif %}
+                                
+                                <a href="{% url 'partner_clients_list' partner.pk %}" class="p-2 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded-lg transition" title="Ver Clientes Atendidos">
+                                    <i data-lucide="users" class="w-5 h-5"></i>
+                                </a>
+
+                                <a href="{% url 'timeline_global' 'partners' 'partner' partner.pk %}" class="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition" title="Ver Histórico & Auditoria">
+                                    <i data-lucide="history" class="w-5 h-5"></i>
+                                </a>
+
+                                <a href="{% url 'partner_detail' partner.pk %}" class="p-2 text-gray-400 hover:text-blue-600 transition" title="Ver Detalhes do Parceiro">
+                                    <i data-lucide="external-link" class="w-5 h-5"></i>
+                                </a>
+                            </div>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr><td colspan="4" class="px-6 py-20 text-center text-gray-400">Nenhum parceiro encontrado.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<div id="statusModal" class="fixed inset-0 bg-black/60 z-[80] hidden flex items-center justify-center backdrop-blur-sm p-4">
+    <div class="bg-white rounded-[2rem] p-8 max-w-sm w-full shadow-2xl border border-gray-100 transform transition-all">
+        <div class="flex items-center gap-3 mb-6">
+            <div class="w-10 h-10 bg-ageis-yellow rounded-xl flex items-center justify-center">
+                <i data-lucide="refresh-cw" class="w-5 h-5 text-black"></i>
+            </div>
+            <div>
+                <h3 class="text-lg font-bold text-gray-900 leading-none">Alterar Status</h3>
+                <p id="modalPartnerName" class="text-xs text-gray-500 mt-1 truncate max-w-[200px]"></p>
+            </div>
+        </div>
+
+        <form id="statusForm" method="POST" enctype="multipart/form-data">
+            {% csrf_token %}
+            <div class="space-y-4 mb-8">
+                <label class="text-[10px] font-extrabold uppercase text-gray-400 tracking-widest">Novo estágio</label>
+                <select name="status" id="modalStatusSelect" onchange="toggleInativoFields()" class="w-full p-4 bg-gray-50 border border-gray-100 rounded-2xl focus:ring-2 focus:ring-ageis-yellow outline-none font-medium text-sm transition-all">
+                    <option value="ativo">Ativo</option>
+                    <option value="inativo">Inativo</option>
+                </select>
+                <p id="modalHelperText" class="text-[9px] text-gray-500 font-medium">💡 Status "Inativo" suspende a operação do parceiro.</p>
+
+                <div id="inativoFields" class="hidden space-y-3 pt-4 border-t border-gray-100 mt-4 animate-in fade-in slide-in-from-top-2">
+                    <label class="text-[10px] font-extrabold uppercase text-red-400 tracking-widest">Motivo da Inativação</label>
+                    <textarea name="observacao" id="inativoObservacao" rows="3" placeholder="Por que o parceiro está sendo inativado? (Ex: Cancelamento, quebra de contrato...)" class="w-full p-4 bg-red-50/50 border border-red-100 rounded-2xl focus:ring-2 focus:ring-red-400 outline-none font-medium text-sm transition-all resize-none"></textarea>
+                    
+                    <div class="relative w-full mt-2">
+                        <input type="file" name="arquivo" id="inativoArquivo" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer" onchange="document.getElementById('inativo-file-name').innerText = this.files[0] ? this.files[0].name : 'Anexar evidência (Ex: Distrato, E-mail)'">
+                        <div class="flex items-center gap-2 px-4 py-3 bg-white border border-gray-200 rounded-xl text-xs font-bold text-gray-500 hover:bg-gray-50 transition cursor-pointer shadow-sm">
+                            <i data-lucide="paperclip" class="w-4 h-4 text-gray-400"></i>
+                            <span id="inativo-file-name" class="truncate">Anexar evidência (Ex: Distrato, E-mail)</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-2 gap-3">
+                <button type="button" onclick="closeStatusModal()" class="py-4 text-gray-500 font-bold hover:bg-gray-50 rounded-2xl transition">Cancelar</button>
+                <button type="submit" id="btnSubmitModal" class="py-4 bg-ageis-black text-ageis-yellow font-bold rounded-2xl hover:shadow-lg transition-all">Atualizar</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div id="activationModal" class="fixed inset-0 bg-black/60 z-[70] hidden flex items-center justify-center backdrop-blur-sm p-4">
+    <div class="bg-white rounded-[2.5rem] p-8 max-w-2xl w-full shadow-2xl border border-gray-100 transform transition-all">
+        <div class="flex items-center gap-4 mb-8">
+            <div class="w-12 h-12 bg-ageis-yellow rounded-2xl flex items-center justify-center">
+                <i data-lucide="zap" class="text-black w-6 h-6"></i>
+            </div>
+            <div>
+                <h3 class="text-2xl font-black text-gray-900 italic uppercase leading-tight">Ativar Parceiro</h3>
+                <p id="modalActivationPartnerName" class="text-sm text-gray-500 font-bold"></p>
+            </div>
+        </div>
+
+        <form id="activationForm" method="POST">
+            {% csrf_token %}
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+                <div class="space-y-1">
+                    <label class="text-[10px] font-black uppercase text-gray-400 ml-1">Ordem de Serviço (OS)</label>
+                    <input type="text" name="os_numero" placeholder="Ex: 016EILD2025" class="w-full p-4 bg-gray-50 border border-gray-100 rounded-2xl outline-none focus:ring-2 focus:ring-ageis-yellow transition-all">
+                </div>
+                <div class="space-y-1">
+                    <label class="text-[10px] font-black uppercase text-gray-400 ml-1">Data de Ativação</label>
+                    <input type="date" name="data_ativacao" required class="w-full p-4 bg-gray-50 border border-gray-100 rounded-2xl outline-none focus:ring-2 focus:ring-ageis-yellow transition-all">
+                </div>
+                <div class="space-y-1">
+                    <label class="text-[10px] font-black uppercase text-gray-400 ml-1">Tempo de Contrato (Meses)</label>
+                    <input type="number" name="tempo_contrato" value="24" class="w-full p-4 bg-gray-50 border border-gray-100 rounded-2xl outline-none focus:ring-2 focus:ring-ageis-yellow transition-all">
+                </div>
+                <div class="space-y-1">
+                    <label class="text-[10px] font-black uppercase text-gray-400 ml-1">Velocidade</label>
+                    <input type="text" name="velocidade" value="50 Mbps" class="w-full p-4 bg-gray-50 border border-gray-100 rounded-2xl outline-none focus:ring-2 focus:ring-ageis-yellow transition-all">
+                </div>
+                <div class="space-y-1 md:col-span-2">
+                    <label class="text-[10px] font-black uppercase text-gray-400 ml-1">Valor Mensal (R$)</label>
+                    <input type="text" name="valor_mensal" placeholder="Ex: 700,00" class="w-full p-4 bg-gray-50 border border-gray-100 rounded-2xl outline-none focus:ring-2 focus:ring-ageis-yellow transition-all">
+                </div>
+            </div>
+
+            <div class="flex justify-end gap-3">
+                <button type="button" onclick="closeActivationModal()" class="px-8 py-4 text-gray-500 font-bold hover:bg-gray-50 rounded-2xl transition">Cancelar</button>
+                <button type="submit" class="px-10 py-4 bg-ageis-black text-ageis-yellow font-black rounded-2xl hover:shadow-xl transition-all uppercase italic">Confirmar Ativação</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+function toggleInativoFields() {
+    const select = document.getElementById('modalStatusSelect');
+    const inativoFields = document.getElementById('inativoFields');
+    const obsInput = document.getElementById('inativoObservacao');
+    const helperText = document.getElementById('modalHelperText');
+    const btnSubmit = document.getElementById('btnSubmitModal');
+
+    if (select.value === 'inativo') {
+        inativoFields.classList.remove('hidden');
+        obsInput.required = true; // Obriga a justificar!
+        helperText.innerText = "⚠️ Atenção: A operação deste parceiro será suspensa.";
+        helperText.className = "text-[9px] text-red-500 font-medium";
+        btnSubmit.classList.replace('bg-ageis-black', 'bg-red-600');
+        btnSubmit.classList.replace('text-ageis-yellow', 'text-white');
+    } else {
+        inativoFields.classList.add('hidden');
+        obsInput.required = false;
+        helperText.innerText = '💡 Status "Inativo" suspende a operação do parceiro.';
+        helperText.className = "text-[9px] text-gray-500 font-medium";
+        btnSubmit.classList.replace('bg-red-600', 'bg-ageis-black');
+        btnSubmit.classList.replace('text-white', 'text-ageis-yellow');
+    }
+}
+
+// JS DO MODAL DE STATUS
+function openStatusModal(pk, name, currentStatus) {
+    const modal = document.getElementById('statusModal');
+    const form = document.getElementById('statusForm');
+    const nameDisplay = document.getElementById('modalPartnerName');
+    const select = document.getElementById('modalStatusSelect');
+
+    form.action = `/parceiros/status/${pk}/`; 
+    nameDisplay.innerText = name;
+    
+    if (currentStatus === 'ativo' || currentStatus === 'inativo') {
+        select.value = currentStatus.toLowerCase();
+    } else {
+        select.value = 'ativo';
+    }
+
+    toggleInativoFields(); // Roda a validação visual ao abrir
+
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+}
+
+function closeStatusModal() {
+    const modal = document.getElementById('statusModal');
+    modal.classList.add('hidden');
+    modal.classList.remove('flex');
+}
+
+// JS DO MODAL DE ATIVAÇÃO
+function openActivationModal(pk, name) {
+    const modal = document.getElementById('activationModal');
+    const form = document.getElementById('activationForm');
+    document.getElementById('modalActivationPartnerName').innerText = name;
+    
+    form.action = `/parceiros/ativar/${pk}/`;
+
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+}
+
+function closeActivationModal() {
+    const modal = document.getElementById('activationModal');
+    modal.classList.add('hidden');
+    modal.classList.remove('flex');
+}
+
+window.onclick = function(event) {
+    if (event.target == document.getElementById('statusModal')) closeStatusModal();
+    if (event.target == document.getElementById('activationModal')) closeActivationModal();
+}
+</script>
+{% endblock %}

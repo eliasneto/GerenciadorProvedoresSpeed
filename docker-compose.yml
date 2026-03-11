@@ -1,0 +1,31 @@
+services:
+  speed_db:
+    image: mysql:8.0
+    container_name: speed_mysql
+    restart: always
+    environment:
+      MYSQL_DATABASE: speed_banco
+      MYSQL_USER: speed_user
+      MYSQL_PASSWORD: speed_password
+      MYSQL_ROOT_PASSWORD: root_super_password
+    ports:
+      - "3309:3306"
+    volumes:
+      - speed_db_data:/var/lib/mysql
+
+  speed_web:
+    build: .
+    container_name: speed_sistema
+    restart: always
+    ports:
+      - "8003:8000"
+    # Adicionamos o comando explícito para aumentar o tempo de resposta (timeout)
+    # Isso evita que o sistema caia ao processar requisições mais pesadas ou lentas
+    command: >
+      sh -c "python setup_speed.py && 
+             gunicorn --bind 0.0.0.0:8000 --timeout 120 --workers 3 config.wsgi:application"
+    depends_on:
+      - speed_db
+
+volumes:
+  speed_db_data:
