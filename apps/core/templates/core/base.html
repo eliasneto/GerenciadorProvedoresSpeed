@@ -1,3 +1,4 @@
+{% load static %}
 <!DOCTYPE html>
 <html lang="pt-br">
 <head>
@@ -51,15 +52,11 @@
     <aside id="sidebar" class="fixed top-0 left-0 h-full w-64 bg-ageis-black text-white z-50 transform -translate-x-full transition-all duration-300 ease-in-out md:translate-x-0 border-r border-white/5 shadow-2xl flex flex-col overflow-y-auto">
         
         <div class="p-8 mb-4">
-            <div class="flex items-center gap-3">
-                <div class="w-8 h-8 bg-ageis-yellow rounded-lg flex items-center justify-center shadow-[0_0_15px_rgba(255,193,7,0.3)]">
-                    <i data-lucide="zap" class="w-5 h-5 text-black fill-black"></i>
-                </div>
-                <span class="text-2xl font-black italic uppercase tracking-tighter leading-none">Speed</span>
+            <div class="flex items-center">
+                <img src="{% static 'img/speed_logo.png' %}" alt="Speed Logo" class="h-10 w-auto object-contain">
             </div>
-            <p class="text-[10px] text-gray-500 font-bold tracking-[0.2em] mt-2 ml-1 uppercase">Partner Manager</p>
+            <p class="text-[10px] text-gray-500 font-bold tracking-[0.2em] mt-3 uppercase">Partner Manager</p>
         </div>
-
         <nav class="px-4 space-y-1 flex-grow">
             <p class="text-[10px] uppercase text-gray-600 font-extrabold px-4 py-3 tracking-widest">Menu Principal</p>
             <a href="{% url 'home' %}" class="flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 text-gray-400 hover:bg-white/5 hover:text-white group">
@@ -153,7 +150,7 @@
                     <i data-lucide="menu"></i>
                 </button>
                 <div class="hidden md:block">
-                    <h2 class="text-xs font-bold text-gray-400 uppercase tracking-widest italic">Ageis Sistemas / <span class="text-gray-900">Gerenciador</span></h2>
+                    <h2 class="text-xs font-bold text-gray-400 uppercase tracking-widest italic">Speed Systems / <span class="text-gray-900">Gerenciador</span></h2>
                 </div>
             </div>
             <div class="flex items-center gap-3 bg-green-50 px-3 py-1.5 rounded-full border border-green-100">
