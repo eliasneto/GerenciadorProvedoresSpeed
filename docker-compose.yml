@@ -19,13 +19,31 @@ services:
     restart: always
     ports:
       - "8003:8000"
-    # Adicionamos o comando explícito para aumentar o tempo de resposta (timeout)
-    # Isso evita que o sistema caia ao processar requisições mais pesadas ou lentas
     command: >
       sh -c "python setup_speed.py && 
              gunicorn --bind 0.0.0.0:8000 --timeout 120 --workers 3 config.wsgi:application"
     depends_on:
       - speed_db
+
+  # =========================================================
+  # 🤖 NOVO SERVIÇO: ROBÔ DE SINCRONIZAÇÃO DO IXC
+  # =========================================================
+  speed_sincronizador:
+    build: .
+    container_name: speed_sincronizador_ixc
+    restart: always
+    depends_on:
+      - speed_db
+    # O comando abaixo cria um loop: roda o script -> espera 20 min -> repete
+    command: >
+      sh -c "
+      echo '🤖 Robô Sincronizador do IXC Iniciado...';
+      while true; do
+        echo '🔄 Iniciando sincronização incremental (D-0)...';
+        python scripts/integracoes/ixc_api_incremental.py;
+        echo '⏳ Sincronização finalizada. Aguardando 20 minutos (1200s)...';
+        sleep 1200;
+      done"
 
 volumes:
   speed_db_data:
