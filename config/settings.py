@@ -67,31 +67,31 @@ TEMPLATES = [
 WSGI_APPLICATION = 'config.wsgi.application'
 
 # A ponta do cabo de rede do Django conectando no MySQL do Docker
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.mysql',
-        'NAME': 'speed_banco',
-        'USER': 'speed_user',
-        'PASSWORD': 'speed_password',
-        'HOST': 'speed_db', # Nome exato do serviço no docker-compose
-        'PORT': '3306', # Porta interna do container MySQL
-        'OPTIONS': {
-            'init_command': "SET sql_mode='STRICT_TRANS_TABLES'",
-            'charset': 'utf8mb4',
-        }
-    }
-}
+#DATABASES = {
+#    'default': {
+#        'ENGINE': 'django.db.backends.mysql',
+#        'NAME': 'speed_banco',
+#        'USER': 'speed_user',
+#        'PASSWORD': 'speed_password',
+#        'HOST': 'speed_db', # Nome exato do serviço no docker-compose
+#        'PORT': '3306', # Porta interna do container MySQL
+#        'OPTIONS': {
+#            'init_command': "SET sql_mode='STRICT_TRANS_TABLES'",
+#            'charset': 'utf8mb4',
+#        }
+#    }
+#}
 
 # Comente o MySQL temporariamente
 # DATABASES = { ... }
 
 # Adicione o SQLite só para criar o app
-#DATABASES = {
-#    'default': {
-#        'ENGINE': 'django.db.backends.sqlite3',
-#        'NAME': BASE_DIR / 'db.sqlite3',
-#    }
-#}
+DATABASES = {
+    'default': {
+        'ENGINE': 'django.db.backends.sqlite3',
+        'NAME': BASE_DIR / 'db.sqlite3',
+    }
+}
 
 AUTH_PASSWORD_VALIDATORS = [
     {'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator'},

@@ -64,7 +64,7 @@ def investigar_dados_profundo(driver, nome_empresa, site_url):
             driver.close()
             driver.switch_to.window(driver.window_handles[0])
 
-    # FALLBACK DUCKDUCKGO (Busca CNPJ e Site caso o Maps falhe)
+    # FALLBACK DUCKDUCKGO
     if not cnpj or not site_oficial:
         try:
             query_ddg = f"https://html.duckduckgo.com/html/?q=empresa+{nome_empresa.replace(' ', '+')}"
@@ -72,13 +72,11 @@ def investigar_dados_profundo(driver, nome_empresa, site_url):
             driver.switch_to.window(driver.window_handles[-1])
             time.sleep(3)
             
-            # Tenta apanhar o site nos resultados orgânicos se não existir um
             if not site_oficial:
                 try:
                     links_ddg = driver.find_elements(By.CSS_SELECTOR, "a.result__url")
                     for lnk in links_ddg:
                         href = lnk.get_attribute("href")
-                        # Filtra sites de diretórios de CNPJ ou redes sociais para pegar o site real
                         if href and "cnpj" not in href and "jusbrasil" not in href and "instagram" not in href and "facebook" not in href:
                             site_oficial = href
                             break
@@ -157,23 +155,29 @@ def extrair_leads(caminho_excel, automacao_id):
                         print(f"⏩ Pulando (Já existe): {nome}")
                         continue
 
+                    # Clica na empresa e dá um tempo MÍNIMO para a animação do Maps descarregar os dados velhos
                     driver.execute_script("arguments[0].click();", card)
+                    time.sleep(1.5) 
                     
                     try:
-                        WebDriverWait(driver, 8).until(EC.presence_of_element_located((By.CSS_SELECTOR, "button[data-value='Compartilhar'], button[aria-label*='Compartilhar']")))
+                        # NOVA LÓGICA: Espera que o Título (h1) do painel lateral atualize para o NOME da nova empresa.
+                        # Usa o primeiro nome para evitar falhas com aspas ou caracteres estranhos.
+                        primeiro_nome = nome.split()[0].replace("'", "").replace('"', "")
+                        WebDriverWait(driver, 8).until(
+                            EC.presence_of_element_located((By.XPATH, f"//h1[contains(text(), '{primeiro_nome}')]"))
+                        )
+                        time.sleep(1) # Extra segurança após a confirmação visual
                     except:
-                        time.sleep(3)
+                        time.sleep(4) # Fallback se o título for muito estranho e falhar o XPATH
 
                     tel, site = "Não informado", None
                     
-                    # 1. TENTA ACHAR O SITE (Estratégia Agressiva)
+                    # 1. TENTA ACHAR O SITE
                     try:
-                        # Método A: Seletor exato
                         site_element = driver.find_element(By.CSS_SELECTOR, "a[data-item-id='authority']")
                         site = site_element.get_attribute("href")
                     except:
                         try:
-                            # Método B: Varredura de todos os links do painel principal
                             links_painel = driver.find_elements(By.CSS_SELECTOR, "div[role='main'] a[href^='http']")
                             for lnk in links_painel:
                                 h = lnk.get_attribute("href")
@@ -182,7 +186,6 @@ def extrair_leads(caminho_excel, automacao_id):
                                     break
                         except: pass
 
-                    # Limpa links de redirecionamento do Google
                     if site and "google.com/url" in site:
                         try:
                             parsed = urllib.parse.urlparse(site)
@@ -205,10 +208,9 @@ def extrair_leads(caminho_excel, automacao_id):
 
                     print(f"   ↳ Lendo Maps -> Tel: {tel} | Site: {'Sim' if site else 'Não'}")
 
-                    # 3. INVESTIGAÇÃO PROFUNDA (Busca e-mail, CNPJ e tenta achar o site se ainda não tiver)
+                    # 3. INVESTIGAÇÃO PROFUNDA
                     email, cnpj, site_profundo = investigar_dados_profundo(driver, nome, site)
                     
-                    # Se o Maps não tinha site, mas a pesquisa profunda encontrou um, usamos esse!
                     if not site and site_profundo:
                         site = site_profundo
 
