@@ -9,7 +9,7 @@ from tqdm import tqdm
 import traceback
 
 # ==========================================
-#  CONFIGURAÇÃO DO AMBIENTE DJANGO (CORRIGIDO)
+# ⚙️ CONFIGURAÇÃO DO AMBIENTE DJANGO
 # ==========================================
 DIRETORIO_ATUAL = os.path.dirname(os.path.abspath(__file__))
 BASE_DIR = os.path.dirname(os.path.dirname(DIRETORIO_ATUAL))
@@ -17,6 +17,7 @@ BASE_DIR = os.path.dirname(os.path.dirname(DIRETORIO_ATUAL))
 if BASE_DIR not in sys.path:
     sys.path.append(BASE_DIR)
 
+# Adiciona a pasta 'apps' ao PATH
 APPS_DIR = os.path.join(BASE_DIR, 'apps')
 if APPS_DIR not in sys.path:
     sys.path.insert(0, APPS_DIR)
@@ -24,14 +25,14 @@ if APPS_DIR not in sys.path:
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings') 
 
 import django
-django.setup() # <--- ESSENCIAL ESTAR AQUI
+django.setup()
 
-# AGORA SIM IMPORTAMOS OS MODELS
+# Importação dos models (Sempre APÓS o django.setup)
 from clientes.models import Cliente, Endereco, HistoricoSincronizacao, LogAlteracaoIXC
 from django.utils import timezone
 
 # ==========================================
-#  CONFIGURAÇÕES DA API DO IXC
+# 🌐 CONFIGURAÇÕES DA API DO IXC
 # ==========================================
 IXC_URL = "https://megainfraestrutura.com.br/webservice/v1"  
 IXC_TOKEN = "76:54f35af33ea35f3b8a9a8fa14868322662d0465ebbb63fc56c3fb499ac3e1b61"
@@ -54,7 +55,7 @@ def consultar_ixc(tabela, payload):
         return None
 
 def buscar_mapa_filiais():
-    print(" 🏢 Mapeando nomes das filiais no IXC...")
+    print("🏢 Mapeando nomes das filiais no IXC...")
     payload = {"qtype": "id", "query": "0", "oper": ">", "page": "1", "rp": "100"}
     res = consultar_ixc("filial", payload)
     mapa = {}
@@ -64,22 +65,26 @@ def buscar_mapa_filiais():
     return mapa
 
 def extrair_clientes_recentes(dias_retroativos=0):
-    if dias_retroativos is None:
-        data_limite = "2000-01-01 00:00:00"
-        print(" 🚀 Iniciando CARGA TOTAL...")
-    else:
-        data_limite = (datetime.now() - timedelta(days=dias_retroativos)).strftime('%Y-%m-%d 00:00:00')
-        print(f" ⏳ Buscando alterações após {data_limite}...")
+    # 1. Calcula a data limite para o "freio"
+    data_limite = (datetime.now() - timedelta(days=dias_retroativos)).strftime('%Y-%m-%d 00:00:00')
+    
+    # 2. Descobrimos o total de clientes ATIVOS (Exatamente como na carga total)
+    res_total = consultar_ixc("cliente", {"qtype": "ativo", "query": "S", "oper": "=", "rp": "1"})
+    total_ativos = int(res_total.get('total', 0)) if res_total else 0
+
+    print(f"⏳ Analisando {total_ativos} clientes ativos em busca de alterações após {data_limite}...")
     
     pagina_atual = 1
-    registros_por_pagina = 100 
+    registros_por_pagina = 50
     base_de_dados_local = []
     parar_busca = False
-    clientes_processados = 0
-
-    pbar = tqdm(desc=" 🔍 Lendo API IXC", unit="cli")
+    
+    # Barra de progresso baseada no total de ativos
+    pbar = tqdm(total=total_ativos, desc="📥 Varrendo API IXC", unit="cli")
 
     while not parar_busca:
+        # Acessa os clientes exatamente como na automação de carga total
+        # Mas ordenando por data_atualizacao desc para achar os novos rápido
         payload = {
             "qtype": "ativo", "query": "S", "oper": "=",
             "page": str(pagina_atual), "rp": str(registros_por_pagina),
@@ -93,12 +98,19 @@ def extrair_clientes_recentes(dias_retroativos=0):
         if not clientes: break
 
         for cliente in clientes:
+            # 3. AQUI ESTÁ A LÓGICA DO INCREMENTAL:
+            # Se chegarmos em um cliente com data de atualização antiga, paramos a busca.
             data_ixc = cliente.get('data_atualizacao') or '2000-01-01 00:00:00'
-            if dias_retroativos is not None and data_ixc < data_limite:
+            
+            if data_ixc < data_limite:
                 parar_busca = True
+                # Preenche a barra até o final e sai
+                pbar.update(total_ativos - pbar.n)
                 break
 
             id_cli = cliente['id']
+            
+            # Busca Logins e Contratos (Igual à carga total)
             res_logins = consultar_ixc("radusuarios", {"qtype": "id_cliente", "query": id_cli, "oper": "=", "rp": "50"})
             logins_encontrados = res_logins.get('registros', []) if res_logins else []
 
@@ -113,7 +125,6 @@ def extrair_clientes_recentes(dias_retroativos=0):
                 "contratos": contratos_encontrados,
                 "logins": logins_encontrados
             })
-            clientes_processados += 1
             pbar.update(1)
 
         pagina_atual += 1
@@ -123,18 +134,18 @@ def extrair_clientes_recentes(dias_retroativos=0):
 
 def salvar_clientes_no_django(dados_ixc, mapa_filiais):
     if not dados_ixc:
-        print(" ✅ Sistema já está atualizado!")
+        print("✅ Sistema já está atualizado!")
         return
 
-    print("\n 💾 Gravando e auditando alterações...")
-    pbar_save = tqdm(total=len(dados_ixc), desc=" Banco de Dados", unit="cli")
+    print("\n💾 Gravando e auditando alterações no banco...")
+    pbar_save = tqdm(total=len(dados_ixc), desc="💾 Gravando no Banco", unit="cli")
 
     for dado in dados_ixc:
         id_ixc = dado['id_ixc']
         cnpj_novo = str(dado.get('cpf_cnpj') or '').strip()
         razao_nova = dado['nome_com_id']
         
-        # Auditoria de Cliente
+        # --- AUDITORIA (DE/PARA) ---
         cliente_obj = Cliente.objects.filter(id_ixc=id_ixc).first()
         if cliente_obj:
             if cliente_obj.cnpj_cpf != cnpj_novo:
@@ -153,10 +164,10 @@ def salvar_clientes_no_django(dados_ixc, mapa_filiais):
             
             status_login_ixc = str(lg.get('ativo', 'S')).strip().upper()
             status_con_ixc = str(con_pai.get('status', 'A')).strip().upper()
-            status_novo = 'cancelado' if status_con_ixc in ['C', 'D', 'CM'] else ('inativo' if status_login_ixc == 'N' else 'ativo')
-            filial_nova = mapa_filiais.get(str(con_pai.get('id_filial')), "Não Informada")
+            status_novo = 'cancelado' if status_con_ixc in ['C', 'D', 'CM', 'CANCELADO'] else ('inativo' if status_login_ixc == 'N' else 'ativo')
+            filial_nova = mapa_filiais.get(str(con_pai.get('id_filial')), "Filial Não Informada")
 
-            # Auditoria de Endereço/Login
+            # --- AUDITORIA DE STATUS/FILIAL (DE/PARA) ---
             end_atual = Endereco.objects.filter(cliente=cliente_obj, login_ixc=login_nome).first()
             if end_atual:
                 if end_atual.status != status_novo:
@@ -177,24 +188,28 @@ def salvar_clientes_no_django(dados_ixc, mapa_filiais):
                 }
             )
         pbar_save.update(1)
+
     pbar_save.close()
+    print("✅ Sincronização concluída com sucesso!")
 
 if __name__ == "__main__":
     urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+    
     historico = HistoricoSincronizacao.objects.create(status='rodando')
     
     try:
         mapa_f = buscar_mapa_filiais()
+        # Roda o incremental (D-0)
         meus_dados = extrair_clientes_recentes(dias_retroativos=0) 
         salvar_clientes_no_django(meus_dados, mapa_f)
         
         historico.status = 'sucesso'
         historico.registros_processados = len(meus_dados)
-        historico.detalhes = "Sincronização incremental concluída."
+        historico.detalhes = f"Incremental concluído. {len(meus_dados)} registros auditados."
     except Exception:
         historico.status = 'erro'
         historico.detalhes = traceback.format_exc()
-        print(" ❌ Erro fatal! Detalhes salvos no banco.")
+        print("❌ Erro fatal registrado no banco.")
     finally:
         historico.data_fim = timezone.now()
         historico.save()

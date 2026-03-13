@@ -180,6 +180,10 @@ USE_I18N = True
 USE_TZ = False
 
 STATIC_URL = 'static/'
+# Adicione isso aqui 👇 (Diz ao Django para olhar na sua pasta static da raiz)
+STATICFILES_DIRS = [
+    os.path.join(BASE_DIR, 'static'),
+]
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # --- AUTENTICAÇÃO ---
