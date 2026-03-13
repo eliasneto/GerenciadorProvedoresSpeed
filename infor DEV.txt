@@ -44,3 +44,9 @@ docker volume rm NOME_DO_VOLUME
 rm -rf nome_da_pasta
 
 # Comando para criar pasta no linux
+
+
+# subindo docker limpando o cache: 
+docker-compose down
+docker-compose build --no-cache
+docker-compose up -d
