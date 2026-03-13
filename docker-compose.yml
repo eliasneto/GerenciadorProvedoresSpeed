@@ -64,7 +64,7 @@ services:
         echo ' Iniciando sincronização incremental (D-0)...';
         python scripts/integracoes/ixc_api_incremental.py;
         echo ' Sincronização finalizada. Aguardando 20 minutos...';
-        sleep 1200;
+        sleep 300;
       done"
 
 volumes:

@@ -69,23 +69,22 @@ def buscar_mapa_filiais():
 # dias_retroativos=0 puxa só o dia de HOJE (D-0).
 # dias_retroativos=1 puxa ontem e hoje (D-1).
 def extrair_clientes_recentes(dias_retroativos=0):
-    
-    #  1. CALCULA A DATA LIMITE (O FREIO)
-    # Pega o dia atual, subtrai os dias e zera as horas (00:00:00).
-    data_limite = (datetime.now() - timedelta(days=dias_retroativos)).strftime('%Y-%m-%d 00:00:00')
-    print(f" Iniciando extração INCREMENTAL (Buscando tudo alterado APÓS {data_limite})...")
+    # Se dias_retroativos for None ou muito alto, vira uma CARGA TOTAL
+    if dias_retroativos is None:
+        data_limite = "2000-01-01 00:00:00"
+        print(" 🚀 Iniciando CARGA TOTAL (Buscando todos os registros)...")
+    else:
+        data_limite = (datetime.now() - timedelta(days=dias_retroativos)).strftime('%Y-%m-%d 00:00:00')
+        print(f" ⏳ Iniciando extração INCREMENTAL (Após {data_limite})...")
     
     pagina_atual = 1
-    registros_por_pagina = 50
+    registros_por_pagina = 100 # Aumentado para ser mais rápido
     base_de_dados_local = []
     parar_busca = False
-    clientes_processados = 0
 
-    pbar = tqdm(desc=" Lendo API", unit="cli")
+    pbar = tqdm(desc=" 🔍 Lendo API IXC", unit="cli")
 
     while not parar_busca:
-        #  2. O CAMPO QUE FILTRA NO IXC
-        # Pedimos ordenado por "data_atualizacao" decrescente (mais recentes primeiro)
         payload = {
             "qtype": "ativo", "query": "S", "oper": "=",
             "page": str(pagina_atual), "rp": str(registros_por_pagina),
@@ -93,56 +92,43 @@ def extrair_clientes_recentes(dias_retroativos=0):
         }
 
         resposta = consultar_ixc("cliente", payload)
-        if not resposta or 'registros' not in resposta:
-            break
+        if not resposta or 'registros' not in resposta: break
             
         clientes = resposta['registros']
-        if not clientes:
-            break
+        if not clientes: break
 
         for cliente in clientes:
-            # Pega a data que o cliente foi alterado no IXC
             data_ixc = cliente.get('data_atualizacao') or '2000-01-01 00:00:00'
             
-            #  3. O ACIONAMENTO DO FREIO
-            # Se a data do IXC for mais velha que a nossa Data Limite, para tudo!
-            if data_ixc < data_limite:
+            # O FREIO: Só ativa se não for carga total
+            if dias_retroativos is not None and data_ixc < data_limite:
                 parar_busca = True
                 break
 
             id_cli = cliente['id']
             
+            # BUSCA LOGINS (radusuarios)
             res_logins = consultar_ixc("radusuarios", {"qtype": "id_cliente", "query": id_cli, "oper": "=", "rp": "50"})
             logins_encontrados = res_logins.get('registros', []) if res_logins else []
 
-            if len(logins_encontrados) > 0:
-                dados_completos = {
-                    "id_ixc": id_cli,
-                    "nome_com_id": f"{id_cli} - {cliente['razao']}",
-                    "fantasia": cliente.get('fantasia') or '',
-                    "cpf_cnpj": cliente.get('cnpj_cpf') or '',
-                    "contratos": [],
-                    "logins": [{"id_contrato": l.get('id_contrato', ''), "login": l['login'], "ativo": l.get('ativo', 'S')} for l in logins_encontrados]
-                }
+            # BUSCA CONTRATOS
+            res_con = consultar_ixc("cliente_contrato", {"qtype": "id_cliente", "query": id_cli, "oper": "=", "rp": "50"})
+            contratos_encontrados = res_con.get('registros', []) if res_con else []
 
-                res_con = consultar_ixc("cliente_contrato", {"qtype": "id_cliente", "query": id_cli, "oper": "=", "rp": "50"})
-                if res_con and 'registros' in res_con:
-                    for c in res_con['registros']:
-                        dados_completos["contratos"].append({
-                            "id_contrato": c['id'], "status": c['status'], "endereco": c.get('endereco', ''),
-                            "numero": c.get('numero', 'S/N'), "bairro": c.get('bairro', ''), "cidade": c.get('cidade', ''),
-                            "uf": c.get('uf', 'CE'), "filial_id": str(c.get('id_filial', '')), "agente_id": c.get('vendedor', '')
-                        })
-
-                base_de_dados_local.append(dados_completos)
-            
-            clientes_processados += 1
+            dados_completos = {
+                "id_ixc": id_cli,
+                "nome_com_id": f"{id_cli} - {cliente['razao']}",
+                "fantasia": cliente.get('fantasia') or '',
+                "cpf_cnpj": cliente.get('cnpj_cpf') or '',
+                "contratos": contratos_encontrados,
+                "logins": logins_encontrados
+            }
+            base_de_dados_local.append(dados_completos)
             pbar.update(1)
 
         pagina_atual += 1
 
     pbar.close()
-    print(f" Total de clientes criados/atualizados encontrados: {clientes_processados}")
     return base_de_dados_local
 
 def salvar_clientes_no_django(dados_ixc, mapa_filiais):

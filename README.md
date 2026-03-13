@@ -21,3 +21,6 @@ Text Search: Custa aprox. US$ 32,00 por 1.000 buscas.
 Place Details: Custa aprox. US$ 17,00 por 1.000 buscas.
 
 Com o crédito de US$ 200, você consegue pesquisar e detalhar cerca de 4.000 a 5.000 fornecedores por mês totalmente de graça.
+
+
+docker exec -it speed_sistema python scripts/integracoes/ixc_api.py
