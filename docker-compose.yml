@@ -19,17 +19,20 @@ services:
     restart: always
     ports:
       - "8003:8000"
-    # =========================================================
-    #  VARIÁVEIS DE AMBIENTE (ACTIVE DIRECTORY / LDAP)
-    # =========================================================
     environment:
+      # --- BANCO DE DADOS ---
+      - DB_NAME=speed_banco
+      - DB_USER=speed_user
+      - DB_PASSWORD=speed_password
+      - DB_HOST=speed_db
+      - DB_PORT=3306
+      # --- ACTIVE DIRECTORY (AD) ---
       - USE_AD_AUTH=true
       - AD_SERVER=ldap://seu-servidor-ad.local
       - AD_USER=usuario_leitura_ad@seu-dominio.com.br
       - AD_PASS=SenhaDoUsuario123
       - BASE_DN=DC=seu-dominio,DC=com,DC=br
       - AD_DOMAIN=seu-dominio.com.br
-      # Opcional: Se quiser restringir a um grupo específico
       # - GRUPO_PERMITIDO=CN=Usuarios-Speed,OU=Grupos,DC=seu-dominio,DC=com,DC=br
     command: >
       sh -c "python setup_speed.py && 
@@ -44,15 +47,19 @@ services:
     build: .
     container_name: speed_sincronizador_ixc
     restart: always
-    depends_on:
-      - speed_db
-    # Opcional: Passamos USE_AD_AUTH=false para o robô, pois ele não faz login, 
-    # apenas executa script interno, poupando processamento.
-    # cálculo é simples: 5 minutos x 60 segundos = 300
     environment:
       - USE_AD_AUTH=false
+      - DB_NAME=speed_banco
+      - DB_USER=speed_user
+      - DB_PASSWORD=speed_password
+      - DB_HOST=speed_db
+      - DB_PORT=3306
+    depends_on:
+      - speed_db
     command: >
       sh -c "
+      echo ' Aguardando banco de dados estabilizar...';
+      sleep 20;
       echo ' Robô Sincronizador do IXC Iniciado...';
       while true; do
         echo ' Iniciando sincronização incremental (D-0)...';

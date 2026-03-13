@@ -8,3 +8,6 @@ Porta: 3309 (Aquela porta segura que abrimos para fora)
 Banco de Dados: speed_banco
 Usuário: speed_user (ou root)
 Senha: speed_password (ou root_super_password se usar o root)
+
+
+API google: AIzaSyCtz9rsDfujX9NhIvm1rW1hfkKCsxE3GHk
