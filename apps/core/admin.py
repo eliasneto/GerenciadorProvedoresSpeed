@@ -1,14 +1,13 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 from .models import User, RegistroHistorico
-from django.urls import path
 
 @admin.register(User)
 class UserAdmin(BaseUserAdmin):
     # 1. Removemos o formulário de alteração de senha do topo da página
     change_password_form = None
 
-    # 2. Reorganiza os campos de edição (Removendo o campo de Password/Estrelinhas)
+    # 2. Reorganiza os campos de EDIÇÃO (Removendo o campo de Password/Estrelinhas)
     fieldsets = (
         (None, {'fields': ('username',)}),
         ('Informações Pessoais', {'fields': ('first_name', 'last_name', 'email')}),
@@ -17,8 +16,7 @@ class UserAdmin(BaseUserAdmin):
         ('Datas', {'fields': ('last_login', 'date_joined')}),
     )
     
-    # 3. Organiza o formulário de CRIAÇÃO (Removendo a obrigatoriedade de senha)
-    # Aqui permitimos criar o usuário apenas com username e e-mail
+    # 3. Organiza o formulário de CRIAÇÃO (Puxando apenas o essencial para o AD)
     add_fieldsets = (
         (None, {
             'classes': ('wide',),
@@ -32,10 +30,12 @@ class UserAdmin(BaseUserAdmin):
     ordering = ('username',)
     readonly_fields = ('last_login', 'date_joined')
 
-    # 4. Bloqueio de Segurança: Remove as URLs de alteração de senha do admin
+    # 4. Bloqueio de Segurança: Remove o acesso à view de senha
+    # Esta é a forma correta e segura para Django 4.0+
     def get_urls(self):
         urls = super().get_urls()
-        return [u for u in urls if 'password' not in u.pattern.get_regexp().pattern]
+        # Filtramos as URLs removendo aquelas que levam para a troca de senha
+        return [u for u in urls if 'password' not in u.name]
 
 # Registro do Histórico
 @admin.register(RegistroHistorico)
