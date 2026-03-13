@@ -122,25 +122,26 @@ else:
     ]
 
 # ============================================
-#  CONFIG LDAP / AD (usa variáveis do .env ou Docker)
+# 🌐 CONFIG LDAP / AD (Caminho corrigido para o seu .env)
 # ============================================
 if USE_AD_AUTH:
     import ldap
     from django_auth_ldap.config import LDAPSearch, ActiveDirectoryGroupType
 
-    AUTH_LDAP_SERVER_URI = os.getenv("AD_SERVER") or os.getenv("AD_SERVER_URI", "")
-    AUTH_LDAP_BIND_DN = os.getenv("AD_USER") or os.getenv("AD_BIND_DN", "")
-    AUTH_LDAP_BIND_PASSWORD = os.getenv("AD_PASS") or os.getenv("AD_BIND_PASSWORD", "")
+    # O os.getenv busca o nome EXATO que está no seu .env
+    AUTH_LDAP_SERVER_URI = os.getenv("AD_SERVER_URI")
+    AUTH_LDAP_BIND_DN = os.getenv("AD_BIND_DN")
+    AUTH_LDAP_BIND_PASSWORD = os.getenv("AD_BIND_PASSWORD")
 
-    BASE_DN = os.getenv("BASE_DN") or os.getenv("AD_USER_SEARCH_BASE", "")
-
+    # Base de busca de usuários
     AUTH_LDAP_USER_SEARCH = LDAPSearch(
-        BASE_DN,
+        os.getenv("AD_USER_SEARCH_BASE"),
         ldap.SCOPE_SUBTREE,
-        "(sAMAccountName=%(user)s)",   # login = samAccountName
+        "(sAMAccountName=%(user)s)",
     )
 
-    GROUP_BASE_DN = os.getenv("AD_GROUP_SEARCH_BASE", BASE_DN)
+    # Configurações de Grupo
+    GROUP_BASE_DN = os.getenv("AD_GROUP_SEARCH_BASE")
     AUTH_LDAP_GROUP_SEARCH = LDAPSearch(
         GROUP_BASE_DN,
         ldap.SCOPE_SUBTREE,
@@ -148,6 +149,7 @@ if USE_AD_AUTH:
     )
     AUTH_LDAP_GROUP_TYPE = ActiveDirectoryGroupType()
 
+    # Mapeamento de atributos: AD -> Django
     AUTH_LDAP_USER_ATTR_MAP = {
         "first_name": "givenName",
         "last_name": "sn",
@@ -157,17 +159,18 @@ if USE_AD_AUTH:
     AUTH_LDAP_ALWAYS_UPDATE_USER = True
     AUTH_LDAP_MIRROR_GROUPS = True
 
-    grupo_permitido_dn = os.getenv("GRUPO_PERMITIDO", "")
-    if grupo_permitido_dn:
-        AUTH_LDAP_REQUIRE_GROUP = grupo_permitido_dn
-
-    AD_DEFAULT_DOMAIN = os.getenv("AD_DOMAIN") or os.getenv("AD_DEFAULT_DOMAIN", "")
-    if AD_DEFAULT_DOMAIN:
-        AUTH_LDAP_USER_DOMAIN = AD_DEFAULT_DOMAIN
+    # Domínio padrão (HOWBE)
+    AUTH_LDAP_USER_DOMAIN = os.getenv("AD_DEFAULT_DOMAIN")
 
     AUTH_LDAP_CONNECTION_OPTIONS = {
         ldap.OPT_REFERRALS: 0,
     }
+    
+    # Adicione isso para debug se o login falhar (aparece no console do Docker)
+    import logging
+    logger = logging.getLogger('django_auth_ldap')
+    logger.addHandler(logging.StreamHandler())
+    logger.setLevel(logging.DEBUG)
 
 
 # --- AJUSTES DE LOCALIZAÇÃO (IMPORTANTE) ---

@@ -36,7 +36,7 @@ services:
       # - GRUPO_PERMITIDO=CN=Usuarios-Speed,OU=Grupos,DC=seu-dominio,DC=com,DC=br
     command: >
       sh -c "python setup_speed.py && 
-             gunicorn --bind 0.0.0.0:8000 --timeout 120 --workers 3 config.wsgi:application"
+             gunicorn --bind 0.0.0.0:8000 --timeout 120 --workers 3 --log-level debug --access-logfile - config.wsgi:application"
     depends_on:
       - speed_db
 
