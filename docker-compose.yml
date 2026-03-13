@@ -20,7 +20,7 @@ services:
     ports:
       - "8003:8000"
     # =========================================================
-    # 🔐 VARIÁVEIS DE AMBIENTE (ACTIVE DIRECTORY / LDAP)
+    #  VARIÁVEIS DE AMBIENTE (ACTIVE DIRECTORY / LDAP)
     # =========================================================
     environment:
       - USE_AD_AUTH=true
@@ -38,7 +38,7 @@ services:
       - speed_db
 
   # =========================================================
-  # 🤖 NOVO SERVIÇO: ROBÔ DE SINCRONIZAÇÃO DO IXC
+  #  NOVO SERVIÇO: ROBÔ DE SINCRONIZAÇÃO DO IXC
   # =========================================================
   speed_sincronizador:
     build: .
@@ -48,16 +48,17 @@ services:
       - speed_db
     # Opcional: Passamos USE_AD_AUTH=false para o robô, pois ele não faz login, 
     # apenas executa script interno, poupando processamento.
+    # cálculo é simples: 5 minutos x 60 segundos = 300
     environment:
       - USE_AD_AUTH=false
     command: >
       sh -c "
-      echo '🤖 Robô Sincronizador do IXC Iniciado...';
+      echo ' Robô Sincronizador do IXC Iniciado...';
       while true; do
-        echo '🔄 Iniciando sincronização incremental (D-0)...';
+        echo ' Iniciando sincronização incremental (D-0)...';
         python scripts/integracoes/ixc_api_incremental.py;
-        echo '⏳ Sincronização finalizada. Aguardando 20 minutos...';
-        sleep 1200;
+        echo ' Sincronização finalizada. Aguardando 20 minutos...';
+        sleep 300;
       done"
 
 volumes:

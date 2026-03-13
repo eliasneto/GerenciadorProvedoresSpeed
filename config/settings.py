@@ -2,7 +2,7 @@ from pathlib import Path
 import os
 import sys
 from dotenv import load_dotenv  # pip install python-dotenv
-
+from decouple import config
 # ============================================
 # ⚙️ CARREGA VARIÁVEIS DE AMBIENTE
 # ============================================
@@ -76,10 +76,30 @@ WSGI_APPLICATION = 'config.wsgi.application'
 # ==========================================
 # 💾 BANCO DE DADOS (SQLite)
 # ==========================================
+#DATABASES = {
+#    'default': {
+#        'ENGINE': 'django.db.backends.sqlite3',
+#        'NAME': BASE_DIR / 'db.sqlite3',
+#    }
+#}
+
+# ==========================================
+# 💾 BANCO DE DADOS (MySQL)
+# ==========================================
+
+
 DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+        'ENGINE': 'django.db.backends.mysql',
+        'NAME': config('DB_NAME', default='speed_banco'),
+        'USER': config('DB_USER', default='speed_user'),
+        'PASSWORD': config('DB_PASSWORD', default='sua_senha_aqui'),
+        'HOST': config('DB_HOST', default='db'),  # 'db' é o nome do serviço no docker-compose
+        'PORT': config('DB_PORT', default='3306'),
+        'OPTIONS': {
+            'init_command': "SET sql_mode='STRICT_TRANS_TABLES'",
+            'charset': 'utf8mb4',
+        },
     }
 }
 
