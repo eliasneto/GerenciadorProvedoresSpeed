@@ -84,22 +84,23 @@ WSGI_APPLICATION = 'config.wsgi.application'
 #}
 
 # ==========================================
-#  BANCO DE DADOS (MySQL)
+# 💾 BANCO DE DADOS (MySQL)
 # ==========================================
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.mysql',
-        'NAME': os.getenv('DB_NAME', 'speed_banco'),
-        'USER': os.getenv('DB_USER', 'speed_user'),
-        'PASSWORD': os.getenv('DB_PASSWORD', 'speed_password'),
-        'HOST': os.getenv('DB_HOST', 'speed_db'), # Nome do serviço no docker-compose
-        'PORT': os.getenv('DB_PORT', '3306'),
+        'NAME': config('DB_NAME', default='speed_banco'),
+        'USER': config('DB_USER', default='speed_user'),
+        'PASSWORD': config('DB_PASSWORD', default='speed_password'),
+        'HOST': config('DB_HOST', default='speed_db'),  # 👈 MUDE DE 'db' PARA 'speed_db'
+        'PORT': config('DB_PORT', default='3306'),
         'OPTIONS': {
             'init_command': "SET sql_mode='STRICT_TRANS_TABLES'",
             'charset': 'utf8mb4',
         },
     }
 }
+
 AUTH_PASSWORD_VALIDATORS = [
     {'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator'},
     {'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator'},
