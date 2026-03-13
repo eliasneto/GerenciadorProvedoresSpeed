@@ -95,3 +95,15 @@ class HistoricoSincronizacao(models.Model):
 
     def __str__(self):
         return f"Sync {self.data_inicio.strftime('%d/%m/%Y %H:%M')} - {self.get_status_display()}"
+
+
+class LogAlteracaoIXC(models.Model):
+    cliente = models.ForeignKey('Cliente', on_delete=models.CASCADE, related_name='logs_alteracoes')
+    campo_alterado = models.CharField(max_length=100) # Ex: 'status', 'endereco', 'login'
+    valor_antigo = models.TextField(null=True, blank=True)
+    valor_novo = models.TextField(null=True, blank=True)
+    data_alteracao = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "Log de Alteração IXC"
+        ordering = ['-data_alteracao']

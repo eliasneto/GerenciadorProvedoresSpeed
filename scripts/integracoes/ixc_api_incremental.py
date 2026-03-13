@@ -7,7 +7,7 @@ import urllib3
 from datetime import datetime, timedelta
 from tqdm import tqdm  
 import traceback
-
+from clientes.models import Cliente, Endereco, HistoricoSincronizacao, LogAlteracaoIXC
 # ==========================================
 #  CONFIGURAÇÃO DO AMBIENTE DJANGO
 # ==========================================
@@ -131,60 +131,86 @@ def extrair_clientes_recentes(dias_retroativos=0):
     pbar.close()
     return base_de_dados_local
 
+
 def salvar_clientes_no_django(dados_ixc, mapa_filiais):
     if not dados_ixc:
-        print(" Nenhuma alteração nova no IXC para sincronizar. Sistema já está atualizado!")
+        print(" Nenhuma alteração nova no IXC para sincronizar.")
         return
 
-    print("\n Atualizando registros no banco de dados...")
-    pbar_save = tqdm(total=len(dados_ixc), desc=" Gravando no Banco", unit="cli")
+    print("\n 🔍 Analisando e gravando alterações...")
+    pbar_save = tqdm(total=len(dados_ixc), desc=" Processando", unit="cli")
 
     for dado in dados_ixc:
-        cnpj_limpo = str(dado.get('cpf_cnpj') or '').strip()
-
+        id_ixc = dado['id_ixc']
+        cnpj_novo = str(dado.get('cpf_cnpj') or '').strip()
+        razao_nova = dado['nome_com_id']
+        
+        # 1. VERIFICA ALTERAÇÕES NO CLIENTE (RAZÃO OU CNPJ)
+        cliente_obj = Cliente.objects.filter(id_ixc=id_ixc).first()
+        
+        if cliente_obj:
+            if cliente_obj.cnpj_cpf != cnpj_novo:
+                LogAlteracaoIXC.objects.create(cliente=cliente_obj, campo_alterado="cnpj_cpf", valor_antigo=cliente_obj.cnpj_cpf, valor_novo=cnpj_novo)
+            if cliente_obj.razao_social != razao_nova:
+                LogAlteracaoIXC.objects.create(cliente=cliente_obj, campo_alterado="razao_social", valor_antigo=cliente_obj.razao_social, valor_novo=razao_nova)
+        
+        # Atualiza ou cria o Cliente
         cliente_obj, _ = Cliente.objects.update_or_create(
-            id_ixc=dado['id_ixc'],
-            defaults={
-                'cnpj_cpf': cnpj_limpo,
-                'razao_social': dado['nome_com_id'],
-                'nome_fantasia': dado['fantasia']
-            }
+            id_ixc=id_ixc,
+            defaults={'cnpj_cpf': cnpj_novo, 'razao_social': razao_nova, 'nome_fantasia': dado['fantasia']}
         )
 
+        # 2. VERIFICA ALTERAÇÕES NOS ENDEREÇOS/LOGINS
         for lg in dado.get('logins', []):
+            login_nome = lg['login']
             con_pai = next((c for c in dado['contratos'] if str(c['id_contrato']) == str(lg['id_contrato'])), {})
             
+            # Lógica de Status (Mesma que você já usa)
             status_login_ixc = str(lg.get('ativo', 'S')).strip().upper()
             status_contrato_ixc = str(con_pai.get('status', 'A')).strip().upper()
-            
-            if status_contrato_ixc in ['C', 'D', 'CM', 'CANCELADO', 'DESISTENCIA', 'DESISTÊNCIA']:
-                status_django = 'cancelado'
-            elif status_login_ixc == 'N':
-                status_django = 'inativo'
-            elif status_login_ixc == 'S':
-                status_django = 'ativo'
-            else:
-                status_django = 'pendente'
+            status_novo = 'cancelado' if status_contrato_ixc in ['C', 'D', 'CM'] else ('inativo' if status_login_ixc == 'N' else 'ativo')
 
+            # BUSCA O REGISTRO ATUAL PARA COMPARAR
+            endereco_atual = Endereco.objects.filter(cliente=cliente_obj, login_ixc=login_nome).first()
+            
+            if endereco_atual:
+                # Se o status mudou, loga!
+                if endereco_atual.status != status_novo:
+                    LogAlteracaoIXC.objects.create(
+                        cliente=cliente_obj, 
+                        login_ixc=login_nome, 
+                        campo_alterado="status_login", 
+                        valor_antigo=endereco_atual.status, 
+                        valor_novo=status_novo
+                    )
+                
+                # Se a filial mudou, loga!
+                filial_nova = mapa_filiais.get(con_pai.get('filial_id'), f"Filial {con_pai.get('filial_id')}")
+                if endereco_atual.filial_ixc != filial_nova:
+                    LogAlteracaoIXC.objects.create(
+                        cliente=cliente_obj, 
+                        login_ixc=login_nome, 
+                        campo_alterado="filial", 
+                        valor_antigo=endereco_atual.filial_ixc, 
+                        valor_novo=filial_nova
+                    )
+
+            # Grava a atualização final
             Endereco.objects.update_or_create(
                 cliente=cliente_obj,
-                login_ixc=lg['login'],
+                login_ixc=login_nome,
                 defaults={
                     'logradouro': con_pai.get('endereco') or 'Não informado',
                     'numero': con_pai.get('numero') or 'S/N',
                     'bairro': con_pai.get('bairro', ''),
                     'cidade': con_pai.get('cidade', ''),
                     'estado': str(con_pai.get('uf', 'CE'))[:2].upper(),
-                    'tipo': '', 
-                    'filial_ixc': mapa_filiais.get(con_pai.get('filial_id'), f"Filial {con_pai.get('filial_id')}"),
-                    'agente_id_ixc': con_pai.get('agente_id', ''),
-                    'status': status_django
+                    'filial_ixc': filial_nova,
+                    'status': status_novo
                 }
             )
         pbar_save.update(1)
-
     pbar_save.close()
-    print(" Sincronização Incremental concluída com sucesso!")
 
 if __name__ == "__main__":
     urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
