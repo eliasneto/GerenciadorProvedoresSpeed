@@ -18,7 +18,7 @@ services:
     container_name: speed_sistema
     restart: always
     ports:
-      - "8003:8000"
+      - "8090:8000"  # Acesse agora por http://192.168.90.202:8090
     environment:
       # --- BANCO DE DADOS ---
       - DB_NAME=speed_banco
@@ -26,23 +26,22 @@ services:
       - DB_PASSWORD=speed_password
       - DB_HOST=speed_db
       - DB_PORT=3306
-      # --- ACTIVE DIRECTORY (AD) ---
+      # --- ACTIVE DIRECTORY (AD) - NOMES PADRONIZADOS COM O SETTINGS ---
       - USE_AD_AUTH=true
-      - AD_SERVER=ldap://seu-servidor-ad.local
-      - AD_USER=usuario_leitura_ad@seu-dominio.com.br
-      - AD_PASS=SenhaDoUsuario123
-      - BASE_DN=DC=seu-dominio,DC=com,DC=br
-      - AD_DOMAIN=seu-dominio.com.br
-      # - GRUPO_PERMITIDO=CN=Usuarios-Speed,OU=Grupos,DC=seu-dominio,DC=com,DC=br
+      - AD_SERVER_URI=ldap://192.168.90.51
+      - AD_BIND_DN=servico.ti@howbe.local
+      - AD_BIND_PASSWORD=HowB3@dm1n
+      - AD_USER_SEARCH_BASE=DC=howbe,DC=local
+      - AD_GROUP_SEARCH_BASE=DC=howbe,DC=local
+      - AD_DEFAULT_DOMAIN=HOWBE
+    extra_hosts:
+      - "howbe.local:192.168.90.51"
     command: >
       sh -c "python setup_speed.py && 
              gunicorn --bind 0.0.0.0:8000 --timeout 120 --workers 3 --log-level debug --access-logfile - config.wsgi:application"
     depends_on:
       - speed_db
 
-  # =========================================================
-  #  NOVO SERVIÇO: ROBÔ DE SINCRONIZAÇÃO DO IXC
-  # =========================================================
   speed_sincronizador:
     build: .
     container_name: speed_sincronizador_ixc
@@ -65,7 +64,7 @@ services:
         echo ' Iniciando sincronização incremental (D-0)...';
         python scripts/integracoes/ixc_api_incremental.py;
         echo ' Sincronização finalizada. Aguardando 20 minutos...';
-        sleep 300;
+        sleep 1200;
       done"
 
 volumes:
