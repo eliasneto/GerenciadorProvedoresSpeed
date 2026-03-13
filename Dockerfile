@@ -8,10 +8,13 @@ ENV PYTHONUNBUFFERED 1
 # Cria a pasta do sistema dentro do Docker
 WORKDIR /app
 
-# MÁGICA SPEED: Instala as ferramentas do Linux necessárias para o MySQL
+# MÁGICA SPEED + AD AUTH: Instala as ferramentas do Linux necessárias
 RUN apt-get update && apt-get install -y \
     default-libmysqlclient-dev \
     build-essential \
+    libldap2-dev \
+    libsasl2-dev \
+    libssl-dev \
     pkg-config \
     && rm -rf /var/lib/apt/lists/*
 

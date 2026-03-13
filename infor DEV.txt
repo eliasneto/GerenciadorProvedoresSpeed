@@ -28,3 +28,19 @@ pip freeze > requirements.txt
 
 #Instalar apartir do arquivo requirements:
 pip install -r requirements.txt
+
+# Remover um Container:
+docker rm -f ID_OU_NOME
+
+# lista e remove imagens:
+docker images
+docker rmi ID_DA_IMAGEM
+
+#Lista e exclui Volumes:
+docker volume ls  # Para ver o nome do volume
+docker volume rm NOME_DO_VOLUME
+
+# Comando para excluir pasta com arquivos dentro no linux: 
+rm -rf nome_da_pasta
+
+# Comando para criar pasta no linux

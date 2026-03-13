@@ -9,7 +9,7 @@ services:
       MYSQL_PASSWORD: speed_password
       MYSQL_ROOT_PASSWORD: root_super_password
     ports:
-      - "3309:3306"
+      - "3303:3306"
     volumes:
       - speed_db_data:/var/lib/mysql
 
@@ -19,6 +19,18 @@ services:
     restart: always
     ports:
       - "8003:8000"
+    # =========================================================
+    # 🔐 VARIÁVEIS DE AMBIENTE (ACTIVE DIRECTORY / LDAP)
+    # =========================================================
+    environment:
+      - USE_AD_AUTH=true
+      - AD_SERVER=ldap://seu-servidor-ad.local
+      - AD_USER=usuario_leitura_ad@seu-dominio.com.br
+      - AD_PASS=SenhaDoUsuario123
+      - BASE_DN=DC=seu-dominio,DC=com,DC=br
+      - AD_DOMAIN=seu-dominio.com.br
+      # Opcional: Se quiser restringir a um grupo específico
+      # - GRUPO_PERMITIDO=CN=Usuarios-Speed,OU=Grupos,DC=seu-dominio,DC=com,DC=br
     command: >
       sh -c "python setup_speed.py && 
              gunicorn --bind 0.0.0.0:8000 --timeout 120 --workers 3 config.wsgi:application"
@@ -34,14 +46,17 @@ services:
     restart: always
     depends_on:
       - speed_db
-    # O comando abaixo cria um loop: roda o script -> espera 20 min -> repete
+    # Opcional: Passamos USE_AD_AUTH=false para o robô, pois ele não faz login, 
+    # apenas executa script interno, poupando processamento.
+    environment:
+      - USE_AD_AUTH=false
     command: >
       sh -c "
       echo '🤖 Robô Sincronizador do IXC Iniciado...';
       while true; do
         echo '🔄 Iniciando sincronização incremental (D-0)...';
         python scripts/integracoes/ixc_api_incremental.py;
-        echo '⏳ Sincronização finalizada. Aguardando 20 minutos (1200s)...';
+        echo '⏳ Sincronização finalizada. Aguardando 20 minutos...';
         sleep 1200;
       done"
 

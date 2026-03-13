@@ -1,6 +1,13 @@
 from pathlib import Path
 import os
 import sys
+from dotenv import load_dotenv  # pip install python-dotenv
+
+# ============================================
+# ⚙️ CARREGA VARIÁVEIS DE AMBIENTE
+# ============================================
+load_dotenv()
+USE_AD_AUTH = os.getenv("USE_AD_AUTH", "false").lower() == "true"
 
 # Build paths inside the project
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -66,19 +73,13 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'config.wsgi.application'
 
-# A ponta do cabo de rede do Django conectando no MySQL do Docker
+# ==========================================
+# 💾 BANCO DE DADOS (SQLite)
+# ==========================================
 DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.mysql',
-        'NAME': 'speed_banco',
-        'USER': 'speed_user',
-        'PASSWORD': 'speed_password',
-        'HOST': 'speed_db', # Nome exato do serviço no docker-compose
-        'PORT': '3306', # Porta interna do container MySQL
-        'OPTIONS': {
-            'init_command': "SET sql_mode='STRICT_TRANS_TABLES'",
-            'charset': 'utf8mb4',
-        }
+        'ENGINE': 'django.db.backends.sqlite3',
+        'NAME': BASE_DIR / 'db.sqlite3',
     }
 }
 
@@ -89,11 +90,73 @@ AUTH_PASSWORD_VALIDATORS = [
     {'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator'},
 ]
 
+# ============================================
+# 🔐 BACKENDS DE AUTENTICAÇÃO (Django x AD)
+# ============================================
+if USE_AD_AUTH:
+    AUTHENTICATION_BACKENDS = [
+        "django_auth_ldap.backend.LDAPBackend",         # autentica no AD
+        "django.contrib.auth.backends.ModelBackend",    # ainda permite superuser local
+    ]
+else:
+    AUTHENTICATION_BACKENDS = [
+        "django.contrib.auth.backends.ModelBackend",
+    ]
+
+# ============================================
+# 🌐 CONFIG LDAP / AD (usa variáveis do .env ou Docker)
+# ============================================
+if USE_AD_AUTH:
+    import ldap
+    from django_auth_ldap.config import LDAPSearch, ActiveDirectoryGroupType
+
+    AUTH_LDAP_SERVER_URI = os.getenv("AD_SERVER") or os.getenv("AD_SERVER_URI", "")
+    AUTH_LDAP_BIND_DN = os.getenv("AD_USER") or os.getenv("AD_BIND_DN", "")
+    AUTH_LDAP_BIND_PASSWORD = os.getenv("AD_PASS") or os.getenv("AD_BIND_PASSWORD", "")
+
+    BASE_DN = os.getenv("BASE_DN") or os.getenv("AD_USER_SEARCH_BASE", "")
+
+    AUTH_LDAP_USER_SEARCH = LDAPSearch(
+        BASE_DN,
+        ldap.SCOPE_SUBTREE,
+        "(sAMAccountName=%(user)s)",   # login = samAccountName
+    )
+
+    GROUP_BASE_DN = os.getenv("AD_GROUP_SEARCH_BASE", BASE_DN)
+    AUTH_LDAP_GROUP_SEARCH = LDAPSearch(
+        GROUP_BASE_DN,
+        ldap.SCOPE_SUBTREE,
+        "(objectClass=group)",
+    )
+    AUTH_LDAP_GROUP_TYPE = ActiveDirectoryGroupType()
+
+    AUTH_LDAP_USER_ATTR_MAP = {
+        "first_name": "givenName",
+        "last_name": "sn",
+        "email": "mail",
+    }
+
+    AUTH_LDAP_ALWAYS_UPDATE_USER = True
+    AUTH_LDAP_MIRROR_GROUPS = True
+
+    grupo_permitido_dn = os.getenv("GRUPO_PERMITIDO", "")
+    if grupo_permitido_dn:
+        AUTH_LDAP_REQUIRE_GROUP = grupo_permitido_dn
+
+    AD_DEFAULT_DOMAIN = os.getenv("AD_DOMAIN") or os.getenv("AD_DEFAULT_DOMAIN", "")
+    if AD_DEFAULT_DOMAIN:
+        AUTH_LDAP_USER_DOMAIN = AD_DEFAULT_DOMAIN
+
+    AUTH_LDAP_CONNECTION_OPTIONS = {
+        ldap.OPT_REFERRALS: 0,
+    }
+
+
 # --- AJUSTES DE LOCALIZAÇÃO (IMPORTANTE) ---
 LANGUAGE_CODE = 'pt-br'
 TIME_ZONE = 'America/Fortaleza' # Ajustado para sua localização
 USE_I18N = True
-USE_TZ = True
+USE_TZ = False
 
 STATIC_URL = 'static/'
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
@@ -118,11 +181,9 @@ STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 CSRF_TRUSTED_ORIGINS = [
     "http://localhost:8003",
     "http://127.0.0.1:8003",
-    "http://192.168.18.65:8003", # Seu IP local (Ceará)
-    "https://speed.ageis.com.br",  # <-- O seu domínio real no servidor
-    "http://192.168.90.202:8003",  # <-- O IP da sua VPS/Servidor
+    "http://192.168.18.65:8003", # Seu IP local
+    # ... outros IPs que você usa
 ]
-
 # Garante que o cookie de sessão funcione no Docker
 SESSION_COOKIE_SECURE = False
 CSRF_COOKIE_SECURE = False

@@ -3,7 +3,7 @@
 {% block title %}Speed | Gestão de Unidades{% endblock %}
 
 {% block content %}
-<div class="max-w-7xl mx-auto p-6">
+<div class="max-w-7xl mx-auto p-6 md:p-10">
     <div class="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-10">
         <div>
             <nav class="flex mb-2" aria-label="Breadcrumb">
@@ -16,6 +16,11 @@
             <h1 class="text-4xl font-black text-gray-900 italic uppercase tracking-tighter leading-none">
                 Gestão Unidades <span class="text-ageis-yellow">/</span> {{ cliente.nome_fantasia|default:cliente.razao_social }}
             </h1>
+            {% if cliente.id_ixc %}
+            <span class="inline-block mt-2 px-3 py-1 bg-gray-900 text-ageis-yellow text-[10px] font-black uppercase italic rounded-lg">
+                ID IXC: {{ cliente.id_ixc }}
+            </span>
+            {% endif %}
         </div>
 
         <div class="flex gap-4">
@@ -25,86 +30,119 @@
             </div>
             <div class="bg-ageis-black px-6 py-3 rounded-2xl shadow-lg text-white">
                 <p class="text-[10px] font-black text-gray-500 uppercase leading-none mb-1">Total de Pontos</p>
-                <p class="text-xl font-black italic text-ageis-yellow">
-                    {{ enderecos.count }}
-                </p>
+                <p class="text-xl font-black italic text-ageis-yellow">{{ enderecos.count }}</p>
             </div>
         </div>
     </div>
 
     <div class="bg-white p-4 rounded-[2rem] border border-gray-100 shadow-sm mb-8 flex flex-col md:flex-row gap-4 items-center">
-        <div class="relative flex-grow">
+        <div class="relative flex-grow w-full">
             <i data-lucide="search" class="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-300"></i>
-            <input type="text" placeholder="Buscar unidade por logradouro ou bairro..." class="w-full pl-12 pr-4 py-4 bg-gray-50 border-none rounded-2xl outline-none focus:ring-2 focus:ring-ageis-yellow transition-all">
+            <input type="text" id="unidadeSearch" onkeyup="applyFilters()" placeholder="Buscar Login, Endereço ou Filial..." 
+                   class="w-full pl-12 pr-4 py-4 bg-gray-50 border-none rounded-2xl outline-none focus:ring-2 focus:ring-ageis-yellow transition-all font-bold text-gray-800 uppercase">
         </div>
-        <div class="flex gap-2">
-            <a href="{% url 'endereco_create' cliente.pk %}" class="px-8 py-4 bg-ageis-yellow text-black font-black uppercase italic rounded-2xl hover:bg-yellow-400 transition shadow-lg shadow-yellow-500/20 flex items-center gap-2">
-                <i data-lucide="plus" class="w-5 h-5"></i> Nova Unidade
-            </a>
+        
+        <div class="flex gap-2 w-full md:w-auto">
+            <div class="relative w-full md:w-48">
+                <i data-lucide="activity" class="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400"></i>
+                <select id="statusFilter" onchange="applyFilters()" class="w-full pl-10 pr-8 py-4 bg-gray-50 border-none rounded-2xl outline-none focus:ring-2 focus:ring-ageis-yellow transition-all cursor-pointer font-black text-[11px] uppercase tracking-widest text-gray-600 appearance-none">
+                    <option value="">Todos os Status</option>
+                    <option value="ativo">Conectados</option>
+                    <option value="pendente">Pendentes</option>
+                    <option value="cancelado">Cancelados</option>
+                    <option value="inativo">Inativos</option>
+                </select>
+                <i data-lucide="chevron-down" class="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none"></i>
+            </div>
+
+            <div class="relative w-full md:w-56">
+                <i data-lucide="arrow-up-down" class="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400"></i>
+                <select id="sortFilter" onchange="applyFilters()" class="w-full pl-10 pr-8 py-4 bg-gray-50 border-none rounded-2xl outline-none focus:ring-2 focus:ring-ageis-yellow transition-all cursor-pointer font-black text-[11px] uppercase tracking-widest text-gray-600 appearance-none">
+                    <option value="id">Ordem Padrão (ID)</option>
+                    <option value="filial">Agrupar por Filial (A-Z)</option>
+                    <option value="status">Agrupar por Status</option>
+                </select>
+                <i data-lucide="chevron-down" class="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none"></i>
+            </div>
+            
+            <button onclick="clearFilters()" class="px-4 py-4 bg-gray-100 text-gray-400 rounded-2xl hover:bg-red-50 hover:text-red-500 transition flex items-center justify-center" title="Limpar Filtros">
+                <i data-lucide="filter-x" class="w-5 h-5"></i>
+            </button>
         </div>
     </div>
 
     <div class="bg-white rounded-[2.5rem] border border-gray-100 shadow-sm overflow-hidden">
         <div class="overflow-x-auto">
-            <table class="w-full text-left border-collapse">
+            <table class="w-full text-left border-collapse" id="unidadesTable">
                 <thead>
                     <tr class="text-[10px] font-black uppercase text-gray-400 border-b border-gray-50 bg-gray-50/30">
-                        <th class="px-8 py-5">Identificação</th>
-                        <th class="px-4 py-5">Localização</th>
-                        <th class="px-4 py-5 text-center">Status Operacional</th>
-                        <th class="px-4 py-5 text-center">Prioridade</th>
-                        <th class="px-8 py-5 text-right">Ação</th>
+                        <th class="px-8 py-5">Serviço / Login</th>
+                        <th class="px-4 py-5">Localização / Filial</th>
+                        <th class="px-4 py-5 text-center">Situação (IXC)</th>
+                        <th class="px-4 py-5 text-center">Origem/Agente</th>
+                        <th class="px-8 py-5 text-right">Ações</th>
                     </tr>
                 </thead>
-                <tbody class="divide-y divide-gray-50">
+                <tbody id="tableBody" class="divide-y divide-gray-50">
                     {% for endereco in enderecos %}
-                    <tr class="hover:bg-gray-50/50 transition-all group">
+                    <tr class="hover:bg-gray-50/50 transition-all group unidade-row" 
+                        data-status="{{ endereco.status|default:''|lower }}" 
+                        data-filial="{{ endereco.filial_ixc|default:'Z'|lower }}" 
+                        data-id="{{ endereco.id }}">
+                        
                         <td class="px-8 py-6">
-                            <span class="block font-black text-gray-900 italic uppercase">#{{ endereco.id }} - {{ endereco.tipo }}</span>
-                            <span class="text-[10px] font-bold text-gray-400 uppercase">Vínculo: {{ cliente.razao_social|truncatechars:20 }}</span>
+                            <div class="flex flex-col">
+                                <span class="block font-black text-gray-900 italic uppercase text-base leading-none mb-1">
+                                    {{ endereco.login_ixc|default:"MANUAL / SEM LOGIN" }}
+                                </span>
+                                <div class="flex items-center gap-2">
+                                    <span class="text-[10px] font-bold text-gray-400 uppercase bg-gray-100 px-2 py-0.5 rounded">
+                                        ID: {{ endereco.id }}
+                                    </span>
+                                    {% if endereco.principal %}
+                                    <span class="text-[9px] font-black text-yellow-600 uppercase bg-yellow-50 px-2 py-0.5 rounded border border-yellow-100 flex items-center gap-1">
+                                        <i data-lucide="star" class="w-2 h-2 fill-current"></i> PRINCIPAL
+                                    </span>
+                                    {% endif %}
+                                </div>
+                            </div>
                         </td>
 
                         <td class="px-4 py-6">
-                            <span class="block font-bold text-gray-800 text-sm">{{ endereco.logradouro }}, {{ endereco.numero }}</span>
-                            <span class="block text-[10px] text-gray-400 uppercase">
-                                <i data-lucide="map-pin" class="w-3 h-3 inline"></i> {{ endereco.bairro }} — {{ endereco.cidade }}/{{ endereco.estado }}
+                            <span class="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-md bg-blue-50 text-blue-600 border border-blue-100 font-black uppercase mb-1">
+                                <i data-lucide="building-2" class="w-3 h-3"></i> {{ endereco.filial_ixc|default:"FILIAL CORE" }}
                             </span>
                         </td>
 
                         <td class="px-4 py-6 text-center">
-                            <button onclick="openStatusModal({{ endereco.id }}, '{{ endereco.status }}', '{{ endereco.tipo }} - {{ endereco.logradouro }}')" 
-                                    class="inline-flex flex-col items-center group/status">
+                            <div class="inline-flex flex-col items-center">
                                 {% if endereco.status == 'ativo' %}
-                                    <span class="px-3 py-1 bg-green-50 text-green-700 rounded-full text-[10px] font-black italic mb-1 group-hover/status:bg-green-600 group-hover/status:text-white transition-colors">
-                                        ATÍVO
+                                    <span class="px-4 py-1.5 bg-green-50 text-green-700 rounded-full text-[10px] font-black italic mb-1 border border-green-100 uppercase flex items-center gap-1 shadow-sm">
+                                        <span class="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse"></span> CONECTADO
                                     </span>
-                                    {% if endereco.data_ativacao %}<span class="text-[9px] font-black text-gray-400 uppercase italic">ON: {{ endereco.data_ativacao|date:"d/m/y" }}</span>{% endif %}
+                                    {% if endereco.data_ativacao %}<span class="text-[9px] font-black text-gray-400 uppercase italic">ON: {{ endereco.data_ativacao|date:"d/m/Y" }}</span>{% endif %}
+                                {% elif endereco.status == 'cancelado' %}
+                                    <span class="px-4 py-1.5 bg-red-50 text-red-700 rounded-full text-[10px] font-black italic border border-red-100 uppercase shadow-sm">CANCELADO</span>
                                 {% elif endereco.status == 'pendente' %}
-                                    <span class="px-3 py-1 bg-amber-50 text-amber-700 rounded-full text-[10px] font-black italic group-hover/status:bg-amber-500 group-hover/status:text-white transition-colors">PENDENTE</span>
+                                    <span class="px-4 py-1.5 bg-amber-50 text-amber-700 rounded-full text-[10px] font-black italic border border-amber-100 uppercase shadow-sm">PENDENTE</span>
                                 {% else %}
-                                    <span class="px-3 py-1 bg-gray-100 text-gray-500 rounded-full text-[10px] font-black italic group-hover/status:bg-gray-800 group-hover/status:text-white transition-colors uppercase">{{ endereco.get_status_display }}</span>
+                                    <span class="px-4 py-1.5 bg-gray-100 text-gray-500 rounded-full text-[10px] font-black italic border border-gray-200 uppercase shadow-sm">{{ endereco.get_status_display|default:"DESCONHECIDO" }}</span>
                                 {% endif %}
-                            </button>
+                            </div>
                         </td>
 
                         <td class="px-4 py-6 text-center">
-                            {% if endereco.principal %}
-                                <div class="inline-flex items-center gap-1 text-ageis-yellow bg-yellow-50 px-2 py-1 rounded-lg border border-yellow-100">
-                                    <i data-lucide="star" class="w-3 h-3 fill-current"></i>
-                                    <span class="text-[9px] font-black uppercase">Principal</span>
-                                </div>
-                            {% else %}
-                                <span class="text-[9px] font-black text-gray-300 uppercase">Secundário</span>
-                            {% endif %}
+                            <span class="px-3 py-1 bg-gray-50 text-gray-500 rounded-lg text-[10px] font-bold border border-gray-100 uppercase">
+                                AGENTE: {{ endereco.agente_id_ixc|default:"---" }}
+                            </span>
                         </td>
 
                         <td class="px-8 py-6 text-right">
                             <div class="flex justify-end gap-2">
-                                <a href="{% url 'address_proposals_list' endereco.pk %}" class="inline-flex items-center justify-center w-10 h-10 bg-gray-50 text-gray-400 rounded-xl hover:bg-ageis-yellow hover:text-black transition-all" title="Configuração Técnica">
-                                    <i data-lucide="monitor-dot" class="w-5 h-5"></i>
-                                </a>
-                                <a href="{% url 'endereco_edit' endereco.id %}" class="inline-flex items-center justify-center w-10 h-10 bg-gray-50 text-gray-400 rounded-xl hover:bg-blue-600 hover:text-white transition-all" title="Editar Dados da Unidade">
-                                    <i data-lucide="edit-3" class="w-5 h-5"></i>
+                                <a href="{% url 'address_proposals_list' endereco.pk %}" 
+                                   class="p-3 bg-ageis-black text-ageis-yellow rounded-xl hover:shadow-lg transition-all hover:scale-110 active:scale-95 group/os" 
+                                   title="Gerenciar Ordens de Serviço (Propostas)">
+                                    <i data-lucide="clipboard-list" class="w-5 h-5 transition-transform group-hover/os:scale-110"></i>
                                 </a>
                             </div>
                         </td>
@@ -112,9 +150,14 @@
                     {% empty %}
                     <tr>
                         <td colspan="5" class="px-8 py-20 text-center">
-                            <div class="flex flex-col items-center gap-4 opacity-30">
-                                <i data-lucide="map" class="w-16 h-16"></i>
-                                <p class="font-black italic uppercase">Nenhuma unidade cadastrada</p>
+                            <div class="flex flex-col items-center gap-4 opacity-40">
+                                <div class="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center text-gray-400">
+                                    <i data-lucide="map-pin-off" class="w-8 h-8"></i>
+                                </div>
+                                <div>
+                                    <p class="font-black italic uppercase text-gray-600">Nenhuma unidade vinculada</p>
+                                    <p class="text-xs font-bold text-gray-400 mt-1">Este cliente não possui conexões no IXC.</p>
+                                </div>
                             </div>
                         </td>
                     </tr>
@@ -125,82 +168,52 @@
     </div>
 </div>
 
-<div id="statusModal" class="fixed inset-0 z-[100] hidden flex items-center justify-center p-4">
-    <div class="absolute inset-0 bg-black/80 backdrop-blur-md" onclick="closeStatusModal()"></div>
-    <div class="relative bg-white w-full max-w-md rounded-[3rem] shadow-2xl overflow-hidden animate-in zoom-in duration-300">
-        <div class="p-10 border-b border-gray-100 bg-gray-50/50 flex justify-between items-center">
-            <h3 class="font-black uppercase italic text-xl text-gray-900 tracking-tighter">Alterar <span class="text-ageis-yellow">Status</span></h3>
-            <button onclick="closeStatusModal()" class="text-gray-400 hover:text-black p-2 rounded-xl transition-all"><i data-lucide="x" class="w-6 h-6"></i></button>
-        </div>
-        <div class="p-10 space-y-8">
-            <div class="p-5 bg-gray-50 rounded-[1.5rem] border border-gray-100">
-                <p id="modalUnitName" class="text-xs font-black uppercase text-gray-700 italic"></p>
-            </div>
-            <div class="space-y-3">
-                <label class="text-[10px] font-black uppercase text-gray-500 ml-1 italic">Novo Estado Operacional</label>
-                <select id="newStatusSelect" onchange="toggleDateInput()" class="w-full p-5 bg-gray-100 border border-gray-300 text-gray-900 font-bold rounded-2xl outline-none focus:ring-4 focus:ring-ageis-yellow/20 transition-all cursor-pointer">
-                    <option value="pendente">Pendente</option>
-                    <option value="ativo">Ativo</option>
-                    <option value="inativo">Inativo</option>
-                    <option value="cancelado">Cancelado</option>
-                </select>
-            </div>
-            <div id="activationDateContainer" class="hidden space-y-3 animate-in fade-in slide-in-from-top-4">
-                <label class="text-[10px] font-black uppercase text-green-600 ml-1 italic flex items-center gap-2">
-                    <i data-lucide="calendar-check" class="w-3 h-3"></i> Data de Ativação Oficial
-                </label>
-                <input type="date" id="activationDateInput" class="w-full p-5 bg-gray-100 border border-green-200 text-gray-900 font-bold rounded-2xl outline-none focus:ring-4 focus:ring-green-500/20">
-            </div>
-            <button onclick="saveStatusUpdate()" class="w-full bg-ageis-black text-ageis-yellow py-6 rounded-[2rem] font-black uppercase italic shadow-2xl hover:bg-gray-800 transition-all hover:scale-[1.02] flex items-center justify-center gap-3">
-                <i data-lucide="refresh-cw" class="w-5 h-5"></i> Atualizar Unidade
-            </button>
-        </div>
-    </div>
-</div>
-
 <script>
-    let currentEnderecoId = null;
+    // SISTEMA DE FILTRO E ORDENAÇÃO INSTANTÂNEO
+    function applyFilters() {
+        const textFilter = document.getElementById("unidadeSearch").value.toUpperCase();
+        const statusFilter = document.getElementById("statusFilter").value.toLowerCase();
+        const sortMode = document.getElementById("sortFilter").value;
+        
+        const tbody = document.getElementById("tableBody");
+        const rows = Array.from(tbody.querySelectorAll(".unidade-row"));
 
-    function openStatusModal(id, currentStatus, unitName) {
-        currentEnderecoId = id;
-        document.getElementById('modalUnitName').innerText = unitName;
-        document.getElementById('newStatusSelect').value = currentStatus;
-        document.getElementById('statusModal').classList.remove('hidden');
-        toggleDateInput();
-        lucide.createIcons();
-    }
+        // 1. Aplicar a Pesquisa e Filtro
+        rows.forEach(row => {
+            const rowText = row.innerText.toUpperCase();
+            const rowStatus = row.getAttribute("data-status");
 
-    function closeStatusModal() { document.getElementById('statusModal').classList.add('hidden'); }
+            const matchesText = rowText.includes(textFilter);
+            const matchesStatus = statusFilter === "" || rowStatus === statusFilter;
 
-    function toggleDateInput() {
-        const status = document.getElementById('newStatusSelect').value;
-        const container = document.getElementById('activationDateContainer');
-        container.classList.toggle('hidden', status !== 'ativo');
-        if(status === 'ativo') {
-            const today = new Date().toISOString().split('T')[0];
-            document.getElementById('activationDateInput').value = today;
-        }
-    }
-
-    async function saveStatusUpdate() {
-        const status = document.getElementById('newStatusSelect').value;
-        const dataAtivacao = document.getElementById('activationDateInput').value;
-
-        if (status === 'ativo' && !dataAtivacao) {
-            alert("A data de ativação é obrigatória para o status Ativo.");
-            return;
-        }
-
-        const response = await fetch(`/clientes/api/unidade/${currentEnderecoId}/status/`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRFToken': '{{ csrf_token }}'
-            },
-            body: JSON.stringify({ status: status, data_ativacao: dataAtivacao })
+            if (matchesText && matchesStatus) {
+                row.style.display = "";
+            } else {
+                row.style.display = "none";
+            }
         });
 
-        if (response.ok) { window.location.reload(); }
+        // 2. Aplicar a Ordenação
+        rows.sort((a, b) => {
+            if (sortMode === 'filial') {
+                return a.getAttribute('data-filial').localeCompare(b.getAttribute('data-filial'));
+            } else if (sortMode === 'status') {
+                return a.getAttribute('data-status').localeCompare(b.getAttribute('data-status'));
+            } else {
+                return parseInt(a.getAttribute('data-id')) - parseInt(b.getAttribute('data-id'));
+            }
+        });
+
+        // 3. Reordenar na tela
+        rows.forEach(row => tbody.appendChild(row));
+    }
+
+    // FUNÇÃO PARA LIMPAR TUDO
+    function clearFilters() {
+        document.getElementById("unidadeSearch").value = "";
+        document.getElementById("statusFilter").value = "";
+        document.getElementById("sortFilter").value = "id";
+        applyFilters();
     }
 </script>
 {% endblock %}
