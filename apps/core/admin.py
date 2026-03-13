@@ -32,10 +32,11 @@ class UserAdmin(BaseUserAdmin):
 
     # 4. Bloqueio de Segurança: Remove o acesso à view de senha
     # Esta é a forma correta e segura para Django 4.0+
+    # 4. Bloqueio de Segurança: Remove o acesso à view de senha
     def get_urls(self):
         urls = super().get_urls()
-        # Filtramos as URLs removendo aquelas que levam para a troca de senha
-        return [u for u in urls if 'password' not in u.name]
+        # Filtramos as URLs garantindo que u.name não seja None
+        return [u for u in urls if u.name and 'password' not in u.name]
 
 # Registro do Histórico
 @admin.register(RegistroHistorico)
