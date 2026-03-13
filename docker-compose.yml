@@ -63,7 +63,7 @@ services:
       while true; do
         echo ' Iniciando sincronização incremental (D-0)...';
         python scripts/integracoes/ixc_api_incremental.py;
-        echo ' Sincronização finalizada. Aguardando 20 minutos...';
+        echo ' Sincronização finalizada. Aguardando 5 minutos...';
         sleep 300;
       done"
 
