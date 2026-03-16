@@ -15,12 +15,16 @@ BASE_DIR = os.path.dirname(os.path.dirname(DIRETORIO_ATUAL))
 if BASE_DIR not in sys.path:
     sys.path.append(BASE_DIR)
 
+APPS_DIR = os.path.join(BASE_DIR, 'apps')
+if APPS_DIR not in sys.path:
+    sys.path.insert(0, APPS_DIR)
+
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings') 
 
 import django
 django.setup()
 
-from clientes.models import Cliente, Endereco 
+from clientes.models import Cliente, Endereco, LogAlteracaoIXC
 
 # ==========================================
 # 🌐 CONFIGURAÇÕES DA API DO IXC
@@ -35,8 +39,6 @@ HEADERS = {
     'Authorization': f'Basic {token_b64}',
     'ixcsoft': 'listar' 
 }
-
-# --- FUNÇÕES DE APOIO ---
 
 def consultar_ixc(tabela, payload):
     url = f"{IXC_URL}/{tabela}"
@@ -58,8 +60,6 @@ def buscar_mapa_filiais():
             mapa[str(f['id'])] = f.get('razao') or f.get('filial') or f"Filial {f['id']}"
     return mapa
 
-# --- FUNÇÕES PRINCIPAIS ---
-
 def extrair_todos_os_clientes():
     pagina_atual = 1
     registros_por_pagina = 50
@@ -68,8 +68,7 @@ def extrair_todos_os_clientes():
     res_total = consultar_ixc("cliente", {"qtype": "ativo", "query": "S", "oper": "=", "rp": "1"})
     total_no_ixc = int(res_total.get('total', 0)) if res_total else 0
 
-    print(f"🚀 Iniciando extração de {total_no_ixc} clientes ativos (Filtrando apenas com Logins)...")
-    
+    print(f"🚀 Iniciando extração de {total_no_ixc} clientes ativos...")
     pbar = tqdm(total=total_no_ixc, desc="📥 Extraindo da API", unit="cli")
 
     while True:
@@ -82,14 +81,12 @@ def extrair_todos_os_clientes():
         resposta = consultar_ixc("cliente", payload_clientes)
         if not resposta or 'registros' not in resposta:
             break
-            
         clientes = resposta['registros']
         if not clientes:
             break
 
         for cliente in clientes:
             id_cli = cliente['id']
-            
             res_logins = consultar_ixc("radusuarios", {"qtype": "id_cliente", "query": id_cli, "oper": "=", "rp": "5000"})
             logins_encontrados = res_logins.get('registros', []) if res_logins else []
 
@@ -100,8 +97,13 @@ def extrair_todos_os_clientes():
                     "fantasia": cliente.get('fantasia') or '',
                     "cpf_cnpj": cliente.get('cnpj_cpf') or '',
                     "contratos": [],
-                    # 👇 AQUI: Agora estamos puxando o campo "Ativo" direto do Login PPPoE também!
-                    "logins": [{"id_contrato": l.get('id_contrato', ''), "login": l['login'], "ativo": l.get('ativo', 'S')} for l in logins_encontrados]
+                    "logins": [
+                        {
+                            "id_contrato": l.get('id_contrato', ''), 
+                            "login": l['login'], 
+                            "ativo": l.get('ativo', 'S'),
+                            "circuit_id": l.get('agent_circuit_id', '') # <--- PEGA O CAMPO DA API
+                        } for l in logins_encontrados]
                 }
 
                 res_con = consultar_ixc("cliente_contrato", {"qtype": "id_cliente", "query": id_cli, "oper": "=", "rp": "5000"})
@@ -112,53 +114,58 @@ def extrair_todos_os_clientes():
                             "numero": c.get('numero', 'S/N'), "bairro": c.get('bairro', ''), "cidade": c.get('cidade', ''),
                             "uf": c.get('uf', 'CE'), "filial_id": str(c.get('id_filial', '')), "agente_id": c.get('vendedor', '')
                         })
-
                 base_de_dados_local.append(dados_completos)
-            
             pbar.update(1)
-
         pagina_atual += 1
 
     pbar.close()
     return base_de_dados_local
 
 def salvar_clientes_no_django(dados_ixc, mapa_filiais):
-    print("\n💾 Iniciando gravação no banco de dados...")
+    print("\n💾 Gravando no banco de dados com Auditoria...")
     pbar_save = tqdm(total=len(dados_ixc), desc="💾 Gravando no Banco", unit="cli")
 
     for dado in dados_ixc:
-        cnpj_limpo = str(dado.get('cpf_cnpj') or '').strip()
+        id_ixc = dado['id_ixc']
+        cnpj_novo = str(dado.get('cpf_cnpj') or '').strip()
+        razao_nova = dado['nome_com_id']
+
+        # --- LOGICA DE AUDITORIA DE CLIENTE ---
+        cliente_obj = Cliente.objects.filter(id_ixc=id_ixc).first()
+        if cliente_obj:
+            if cliente_obj.cnpj_cpf != cnpj_novo:
+                LogAlteracaoIXC.objects.create(cliente=cliente_obj, campo_alterado="cnpj_cpf", valor_antigo=cliente_obj.cnpj_cpf, valor_novo=cnpj_novo)
+            if cliente_obj.razao_social != razao_nova:
+                LogAlteracaoIXC.objects.create(cliente=cliente_obj, campo_alterado="razao_social", valor_antigo=cliente_obj.razao_social, valor_novo=razao_nova)
 
         cliente_obj, _ = Cliente.objects.update_or_create(
-            id_ixc=dado['id_ixc'],
-            defaults={
-                'cnpj_cpf': cnpj_limpo,
-                'razao_social': dado['nome_com_id'],
-                'nome_fantasia': dado['fantasia']
-            }
+            id_ixc=id_ixc,
+            defaults={'cnpj_cpf': cnpj_novo, 'razao_social': razao_nova, 'nome_fantasia': dado['fantasia']}
         )
 
         for lg in dado.get('logins', []):
             con_pai = next((c for c in dado['contratos'] if str(c['id_contrato']) == str(lg['id_contrato'])), {})
             
-            # ====================================================
-            # 🔧 TRADUTOR DE STATUS (AGORA LENDO O STATUS DO LOGIN)
-            # ====================================================
+            # TRADUTOR DE STATUS
             status_login_ixc = str(lg.get('ativo', 'S')).strip().upper()
             status_contrato_ixc = str(con_pai.get('status', 'A')).strip().upper()
             
-            # 1. Se o Contrato for cancelado, corta pela raiz
-            if status_contrato_ixc in ['C', 'D', 'CM', 'CANCELADO', 'DESISTENCIA', 'DESISTÊNCIA']:
+            if status_contrato_ixc in ['C', 'D', 'CM', 'CANCELADO']:
                 status_django = 'cancelado'
-            # 2. Se o Login PPPoE estiver inativo ('N'), fica inativo
             elif status_login_ixc == 'N':
                 status_django = 'inativo'
-            # 3. Se o Login PPPoE estiver ativo ('S'), conecta
-            elif status_login_ixc == 'S':
-                status_django = 'ativo'
             else:
-                status_django = 'pendente'
-            # ====================================================
+                status_django = 'ativo'
+
+            filial_nova = mapa_filiais.get(con_pai.get('filial_id'), f"Filial {con_pai.get('filial_id')}")
+
+            # --- LOGICA DE AUDITORIA DE ENDEREÇO / CIRCUITO ---
+            end_atual = Endereco.objects.filter(cliente=cliente_obj, login_ixc=lg['login']).first()
+            if end_atual:
+                if end_atual.status != status_django:
+                    LogAlteracaoIXC.objects.create(cliente=cliente_obj, login_ixc=lg['login'], campo_alterado="status", valor_antigo=end_atual.status, valor_novo=status_django)
+                if end_atual.agent_circuit_id != lg['circuit_id']:
+                    LogAlteracaoIXC.objects.create(cliente=cliente_obj, login_ixc=lg['login'], campo_alterado="agent_circuit_id", valor_antigo=end_atual.agent_circuit_id, valor_novo=lg['circuit_id'])
 
             Endereco.objects.update_or_create(
                 cliente=cliente_obj,
@@ -169,22 +176,19 @@ def salvar_clientes_no_django(dados_ixc, mapa_filiais):
                     'bairro': con_pai.get('bairro', ''),
                     'cidade': con_pai.get('cidade', ''),
                     'estado': str(con_pai.get('uf', 'CE'))[:2].upper(),
-                    'tipo': '', 
-                    'filial_ixc': mapa_filiais.get(con_pai.get('filial_id'), f"Filial {con_pai.get('filial_id')}"),
-                    'agente_id_ixc': con_pai.get('agente_id', ''),
+                    'filial_ixc': filial_nova,
+                    'agent_circuit_id': lg['circuit_id'], # <--- GRAVA NO BANCO
                     'status': status_django
                 }
             )
         pbar_save.update(1)
 
     pbar_save.close()
-    print("✅ Processo concluído com sucesso!")
+    print("✅ Carga total concluída com sucesso!")
 
 if __name__ == "__main__":
     urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-    
     mapa_f = buscar_mapa_filiais()
     meus_dados = extrair_todos_os_clientes()
-    
     if meus_dados:
         salvar_clientes_no_django(meus_dados, mapa_f)

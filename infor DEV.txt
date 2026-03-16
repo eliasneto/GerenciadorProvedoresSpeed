@@ -50,3 +50,7 @@ rm -rf nome_da_pasta
 docker-compose down
 docker-compose build --no-cache
 docker-compose up -d
+
+# LOGS DO CONTAINER:
+docker logs -f speed_sistema
+docker logs --tail 50 -f speed_sistema
