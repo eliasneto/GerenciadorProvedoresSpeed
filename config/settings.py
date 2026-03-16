@@ -42,6 +42,7 @@ INSTALLED_APPS = [
     'partners',
     'clientes',
     'core_admin',
+    'backoffice',
 ]
 
 # ============================================

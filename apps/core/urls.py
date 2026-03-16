@@ -1,4 +1,4 @@
-from django.urls import path
+from django.urls import path, include  # 🚀 CORREÇÃO: Adicionado o 'include' aqui!
 from django.contrib.auth import views as auth_views
 from . import views
 
@@ -24,4 +24,6 @@ urlpatterns = [
         template_name='core/includes/alterar_senha.html', 
         success_url='/' 
     ), name='password_change'),
+
+    path('backoffice/', include('apps.backoffice.urls')), # 🚀 LIGANDO O BACKOFFICE
 ]

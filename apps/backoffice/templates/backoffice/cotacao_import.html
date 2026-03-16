@@ -1,0 +1,56 @@
+{% extends "core/base.html" %}
+
+{% block title %}Speed | Importar Cotação Parceiro{% endblock %}
+
+{% block content %}
+<div class="flex items-center justify-center min-h-[80vh] px-4">
+    <div class="max-w-2xl w-full">
+        <div class="text-center mb-8">
+            <div class="w-16 h-16 bg-ageis-yellow rounded-full flex items-center justify-center mx-auto mb-4 shadow-lg border-4 border-white">
+                <i data-lucide="database" class="w-8 h-8 text-black"></i>
+            </div>
+            <h1 class="text-3xl font-black text-gray-900 italic uppercase tracking-tighter">Importador de Dados</h1>
+            <p class="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-2">Ageis Sistemas - Ferramenta Admin</p>
+        </div>
+
+        <div class="bg-white p-8 md:p-12 rounded-[2.5rem] shadow-xl border border-gray-100">
+            
+            <div class="border-2 border-dashed border-gray-200 rounded-3xl p-6 text-center mb-8 bg-gray-50/50">
+                <p class="text-xs text-gray-500 font-bold mb-4 uppercase tracking-wide">Ainda não tem a planilha padrão?</p>
+                
+<a href="{% url 'backoffice:download_modelo' %}" class="inline-flex items-center gap-2 text-xs font-black text-gray-900 hover:text-ageis-yellow transition-colors uppercase tracking-widest">
+    <i data-lucide="download" class="w-4 h-4"></i> Baixar Planilha Modelo
+</a>
+            </div>
+
+            <form method="POST" enctype="multipart/form-data" class="space-y-8">
+                {% csrf_token %}
+                
+                <div>
+                    <label class="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3">Selecione o arquivo preenchido</label>
+                    <div class="relative">
+                        <input type="file" 
+                               name="arquivo_cotacao" 
+                               id="arquivo_cotacao" 
+                               accept=".xlsx, .xls, .csv" 
+                               required
+                               class="block w-full text-sm text-gray-500 
+                                      file:mr-4 file:py-4 file:px-6 
+                                      file:rounded-2xl file:border-0 
+                                      file:text-xs file:font-black file:uppercase file:tracking-wider
+                                      file:bg-white file:text-gray-900 file:shadow-sm
+                                      hover:file:bg-gray-100 hover:file:cursor-pointer
+                                      bg-gray-50 rounded-2xl border border-gray-100 cursor-pointer transition-all">
+                    </div>
+                </div>
+
+                <button type="submit" class="w-full bg-ageis-black hover:bg-gray-900 text-ageis-yellow font-black uppercase italic tracking-widest py-5 rounded-2xl shadow-xl hover:shadow-2xl transition-all flex items-center justify-center gap-3 group">
+                    <i data-lucide="play" class="w-5 h-5 group-hover:scale-110 transition-transform"></i>
+                    Iniciar Importação
+                </button>
+            </form>
+
+        </div>
+    </div>
+</div>
+{% endblock %}
