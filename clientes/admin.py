@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Cliente, Endereco, HistoricoSincronizacao, LogAlteracaoIXC
+from .models import Cliente, Endereco, HistoricoSincronizacao, LogAlteracaoIXC, EnderecoExcluido, ClienteExcluido
 
 # 1. Timeline de mudanças (O que mudou no IXC)
 class LogAlteracaoInline(admin.TabularInline):
@@ -57,3 +57,19 @@ class LogAlteracaoIXCAdmin(admin.ModelAdmin):
     list_display = ('data_registro', 'cliente', 'login_ixc', 'campo_alterado', 'valor_antigo', 'valor_novo')
     search_fields = ('cliente__razao_social', 'login_ixc', 'valor_novo')
     list_filter = ('campo_alterado', 'data_registro')
+
+
+# Em apps/clientes/admin.py
+
+class EnderecoExcluidoInline(admin.TabularInline):
+    model = EnderecoExcluido
+    extra = 0
+    readonly_fields = ('login_ixc', 'agent_circuit_id', 'detalhes_json')
+    can_delete = False
+
+@admin.register(ClienteExcluido)
+class ClienteExcluidoAdmin(admin.ModelAdmin):
+    list_display = ('id_ixc', 'razao_social', 'cnpj_cpf', 'data_exclusao')
+    search_fields = ('razao_social', 'cnpj_cpf', 'id_ixc', 'enderecos_mortos__login_ixc')
+    readonly_fields = ('id_ixc', 'razao_social', 'cnpj_cpf', 'dados_originais_json', 'data_exclusao')
+    inlines = [EnderecoExcluidoInline]    

@@ -24,3 +24,4 @@ Com o crédito de US$ 200, você consegue pesquisar e detalhar cerca de 4.000 a 
 
 
 docker exec -it speed_sistema python scripts/integracoes/ixc_api.py
+docker exec -it speed_sistema python scripts/integracoes/ixc_faxina.py

@@ -18,15 +18,13 @@ services:
     container_name: speed_sistema
     restart: always
     ports:
-      - "8090:8000"  # Acesse agora por http://192.168.90.202:8090
+      - "8090:8000"
     environment:
-      # --- BANCO DE DADOS ---
       - DB_NAME=speed_banco
       - DB_USER=speed_user
       - DB_PASSWORD=speed_password
       - DB_HOST=speed_db
       - DB_PORT=3306
-      # --- ACTIVE DIRECTORY (AD) - NOMES PADRONIZADOS COM O SETTINGS ---
       - USE_AD_AUTH=true
       - AD_SERVER_URI=ldap://192.168.90.51
       - AD_BIND_DN=servico.ti@howbe.local
@@ -57,13 +55,37 @@ services:
       - speed_db
     command: >
       sh -c "
-      echo ' Aguardando banco de dados estabilizar...';
-      sleep 20;
-      echo ' Robô Sincronizador do IXC Iniciado...';
+      echo '🚀 Aguardando banco de dados estabilizar...';
+      sleep 25;
+      
+      # Inicializa os marcadores (0 para rodar tudo na primeira vez)
+      ULTIMA_TOTAL=0;
+      ULTIMA_FAXINA=0;
+      
       while true; do
-        echo ' Iniciando sincronização incremental (D-0)...';
+        AGORA=$$(date +%s);
+        
+        # 1. INCREMENTAL (Roda a cada ciclo de 30 min)
+        echo '⚡ [$(date +%H:%M)] Iniciando sincronização incremental...';
         python scripts/integracoes/ixc_api_incremental.py;
-        echo ' Sincronização finalizada. Aguardando 5 minutos...';
+
+        # 2. CARGA TOTAL (Verifica se já passaram 4 horas - 14400 segundos)
+        DIFERENCA_TOTAL=$$((AGORA - ULTIMA_TOTAL));
+        if [ $$DIFERENCA_TOTAL -ge 420 ]; then
+          echo '📦 [$(date +%H:%M)] 4 horas se passaram. Iniciando Carga Total...';
+          python scripts/integracoes/ixc_api.py;
+          ULTIMA_TOTAL=$$(date +%s);
+        fi
+
+        # 3. FAXINA/LIXO (Verifica se já passaram 24 horas - 86400 segundos)
+        DIFERENCA_FAXINA=$$((AGORA - ULTIMA_FAXINA));
+        if [ $$DIFERENCA_FAXINA -ge 86400 ]; then
+          echo '🧹 [$(date +%H:%M)] 24 horas se passaram. Iniciando Faxina Diária...';
+          python scripts/integracoes/ixc_faxina.py;
+          ULTIMA_FAXINA=$$(date +%s);
+        fi
+
+        echo '😴 Ciclo finalizado. Próximo incremental em 30 minutos...';
         sleep 300;
       done"
 

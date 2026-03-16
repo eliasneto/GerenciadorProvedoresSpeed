@@ -5,6 +5,8 @@ import json
 import base64
 import urllib3
 from tqdm import tqdm  
+import traceback
+from django.utils import timezone
 
 # ==========================================
 # ⚙️ CONFIGURAÇÃO DO AMBIENTE DJANGO
@@ -24,7 +26,7 @@ os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings')
 import django
 django.setup()
 
-from clientes.models import Cliente, Endereco, LogAlteracaoIXC
+from clientes.models import Cliente, Endereco, LogAlteracaoIXC, HistoricoSincronizacao
 
 # ==========================================
 # 🌐 CONFIGURAÇÕES DA API DO IXC
@@ -102,7 +104,7 @@ def extrair_todos_os_clientes():
                             "id_contrato": l.get('id_contrato', ''), 
                             "login": l['login'], 
                             "ativo": l.get('ativo', 'S'),
-                            "circuit_id": l.get('agent_circuit_id', '') # <--- PEGA O CAMPO DA API
+                            "circuit_id": str(l.get('agent_circuit_id') or '').strip() # <--- PEGA O CAMPO DA API SEGURO
                         } for l in logins_encontrados]
                 }
 
@@ -158,14 +160,16 @@ def salvar_clientes_no_django(dados_ixc, mapa_filiais):
                 status_django = 'ativo'
 
             filial_nova = mapa_filiais.get(con_pai.get('filial_id'), f"Filial {con_pai.get('filial_id')}")
+            circuit_id_novo = lg['circuit_id']
 
             # --- LOGICA DE AUDITORIA DE ENDEREÇO / CIRCUITO ---
             end_atual = Endereco.objects.filter(cliente=cliente_obj, login_ixc=lg['login']).first()
             if end_atual:
                 if end_atual.status != status_django:
                     LogAlteracaoIXC.objects.create(cliente=cliente_obj, login_ixc=lg['login'], campo_alterado="status", valor_antigo=end_atual.status, valor_novo=status_django)
-                if end_atual.agent_circuit_id != lg['circuit_id']:
-                    LogAlteracaoIXC.objects.create(cliente=cliente_obj, login_ixc=lg['login'], campo_alterado="agent_circuit_id", valor_antigo=end_atual.agent_circuit_id, valor_novo=lg['circuit_id'])
+                # CORREÇÃO: Compara os valores como strings para evitar falsos positivos com None
+                if str(end_atual.agent_circuit_id or '').strip() != circuit_id_novo:
+                    LogAlteracaoIXC.objects.create(cliente=cliente_obj, login_ixc=lg['login'], campo_alterado="agent_circuit_id", valor_antigo=end_atual.agent_circuit_id, valor_novo=circuit_id_novo)
 
             Endereco.objects.update_or_create(
                 cliente=cliente_obj,
@@ -177,7 +181,7 @@ def salvar_clientes_no_django(dados_ixc, mapa_filiais):
                     'cidade': con_pai.get('cidade', ''),
                     'estado': str(con_pai.get('uf', 'CE'))[:2].upper(),
                     'filial_ixc': filial_nova,
-                    'agent_circuit_id': lg['circuit_id'], # <--- GRAVA NO BANCO
+                    'agent_circuit_id': circuit_id_novo, # <--- GRAVA NO BANCO
                     'status': status_django
                 }
             )
@@ -188,7 +192,26 @@ def salvar_clientes_no_django(dados_ixc, mapa_filiais):
 
 if __name__ == "__main__":
     urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-    mapa_f = buscar_mapa_filiais()
-    meus_dados = extrair_todos_os_clientes()
-    if meus_dados:
-        salvar_clientes_no_django(meus_dados, mapa_f)
+    
+    # Criamos o histórico identificando como CARGA TOTAL
+    historico = HistoricoSincronizacao.objects.create(tipo='total', status='rodando')
+    
+    try:
+        mapa_f = buscar_mapa_filiais()
+        meus_dados = extrair_todos_os_clientes()
+        if meus_dados:
+            salvar_clientes_no_django(meus_dados, mapa_f)
+            
+        historico.status = 'sucesso'
+        historico.registros_processados = len(meus_dados) if meus_dados else 0
+        historico.detalhes = f"Carga total concluída. {historico.registros_processados} clientes processados."
+        
+    except Exception:
+        historico.status = 'erro'
+        historico.detalhes = traceback.format_exc()
+        print("❌ Erro fatal registrado no banco.")
+        
+    finally:
+        historico.data_fim = timezone.now()
+        historico.save()
+        print(f"✅ Fim da rotina {historico.tipo}.")

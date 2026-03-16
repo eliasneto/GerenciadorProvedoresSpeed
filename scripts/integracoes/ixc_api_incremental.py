@@ -63,51 +63,50 @@ def buscar_mapa_filiais():
     return mapa
 
 def extrair_clientes_recentes(dias_retroativos=0):
+    """
+    Lógica Incremental Turbinada: Busca por data de alteração no cliente 
+    E pelos logins mais recentes (resolve o caso de novos logins em clientes antigos).
+    """
     data_limite = (datetime.now() - timedelta(days=dias_retroativos)).strftime('%Y-%m-%d 00:00:00')
-    
-    # Lista de IDs de clientes que precisamos processar
-    ids_para_processar = set()
+    ids_para_processar = set() 
 
-    print(f"🔍 Buscando alterações desde {data_limite}...")
+    print(f"🔍 Buscando novidades desde {data_limite}...")
 
-    # --- 1. BUSCA POR CLIENTES ALTERADOS ---
+    # 1. Busca Clientes que tiveram o cadastro alterado
     payload_cli = {
         "qtype": "data_atualizacao", "query": data_limite, "oper": ">=",
-        "rp": "500", "sortname": "data_atualizacao", "sortorder": "desc"
+        "rp": "200", "sortname": "data_atualizacao", "sortorder": "desc"
     }
     res_cli = consultar_ixc("cliente", payload_cli)
     if res_cli and 'registros' in res_cli:
         for c in res_cli['registros']:
-            ids_para_processar.add(c['id'])
+            ids_para_processar.add(str(c['id']))
 
-    # --- 2. BUSCA POR LOGINS NOVOS/ALTERADOS (Onde o login "CASA" vai aparecer) ---
-    # Nota: Alguns IXC não filtram radusuarios por data, então buscamos os últimos IDs
+    # 2. Busca os últimos logins (Gatilho para novos logins como o CASA 2)
     payload_logins = {
         "qtype": "id", "query": "0", "oper": ">",
-        "rp": "200", "sortname": "id", "sortorder": "desc" 
+        "rp": "100", "sortname": "id", "sortorder": "desc" 
     }
     res_logins_recentes = consultar_ixc("radusuarios", payload_logins)
     if res_logins_recentes and 'registros' in res_logins_recentes:
         for l in res_logins_recentes['registros']:
-            # Se o login é novo ou alterado, pegamos o ID do cliente dele
-            ids_para_processar.add(l['id_cliente'])
+            ids_para_processar.add(str(l['id_cliente']))
 
     if not ids_para_processar:
+        print("✅ Nada de novo encontrado no IXC.")
         return []
 
-    print(f"📦 Encontrados {len(ids_para_processar)} clientes com possíveis atualizações.")
+    print(f"📦 Sincronizando detalhes de {len(ids_para_processar)} clientes...")
     
     base_de_dados_local = []
-    pbar = tqdm(total=len(ids_para_processar), desc="📥 Processando Clientes/Logins", unit="cli")
+    pbar = tqdm(total=len(ids_para_processar), desc="📥 Processando IXC", unit="cli")
 
     for id_cli in ids_para_processar:
-        # Busca os dados do cliente específico
         cliente = consultar_ixc(f"cliente/{id_cli}", {})
         if not cliente or 'id' not in cliente:
             pbar.update(1)
             continue
 
-        # Busca Logins e Contratos (Igual à carga total)
         res_logins = consultar_ixc("radusuarios", {"qtype": "id_cliente", "query": id_cli, "oper": "=", "rp": "50"})
         logins_encontrados = []
         if res_logins and 'registros' in res_logins:
@@ -137,11 +136,10 @@ def extrair_clientes_recentes(dias_retroativos=0):
 
 def salvar_clientes_no_django(dados_ixc, mapa_filiais):
     if not dados_ixc:
-        print("Sistema já está atualizado!")
         return
 
-    print("\n Gravando e auditando alterações no banco...")
-    pbar_save = tqdm(total=len(dados_ixc), desc="Gravando no Banco", unit="cli")
+    print("\n💾 Gravando e auditando alterações no banco...")
+    pbar_save = tqdm(total=len(dados_ixc), desc="💾 Gravando no Banco", unit="cli")
 
     for dado in dados_ixc:
         id_ixc = dado['id_ixc']
@@ -163,7 +161,7 @@ def salvar_clientes_no_django(dados_ixc, mapa_filiais):
 
         for lg in dado.get('logins', []):
             login_nome = lg['login']
-            circuit_id_novo = lg.get('agent_circuit_id', '') # <--- PEGA O CAMPO NOVO
+            circuit_id_novo = lg.get('agent_circuit_id', '')
             con_pai = next((c for c in dado['contratos'] if str(c['id_contrato']) == str(lg['id_contrato'])), {})
             
             status_login_ixc = str(lg.get('ativo', 'S')).strip().upper()
@@ -171,15 +169,14 @@ def salvar_clientes_no_django(dados_ixc, mapa_filiais):
             status_novo = 'cancelado' if status_con_ixc in ['C', 'D', 'CM', 'CANCELADO'] else ('inativo' if status_login_ixc == 'N' else 'ativo')
             filial_nova = mapa_filiais.get(str(con_pai.get('id_filial')), "Filial Não Informada")
 
-            # --- AUDITORIA DE STATUS/FILIAL/CIRCUITO ---
+            # --- AUDITORIA DE ENDEREÇO/LOGIN ---
             end_atual = Endereco.objects.filter(cliente=cliente_obj, login_ixc=login_nome).first()
             if end_atual:
                 if end_atual.status != status_novo:
                     LogAlteracaoIXC.objects.create(cliente=cliente_obj, login_ixc=login_nome, campo_alterado="status", valor_antigo=end_atual.status, valor_novo=status_novo)
                 if end_atual.filial_ixc != filial_nova:
                     LogAlteracaoIXC.objects.create(cliente=cliente_obj, login_ixc=login_nome, campo_alterado="filial", valor_antigo=end_atual.filial_ixc, valor_novo=filial_nova)
-                # Auditoria específica para o Circuit ID
-                if end_atual.agent_circuit_id != circuit_id_novo:
+                if str(end_atual.agent_circuit_id) != str(circuit_id_novo):
                     LogAlteracaoIXC.objects.create(cliente=cliente_obj, login_ixc=login_nome, campo_alterado="agent_circuit_id", valor_antigo=end_atual.agent_circuit_id, valor_novo=circuit_id_novo)
 
             Endereco.objects.update_or_create(
@@ -191,19 +188,19 @@ def salvar_clientes_no_django(dados_ixc, mapa_filiais):
                     'cidade': con_pai.get('cidade', ''),
                     'estado': str(con_pai.get('uf', 'CE'))[:2].upper(),
                     'filial_ixc': filial_nova,
-                    'agent_circuit_id': circuit_id_novo, # <--- GRAVA NO BANCO
+                    'agent_circuit_id': circuit_id_novo,
                     'status': status_novo
                 }
             )
         pbar_save.update(1)
 
     pbar_save.close()
-    print(" Sincronização concluída com sucesso!")
 
 if __name__ == "__main__":
     urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
     
-    historico = HistoricoSincronizacao.objects.create(status='rodando')
+    # Criamos o histórico identificando como INCREMENTAL
+    historico = HistoricoSincronizacao.objects.create(tipo='incremental', status='rodando')
     
     try:
         mapa_f = buscar_mapa_filiais()
@@ -212,11 +209,12 @@ if __name__ == "__main__":
         
         historico.status = 'sucesso'
         historico.registros_processados = len(meus_dados)
-        historico.detalhes = f"Incremental concluído. {len(meus_dados)} registros auditados."
+        historico.detalhes = f"Sincronização concluída. {len(meus_dados)} clientes atualizados."
     except Exception:
         historico.status = 'erro'
         historico.detalhes = traceback.format_exc()
-        print(" Erro fatal registrado no banco.")
+        print("❌ Erro fatal registrado no banco.")
     finally:
         historico.data_fim = timezone.now()
         historico.save()
+        print(f"✅ Fim da rotina {historico.tipo}.")

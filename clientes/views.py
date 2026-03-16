@@ -97,31 +97,57 @@ class ClienteUpdateView(LoginRequiredMixin, UpdateView):
 # ==========================================
 # GESTÃO DE UNIDADES (ENDEREÇOS / LOGINS)
 # ==========================================
+# No arquivo views.py
+
 @login_required
 def endereco_list(request, pk):
     cliente = get_object_or_404(Cliente, pk=pk)
     
-    # 1. Lê o que o usuário clicou no menu do HTML
+    # 1. Parâmetros de Filtro e Pesquisa
     status_filtro = request.GET.get('status', '')
+    sort = request.GET.get('sort', 'id')
+    q = request.GET.get('q', '').strip()
     
-    # 2. Pega todos os endereços originais do cliente
+    # 2. Pega todos os endereços do cliente
     enderecos = cliente.enderecos.all()
     
-    # 3. Se ele clicou em algum filtro válido, aplica no banco de dados
+    # Conta os ativos antes de aplicar os filtros
+    total_ativas = enderecos.filter(status='ativo').count()
+    
+    # 3. Filtro de Pesquisa Textual
+    if q:
+        enderecos = enderecos.filter(
+            Q(login_ixc__icontains=q) | 
+            Q(filial_ixc__icontains=q) |
+            Q(cidade__icontains=q) |
+            Q(agent_circuit_id__icontains=q)
+        )
+
+    # 4. Filtro de Status
     if status_filtro in ['ativo', 'inativo', 'cancelado', 'pendente']:
         enderecos = enderecos.filter(status=status_filtro)
         
-    # 4. Ordena para ficar organizado na tela
-    enderecos = enderecos.order_by('status', 'login_ixc')
+    # 5. Ordenação
+    if sort == 'filial':
+        enderecos = enderecos.order_by('filial_ixc', 'id')
+    elif sort == 'status':
+        enderecos = enderecos.order_by('status', 'id')
+    else:
+        enderecos = enderecos.order_by('id')
     
-    # Conta apenas os ativos reais para mostrar naquele card preto no topo
-    total_ativas = cliente.enderecos.filter(status='ativo').count()
+    # 6. Paginação (10 itens por página)
+    paginator = Paginator(enderecos, 10)
+    page_number = request.GET.get('page')
+    page_obj = paginator.get_page(page_number)
     
     return render(request, 'clientes/endereco_list.html', {
         'cliente': cliente,
-        'enderecos': enderecos,
+        'page_obj': page_obj,          # <- Mandamos o page_obj agora
         'total_ativas': total_ativas,
-        'status_atual': status_filtro # Manda para a tela saber quem está selecionado
+        'enderecos': enderecos,        # <- Necessário para o .count() no topo da tela
+        'status_atual': status_filtro,
+        'sort': sort,
+        'q': q
     })
 
 @login_required

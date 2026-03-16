@@ -30,65 +30,69 @@
             </div>
             <div class="bg-ageis-black px-6 py-3 rounded-2xl shadow-lg text-white">
                 <p class="text-[10px] font-black text-gray-500 uppercase leading-none mb-1">Total de Pontos</p>
-                <p class="text-xl font-black italic text-ageis-yellow">{{ enderecos.count }}</p>
+                <p class="text-xl font-black italic text-ageis-yellow">{{ cliente.enderecos.count }}</p>
             </div>
         </div>
     </div>
 
-    <div class="bg-white p-4 rounded-[2rem] border border-gray-100 shadow-sm mb-8 flex flex-col md:flex-row gap-4 items-center">
+    <form method="GET" class="bg-white p-4 rounded-[2rem] border border-gray-100 shadow-sm mb-8 flex flex-col md:flex-row gap-4 items-center">
         <div class="relative flex-grow w-full">
             <i data-lucide="search" class="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-300"></i>
-            <input type="text" id="unidadeSearch" onkeyup="applyFilters()" placeholder="Buscar Login, Endereço ou Filial..." 
+            <input type="text" name="q" value="{{ q }}" placeholder="Buscar Login, Cidade, Filial ou Designador..." 
                    class="w-full pl-12 pr-4 py-4 bg-gray-50 border-none rounded-2xl outline-none focus:ring-2 focus:ring-ageis-yellow transition-all font-bold text-gray-800 uppercase">
         </div>
         
         <div class="flex gap-2 w-full md:w-auto">
             <div class="relative w-full md:w-48">
                 <i data-lucide="activity" class="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400"></i>
-                <select id="statusFilter" onchange="applyFilters()" class="w-full pl-10 pr-8 py-4 bg-gray-50 border-none rounded-2xl outline-none focus:ring-2 focus:ring-ageis-yellow transition-all cursor-pointer font-black text-[11px] uppercase tracking-widest text-gray-600 appearance-none">
-                    <option value="">Todos os Status</option>
-                    <option value="ativo">Conectados</option>
-                    <option value="pendente">Pendentes</option>
-                    <option value="cancelado">Cancelados</option>
-                    <option value="inativo">Inativos</option>
+                <select name="status" onchange="this.form.submit()" class="w-full pl-10 pr-8 py-4 bg-gray-50 border-none rounded-2xl outline-none focus:ring-2 focus:ring-ageis-yellow transition-all cursor-pointer font-black text-[11px] uppercase tracking-widest text-gray-600 appearance-none">
+                    <option value="" {% if status_atual == '' %}selected{% endif %}>Todos os Status</option>
+                    <option value="ativo" {% if status_atual == 'ativo' %}selected{% endif %}>Conectados</option>
+                    <option value="pendente" {% if status_atual == 'pendente' %}selected{% endif %}>Pendentes</option>
+                    <option value="cancelado" {% if status_atual == 'cancelado' %}selected{% endif %}>Cancelados</option>
+                    <option value="inativo" {% if status_atual == 'inativo' %}selected{% endif %}>Inativos</option>
                 </select>
                 <i data-lucide="chevron-down" class="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none"></i>
             </div>
 
             <div class="relative w-full md:w-56">
                 <i data-lucide="arrow-up-down" class="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400"></i>
-                <select id="sortFilter" onchange="applyFilters()" class="w-full pl-10 pr-8 py-4 bg-gray-50 border-none rounded-2xl outline-none focus:ring-2 focus:ring-ageis-yellow transition-all cursor-pointer font-black text-[11px] uppercase tracking-widest text-gray-600 appearance-none">
-                    <option value="id">Ordem Padrão (ID)</option>
-                    <option value="filial">Agrupar por Filial (A-Z)</option>
-                    <option value="status">Agrupar por Status</option>
+                <select name="sort" onchange="this.form.submit()" class="w-full pl-10 pr-8 py-4 bg-gray-50 border-none rounded-2xl outline-none focus:ring-2 focus:ring-ageis-yellow transition-all cursor-pointer font-black text-[11px] uppercase tracking-widest text-gray-600 appearance-none">
+                    <option value="id" {% if sort == 'id' %}selected{% endif %}>Ordem Padrão (ID)</option>
+                    <option value="filial" {% if sort == 'filial' %}selected{% endif %}>Agrupar por Filial (A-Z)</option>
+                    <option value="status" {% if sort == 'status' %}selected{% endif %}>Agrupar por Status</option>
                 </select>
                 <i data-lucide="chevron-down" class="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none"></i>
             </div>
             
-            <button onclick="clearFilters()" class="px-4 py-4 bg-gray-100 text-gray-400 rounded-2xl hover:bg-red-50 hover:text-red-500 transition flex items-center justify-center" title="Limpar Filtros">
-                <i data-lucide="filter-x" class="w-5 h-5"></i>
+            <button type="submit" class="px-6 py-4 bg-ageis-black text-ageis-yellow font-black uppercase italic rounded-2xl hover:bg-gray-800 transition shadow-lg flex items-center gap-2">
+                Filtrar
             </button>
+            
+            {% if q or status_atual or sort != 'id' %}
+            <a href="{% url 'endereco_list' cliente.pk %}" class="px-4 py-4 bg-gray-100 text-gray-400 rounded-2xl hover:bg-red-50 hover:text-red-500 transition flex items-center justify-center" title="Limpar Filtros">
+                <i data-lucide="x" class="w-5 h-5"></i>
+            </a>
+            {% endif %}
         </div>
-    </div>
+    </form>
 
-    <div class="bg-white rounded-[2.5rem] border border-gray-100 shadow-sm overflow-hidden">
+    <div class="bg-white rounded-[2.5rem] border border-gray-100 shadow-sm overflow-hidden flex flex-col">
         <div class="overflow-x-auto">
-            <table class="w-full text-left border-collapse" id="unidadesTable">
+            <table class="w-full text-left border-collapse">
                 <thead>
                     <tr class="text-[10px] font-black uppercase text-gray-400 border-b border-gray-50 bg-gray-50/30">
                         <th class="px-8 py-5">Serviço / Login</th>
                         <th class="px-4 py-5">Filial</th>
-                        <th class="px-4 py-5 text-center">Situação (IXC)</th>
-                        <th class="px-4 py-5 text-center">Origem/Agente</th>
+                        <th class="px-4 py-5">Localidade</th>
+                        <th class="px-4 py-5 text-center">Status</th>
+                        <th class="px-4 py-5 text-center">Circuito (Origem)</th>
                         <th class="px-8 py-5 text-right">Ações</th>
                     </tr>
                 </thead>
-                <tbody id="tableBody" class="divide-y divide-gray-50">
-                    {% for endereco in enderecos %}
-                    <tr class="hover:bg-gray-50/50 transition-all group unidade-row" 
-                        data-status="{{ endereco.status|default:''|lower }}" 
-                        data-filial="{{ endereco.filial_ixc|default:'Z'|lower }}" 
-                        data-id="{{ endereco.id }}">
+                <tbody class="divide-y divide-gray-50">
+                    {% for endereco in page_obj %}
+                    <tr class="hover:bg-gray-50/50 transition-all group">
                         
                         <td class="px-8 py-6">
                             <div class="flex flex-col">
@@ -114,6 +118,13 @@
                             </span>
                         </td>
 
+                        <td class="px-4 py-6">
+                            <div class="flex flex-col">
+                                <span class="font-black text-gray-800 text-[11px] uppercase">{{ endereco.cidade|default:"NÃO INFORMADA" }}</span>
+                                <span class="text-[10px] text-gray-400 font-bold uppercase">{{ endereco.estado|default:"--" }}</span>
+                            </div>
+                        </td>
+
                         <td class="px-4 py-6 text-center">
                             <div class="inline-flex flex-col items-center">
                                 {% if endereco.status == 'ativo' %}
@@ -132,8 +143,8 @@
                         </td>
 
                         <td class="px-4 py-6 text-center">
-                            <span class="px-3 py-1 bg-gray-50 text-gray-500 rounded-lg text-[10px] font-bold border border-gray-100 uppercase">
-                                AGENTE: {{ endereco.agente_id_ixc|default:"---" }}
+                            <span class="px-3 py-1 bg-gray-50 text-gray-600 rounded-lg text-[10px] font-bold border border-gray-200 uppercase tracking-wider">
+                                {{ endereco.agent_circuit_id|default:"---" }}
                             </span>
                         </td>
 
@@ -149,14 +160,14 @@
                     </tr>
                     {% empty %}
                     <tr>
-                        <td colspan="5" class="px-8 py-20 text-center">
+                        <td colspan="6" class="px-8 py-20 text-center">
                             <div class="flex flex-col items-center gap-4 opacity-40">
                                 <div class="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center text-gray-400">
                                     <i data-lucide="map-pin-off" class="w-8 h-8"></i>
                                 </div>
                                 <div>
-                                    <p class="font-black italic uppercase text-gray-600">Nenhuma unidade vinculada</p>
-                                    <p class="text-xs font-bold text-gray-400 mt-1">Este cliente não possui conexões no IXC.</p>
+                                    <p class="font-black italic uppercase text-gray-600">Nenhum resultado encontrado</p>
+                                    <p class="text-xs font-bold text-gray-400 mt-1">Tente buscar por outro termo ou limpar os filtros.</p>
                                 </div>
                             </div>
                         </td>
@@ -165,55 +176,26 @@
                 </tbody>
             </table>
         </div>
+        
+        {% if page_obj.has_other_pages %}
+        <div class="bg-gray-50/50 px-8 py-6 border-t border-gray-100 flex items-center justify-between">
+            <span class="text-[10px] font-black text-gray-400 uppercase italic tracking-widest">
+                Página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}
+            </span>
+            <div class="flex gap-2">
+                {% if page_obj.has_previous %}
+                    <a href="?page={{ page_obj.previous_page_number }}{% if q %}&q={{ q }}{% endif %}{% if status_atual %}&status={{ status_atual }}{% endif %}{% if sort %}&sort={{ sort }}{% endif %}" class="p-2.5 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 transition shadow-sm text-gray-600">
+                        <i data-lucide="chevron-left" class="w-5 h-5"></i>
+                    </a>
+                {% endif %}
+                {% if page_obj.has_next %}
+                    <a href="?page={{ page_obj.next_page_number }}{% if q %}&q={{ q }}{% endif %}{% if status_atual %}&status={{ status_atual }}{% endif %}{% if sort %}&sort={{ sort }}{% endif %}" class="p-2.5 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 transition shadow-sm text-gray-600">
+                        <i data-lucide="chevron-right" class="w-5 h-5"></i>
+                    </a>
+                {% endif %}
+            </div>
+        </div>
+        {% endif %}
     </div>
 </div>
-
-<script>
-    // SISTEMA DE FILTRO E ORDENAÇÃO INSTANTÂNEO
-    function applyFilters() {
-        const textFilter = document.getElementById("unidadeSearch").value.toUpperCase();
-        const statusFilter = document.getElementById("statusFilter").value.toLowerCase();
-        const sortMode = document.getElementById("sortFilter").value;
-        
-        const tbody = document.getElementById("tableBody");
-        const rows = Array.from(tbody.querySelectorAll(".unidade-row"));
-
-        // 1. Aplicar a Pesquisa e Filtro
-        rows.forEach(row => {
-            const rowText = row.innerText.toUpperCase();
-            const rowStatus = row.getAttribute("data-status");
-
-            const matchesText = rowText.includes(textFilter);
-            const matchesStatus = statusFilter === "" || rowStatus === statusFilter;
-
-            if (matchesText && matchesStatus) {
-                row.style.display = "";
-            } else {
-                row.style.display = "none";
-            }
-        });
-
-        // 2. Aplicar a Ordenação
-        rows.sort((a, b) => {
-            if (sortMode === 'filial') {
-                return a.getAttribute('data-filial').localeCompare(b.getAttribute('data-filial'));
-            } else if (sortMode === 'status') {
-                return a.getAttribute('data-status').localeCompare(b.getAttribute('data-status'));
-            } else {
-                return parseInt(a.getAttribute('data-id')) - parseInt(b.getAttribute('data-id'));
-            }
-        });
-
-        // 3. Reordenar na tela
-        rows.forEach(row => tbody.appendChild(row));
-    }
-
-    // FUNÇÃO PARA LIMPAR TUDO
-    function clearFilters() {
-        document.getElementById("unidadeSearch").value = "";
-        document.getElementById("statusFilter").value = "";
-        document.getElementById("sortFilter").value = "id";
-        applyFilters();
-    }
-</script>
 {% endblock %}

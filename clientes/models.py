@@ -68,13 +68,31 @@ class Endereco(models.Model):
         identificador = self.login_ixc if self.login_ixc else self.tipo
         return f"{identificador} - {self.cidade}/{self.estado}"
 
+# Em apps/clientes/models.py
+
 class HistoricoSincronizacao(models.Model):
-    STATUS_CHOICES = [('rodando', 'Rodando...'), ('sucesso', 'Sucesso'), ('erro', 'Erro')]
+    TIPO_CHOICES = [
+        ('incremental', 'Incremental'),
+        ('total', 'Carga Total'),
+        ('faxina', 'Faxina/Lixo'),
+    ]
+    
+    # Novo campo para identificar a integração
+    tipo = models.CharField('Tipo de Sync', max_length=20, choices=TIPO_CHOICES, default='incremental')
+    
+    status = models.CharField('Status', max_length=20, choices=[('rodando', 'Rodando...'), ('sucesso', 'Sucesso'), ('erro', 'Erro')], default='rodando')
     data_inicio = models.DateTimeField('Início', auto_now_add=True)
     data_fim = models.DateTimeField('Fim', null=True, blank=True)
-    status = models.CharField('Status', max_length=20, choices=STATUS_CHOICES, default='rodando')
-    registros_processados = models.IntegerField('Registros Atualizados', default=0)
+    registros_processados = models.IntegerField('Registros', default=0)
     detalhes = models.TextField('Detalhes', blank=True, null=True)
+
+    class Meta:
+        verbose_name = 'Histórico de Sincronização'
+        verbose_name_plural = 'Histórico de Sincronizações'
+        ordering = ['-data_inicio']
+
+    def __str__(self):
+        return f"{self.get_tipo_display()} - {self.data_inicio.strftime('%d/%m/%Y %H:%M')}"
 
 class LogAlteracaoIXC(models.Model):
     cliente = models.ForeignKey(Cliente, on_delete=models.CASCADE, related_name='logs_alteracoes')
@@ -87,3 +105,21 @@ class LogAlteracaoIXC(models.Model):
     class Meta:
         verbose_name = "Log de Alteração IXC"
         ordering = ['-data_registro']
+
+        
+
+class ClienteExcluido(models.Model):
+    id_ixc = models.CharField('ID IXC', max_length=50)
+    razao_social = models.CharField('Razão Social', max_length=200)
+    cnpj_cpf = models.CharField('CNPJ/CPF', max_length=20)
+    dados_completos_json = models.JSONField('Dados Completos (Backup)') # Guarda tudo que tinha no original
+    data_exclusao = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "Lixo IXC - Cliente"
+
+class EnderecoExcluido(models.Model):
+    cliente_excluido = models.ForeignKey(ClienteExcluido, on_delete=models.CASCADE, related_name='enderecos')
+    login_ixc = models.CharField('Login', max_length=150)
+    agent_circuit_id = models.CharField('Circuito', max_length=150, null=True)
+    detalhes_json = models.JSONField()        
