@@ -65,14 +65,14 @@ services:
       while true; do
         AGORA=$$(date +%s);
         
-        # 1. INCREMENTAL (Roda a cada ciclo de 30 min)
-        echo '⚡ [$(date +%H:%M)] Iniciando sincronização incremental...';
+        # 1. INCREMENTAL
+        echo '⚡ ['$$(date +%H:%M)'] Iniciando sincronização incremental...';
         python scripts/integracoes/ixc_api_incremental.py;
 
         # 2. CARGA TOTAL (Verifica se já passaram 4 horas - 14400 segundos)
         DIFERENCA_TOTAL=$$((AGORA - ULTIMA_TOTAL));
-        if [ $$DIFERENCA_TOTAL -ge 420 ]; then
-          echo '📦 [$(date +%H:%M)] 4 horas se passaram. Iniciando Carga Total...';
+        if [ $$DIFERENCA_TOTAL -ge 360 ]; then
+          echo '📦 ['$$(date +%H:%M)'] 4 horas se passaram. Iniciando Carga Total...';
           python scripts/integracoes/ixc_api.py;
           ULTIMA_TOTAL=$$(date +%s);
         fi
@@ -80,12 +80,12 @@ services:
         # 3. FAXINA/LIXO (Verifica se já passaram 24 horas - 86400 segundos)
         DIFERENCA_FAXINA=$$((AGORA - ULTIMA_FAXINA));
         if [ $$DIFERENCA_FAXINA -ge 86400 ]; then
-          echo '🧹 [$(date +%H:%M)] 24 horas se passaram. Iniciando Faxina Diária...';
+          echo '🧹 ['$$(date +%H:%M)'] 24 horas se passaram. Iniciando Faxina Diária...';
           python scripts/integracoes/ixc_faxina.py;
           ULTIMA_FAXINA=$$(date +%s);
         fi
 
-        echo '😴 Ciclo finalizado. Próximo incremental em 30 minutos...';
+        echo '😴 Ciclo finalizado. Próximo incremental em 5 minutos...';
         sleep 300;
       done"
 
