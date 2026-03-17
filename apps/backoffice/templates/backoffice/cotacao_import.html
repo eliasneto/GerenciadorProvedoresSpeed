@@ -1,56 +1,154 @@
 {% extends "core/base.html" %}
 
-{% block title %}Speed | Importar Cotação Parceiro{% endblock %}
+{% block title %}Speed | Central de Automações{% endblock %}
 
 {% block content %}
-<div class="flex items-center justify-center min-h-[80vh] px-4">
-    <div class="max-w-2xl w-full">
-        <div class="text-center mb-8">
-            <div class="w-16 h-16 bg-ageis-yellow rounded-full flex items-center justify-center mx-auto mb-4 shadow-lg border-4 border-white">
-                <i data-lucide="database" class="w-8 h-8 text-black"></i>
-            </div>
-            <h1 class="text-3xl font-black text-gray-900 italic uppercase tracking-tighter">Importador de Dados</h1>
-            <p class="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-2">Ageis Sistemas - Ferramenta Admin</p>
+<div class="min-h-[80vh] px-4 py-8 max-w-7xl mx-auto">
+    
+    <div class="text-center mb-12">
+        <div class="w-16 h-16 bg-ageis-yellow rounded-full flex items-center justify-center mx-auto mb-4 shadow-lg border-4 border-white">
+            <i data-lucide="cpu" class="w-8 h-8 text-black"></i>
         </div>
+        <h1 class="text-3xl font-black text-gray-900 italic uppercase tracking-tighter">Central de Automações</h1>
+        <p class="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-2">Ageis Sistemas - Ferramentas Admin</p>
+    </div>
 
-        <div class="bg-white p-8 md:p-12 rounded-[2.5rem] shadow-xl border border-gray-100">
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+
+        <div class="bg-white p-8 rounded-[2rem] shadow-xl border border-gray-100 flex flex-col relative overflow-hidden transition-all hover:shadow-2xl">
             
-            <div class="border-2 border-dashed border-gray-200 rounded-3xl p-6 text-center mb-8 bg-gray-50/50">
-                <p class="text-xs text-gray-500 font-bold mb-4 uppercase tracking-wide">Ainda não tem a planilha padrão?</p>
-                
-<a href="{% url 'backoffice:download_modelo' %}" class="inline-flex items-center gap-2 text-xs font-black text-gray-900 hover:text-ageis-yellow transition-colors uppercase tracking-widest">
-    <i data-lucide="download" class="w-4 h-4"></i> Baixar Planilha Modelo
-</a>
+            <div class="flex items-center gap-4 mb-6">
+                <div class="w-12 h-12 bg-gray-900 rounded-2xl flex items-center justify-center shadow-md">
+                    <i data-lucide="database" class="w-6 h-6 text-ageis-yellow"></i>
+                </div>
+                <div>
+                    <h2 class="text-lg font-black text-gray-900 uppercase italic tracking-tight">Criação em Massa IXC</h2>
+                    <p class="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Via Planilha Excel</p>
+                </div>
             </div>
 
-            <form method="POST" enctype="multipart/form-data" class="space-y-8">
+            <div class="border-2 border-dashed border-gray-200 rounded-2xl p-4 text-center mb-6 bg-gray-50/50">
+                <a href="{% url 'backoffice:download_modelo' %}" class="inline-flex items-center gap-2 text-[10px] font-black text-gray-900 hover:text-ageis-yellow transition-colors uppercase tracking-widest">
+                    <i data-lucide="download" class="w-3 h-3"></i> Baixar Planilha Modelo
+                </a>
+            </div>
+
+            <form method="POST" enctype="multipart/form-data" class="space-y-6 flex-1 flex flex-col justify-end" id="formImportacaoIXC">
                 {% csrf_token %}
                 
                 <div>
-                    <label class="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3">Selecione o arquivo preenchido</label>
-                    <div class="relative">
-                        <input type="file" 
-                               name="arquivo_cotacao" 
-                               id="arquivo_cotacao" 
-                               accept=".xlsx, .xls, .csv" 
-                               required
-                               class="block w-full text-sm text-gray-500 
-                                      file:mr-4 file:py-4 file:px-6 
-                                      file:rounded-2xl file:border-0 
-                                      file:text-xs file:font-black file:uppercase file:tracking-wider
-                                      file:bg-white file:text-gray-900 file:shadow-sm
-                                      hover:file:bg-gray-100 hover:file:cursor-pointer
-                                      bg-gray-50 rounded-2xl border border-gray-100 cursor-pointer transition-all">
-                    </div>
+                    <label class="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Arquivo Preenchido</label>
+                    <input type="file" name="arquivo_cotacao" id="arquivo_cotacao" accept=".xlsx, .xls, .csv" required
+                           class="block w-full text-xs text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-[10px] file:font-black file:uppercase file:tracking-wider file:bg-gray-900 file:text-ageis-yellow file:shadow-sm hover:file:cursor-pointer bg-gray-50 rounded-xl border border-gray-100 cursor-pointer transition-all">
                 </div>
 
-                <button type="submit" class="w-full bg-ageis-black hover:bg-gray-900 text-ageis-yellow font-black uppercase italic tracking-widest py-5 rounded-2xl shadow-xl hover:shadow-2xl transition-all flex items-center justify-center gap-3 group">
-                    <i data-lucide="play" class="w-5 h-5 group-hover:scale-110 transition-transform"></i>
+                <div id="areaLoading" class="hidden flex flex-col items-center justify-center gap-3 mt-4 py-2">
+                    <div class="w-6 h-6 border-4 border-gray-100 border-t-ageis-yellow rounded-full animate-spin"></div>
+                    <span class="text-[10px] font-black uppercase tracking-widest text-gray-500">Conectando ao IXC...</span>
+                    <p class="text-[9px] text-center text-gray-400 italic">Processando linhas. O Excel será baixado ao final.</p>
+                </div>
+
+                <div id="areaSucesso" class="hidden flex items-center justify-center gap-2 mt-4 bg-green-50 border border-green-100 py-3 px-4 rounded-xl">
+                    <i data-lucide="check-circle" class="w-5 h-5 text-green-500"></i>
+                    <span class="text-[10px] font-black uppercase tracking-widest text-green-700">Relatório Baixado!</span>
+                </div>
+
+                <button type="submit" id="btnSubmit" class="w-full bg-ageis-black hover:bg-gray-900 text-ageis-yellow font-black uppercase italic tracking-widest py-4 rounded-2xl shadow-lg transition-all flex items-center justify-center gap-2 group mt-auto">
+                    <i data-lucide="play" class="w-4 h-4 group-hover:scale-110 transition-transform"></i>
                     Iniciar Importação
                 </button>
             </form>
-
         </div>
+
+        <div class="bg-gray-50 p-8 rounded-[2rem] border border-gray-200 border-dashed flex flex-col items-center justify-center text-center opacity-70">
+            <div class="w-12 h-12 bg-gray-200 rounded-2xl flex items-center justify-center mb-4">
+                <i data-lucide="lock" class="w-6 h-6 text-gray-400"></i>
+            </div>
+            <h2 class="text-sm font-black text-gray-400 uppercase italic tracking-tight mb-2">Automação em Breve</h2>
+            <p class="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Espaço reservado para nova integração</p>
+        </div>
+
+        <div class="bg-gray-50 p-8 rounded-[2rem] border border-gray-200 border-dashed flex flex-col items-center justify-center text-center opacity-70 hidden lg:flex">
+            <div class="w-12 h-12 bg-gray-200 rounded-2xl flex items-center justify-center mb-4">
+                <i data-lucide="zap" class="w-6 h-6 text-gray-400"></i>
+            </div>
+            <h2 class="text-sm font-black text-gray-400 uppercase italic tracking-tight mb-2">Novo Recurso</h2>
+            <p class="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Em desenvolvimento</p>
+        </div>
+
     </div>
 </div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const form = document.getElementById('formImportacaoIXC');
+        const btnSubmit = document.getElementById('btnSubmit');
+        const areaLoading = document.getElementById('areaLoading');
+        const areaSucesso = document.getElementById('areaSucesso');
+        const arquivoInput = document.getElementById('arquivo_cotacao');
+
+        form.addEventListener('submit', async function(e) {
+            // Evita o recarregamento padrao da página
+            e.preventDefault();
+            
+            // Só ativa se o arquivo estiver preenchido
+            if (arquivoInput.files.length === 0) return;
+
+            // Esconde o botão e mostra o carregamento giratório
+            btnSubmit.classList.add('hidden');
+            areaSucesso.classList.add('hidden');
+            areaLoading.classList.remove('hidden');
+
+            try {
+                // Prepara a planilha para envio silencioso (AJAX)
+                const formData = new FormData(form);
+                
+                const response = await fetch(window.location.href, {
+                    method: 'POST',
+                    body: formData,
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest'
+                    }
+                });
+
+                if (response.ok) {
+                    // O servidor terminou e respondeu com o Excel!
+                    // Extraímos o arquivo da memória
+                    const blob = await response.blob();
+                    const url = window.URL.createObjectURL(blob);
+                    
+                    // Força o navegador a fazer o download instantaneamente
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = 'Relatorio_Importacao_IXC.xlsx';
+                    document.body.appendChild(a);
+                    a.click();
+                    a.remove();
+                    window.URL.revokeObjectURL(url); // Limpa a memória
+
+                    // Mostra o quadro verde de sucesso na tela e esconde o "girando"
+                    areaLoading.classList.add('hidden');
+                    areaSucesso.classList.remove('hidden');
+                    
+                    // Limpa o input do arquivo para subir outra planilha depois se quiser
+                    form.reset();
+
+                    // Depois de 5 segundos, volta a exibir o botão normal
+                    setTimeout(() => {
+                        areaSucesso.classList.add('hidden');
+                        btnSubmit.classList.remove('hidden');
+                    }, 5000);
+
+                } else {
+                    alert("Ocorreu um erro no servidor. Verifique os dados da planilha.");
+                    window.location.reload();
+                }
+            } catch (error) {
+                console.error("Erro na comunicação:", error);
+                alert("Falha na conexão. Tente novamente.");
+                window.location.reload();
+            }
+        });
+    });
+</script>
 {% endblock %}

@@ -36,7 +36,7 @@ services:
       - "howbe.local:192.168.90.51"
     command: >
       sh -c "python setup_speed.py && 
-             gunicorn --bind 0.0.0.0:8000 --timeout 120 --workers 3 --log-level debug --access-logfile - config.wsgi:application"
+             gunicorn --bind 0.0.0.0:8000 --timeout 300 --workers 3 --log-level debug --access-logfile - config.wsgi:application"
     depends_on:
       - speed_db
 
