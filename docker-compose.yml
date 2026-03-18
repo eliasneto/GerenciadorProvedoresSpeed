@@ -4,10 +4,11 @@ services:
     container_name: speed_mysql
     restart: always
     environment:
-      MYSQL_DATABASE: speed_banco
-      MYSQL_USER: speed_user
-      MYSQL_PASSWORD: speed_password
-      MYSQL_ROOT_PASSWORD: root_super_password
+      - TZ=America/Fortaleza
+      - MYSQL_DATABASE=speed_banco
+      - MYSQL_USER=speed_user
+      - MYSQL_PASSWORD=speed_password
+      - MYSQL_ROOT_PASSWORD=root_super_password
     ports:
       - "3303:3306"
     volumes:
@@ -20,6 +21,8 @@ services:
     ports:
       - "8090:8000"
     environment:
+      - TZ=America/Fortaleza
+      - TIME_ZONE=America/Fortaleza
       - DB_NAME=speed_banco
       - DB_USER=speed_user
       - DB_PASSWORD=speed_password
@@ -45,6 +48,8 @@ services:
     container_name: speed_sincronizador_ixc
     restart: always
     environment:
+      - TZ=America/Fortaleza
+      - TIME_ZONE=America/Fortaleza
       - USE_AD_AUTH=false
       - DB_NAME=speed_banco
       - DB_USER=speed_user
@@ -55,38 +60,39 @@ services:
       - speed_db
     command: >
       sh -c "
-      echo '🚀 Aguardando banco de dados estabilizar...';
+      echo ' Aguardando banco de dados estabilizar...';
       sleep 25;
       
-      # Inicializa os marcadores (0 para rodar tudo na primeira vez)
-      ULTIMA_TOTAL=0;
+      # Inicializa os marcadores
+      ULTIMA_DATA_TOTAL='0';
       ULTIMA_FAXINA=0;
       
       while true; do
-        AGORA=$$(date +%s);
+        HORA_AGORA=$$(date +%H);
+        DATA_HOJE=$$(date +%Y%m%d);
+        AGORA_SEC=$$(date +%s);
         
-        # 1. INCREMENTAL
-        echo '⚡ ['$$(date +%H:%M)'] Iniciando sincronização incremental...';
+        # 1. INCREMENTAL (A cada 5 minutos)
+        echo ' ['$$(date +%H:%M)'] Iniciando sincronização incremental...';
         python scripts/integracoes/ixc_api_incremental.py;
 
-        # 2. CARGA TOTAL (Verifica se já passaram 4 horas - 14400 segundos)
-        DIFERENCA_TOTAL=$$((AGORA - ULTIMA_TOTAL));
-        if [ $$DIFERENCA_TOTAL -ge 360 ]; then
-          echo '📦 ['$$(date +%H:%M)'] 4 horas se passaram. Iniciando Carga Total...';
+        # 2. CARGA TOTAL (Roda apenas às 23h se não rodou hoje)
+        if [ \"$$HORA_AGORA\" -eq \"23\" ] && [ \"$$DATA_HOJE\" != \"$$ULTIMA_DATA_TOTAL\" ]; then
+          echo ' ['$$(date +%H:%M)'] Iniciando Carga Total Programada (23h)...';
           python scripts/integracoes/ixc_api.py;
-          ULTIMA_TOTAL=$$(date +%s);
+          ULTIMA_DATA_TOTAL=$$DATA_HOJE;
         fi
 
-        # 3. FAXINA/LIXO (Verifica se já passaram 24 horas - 86400 segundos)
-        DIFERENCA_FAXINA=$$((AGORA - ULTIMA_FAXINA));
+        # 3. FAXINA/LIXO (A cada 24 horas)
+        DIFERENCA_FAXINA=$$((AGORA_SEC - ULTIMA_FAXINA));
         if [ $$DIFERENCA_FAXINA -ge 86400 ]; then
-          echo '🧹 ['$$(date +%H:%M)'] 24 horas se passaram. Iniciando Faxina Diária...';
+          echo ' ['$$(date +%H:%M)'] Iniciando Faxina Diária...';
           python scripts/integracoes/ixc_faxina.py;
-          ULTIMA_FAXINA=$$(date +%s);
+          ULTIMA_FAXINA=$$AGORA_SEC;
         fi
 
-        echo '😴 Ciclo finalizado. Próximo incremental em 5 minutos...';
-        sleep 300;
+        echo ' Ciclo finalizado. Próximo incremental em 5 minutos...';
+        sleep 600;
       done"
 
 volumes:

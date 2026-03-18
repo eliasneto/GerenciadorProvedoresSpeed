@@ -12,7 +12,23 @@ from partners.forms import ProposalForm
 # IMPORTAÇÃO DA TIMELINE (HISTÓRICO)
 from core.models import RegistroHistorico
 
+from django.contrib.auth.decorators import login_required, user_passes_test
+from django.core.exceptions import PermissionDenied
+
+# ==========================================
+# 🛡️ REGRA DE ACESSO: SGP_LastMile
+# ==========================================
+def check_lastmile_group(user):
+    """
+    Libera acesso apenas para Superusuários ou 
+    quem estiver na pasta SGP_LastMile do AD.
+    """
+    if user.is_superuser or user.groups.filter(name='SGP_LastMile').exists():
+        return True
+    raise PermissionDenied
+
 @login_required
+@user_passes_test(check_lastmile_group)
 def lead_list(request):
     """Lista todos os leads com paginação"""
     leads_list = Lead.objects.all().order_by('-id')
@@ -24,6 +40,7 @@ def lead_list(request):
     return render(request, 'leads/lead_list.html', {'page_obj': page_obj})
 
 @login_required
+@user_passes_test(check_lastmile_group)
 def lead_create(request):
     """Criação de novos leads de prospecção"""
     if request.method == 'POST':
@@ -37,6 +54,7 @@ def lead_create(request):
     return render(request, 'leads/lead_form.html', {'form': form})
 
 @login_required
+@user_passes_test(check_lastmile_group)
 def lead_update(request, pk):
     """Edição de dados básicos do lead e Visualização do Histórico"""
     lead = get_object_or_404(Lead, pk=pk)
@@ -62,6 +80,7 @@ def lead_update(request, pk):
     })
 
 @login_required
+@user_passes_test(check_lastmile_group)
 def lead_add_historico(request, pk):
     """Mini-view que recebe o POST do comentário/anexo e salva no banco"""
     lead = get_object_or_404(Lead, pk=pk)
@@ -87,6 +106,7 @@ def lead_add_historico(request, pk):
     return redirect('lead_update', pk=pk)
 
 @login_required
+@user_passes_test(check_lastmile_group)
 def lead_delete(request, pk):
     """Remoção de lead da base"""
     lead = get_object_or_404(Lead, pk=pk)
@@ -97,6 +117,7 @@ def lead_delete(request, pk):
     return redirect('lead_list')
 
 @login_required
+@user_passes_test(check_lastmile_group)
 def update_lead_status(request, pk):
     """Valida a intenção e redireciona para a conversão ou atualiza o status."""
     if request.method == 'POST':
@@ -183,6 +204,7 @@ def update_lead_status(request, pk):
     return redirect('lead_list')
 
 @login_required
+@user_passes_test(check_lastmile_group)
 def lead_convert(request, pk):
     """Tela Oficial de Conversão: Salva Parceiro, Proposta e TRANSFERE HISTÓRICO"""
     lead = get_object_or_404(Lead, pk=pk)

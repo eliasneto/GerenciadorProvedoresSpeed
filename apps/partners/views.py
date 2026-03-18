@@ -13,11 +13,27 @@ from clientes.models import Endereco
 # --- IMPORTAÇÃO DO HISTÓRICO SPEED ---
 from core.models import RegistroHistorico
 
+from django.contrib.auth.decorators import login_required, user_passes_test
+from django.core.exceptions import PermissionDenied
+
+# ==========================================
+# 🛡️ REGRA DE ACESSO: SGP_LastMile
+# ==========================================
+def check_lastmile_group(user):
+    """
+    Libera acesso apenas para Superusuários ou 
+    quem estiver na pasta SGP_LastMile do AD.
+    """
+    if user.is_superuser or user.groups.filter(name='SGP_LastMile').exists():
+        return True
+    raise PermissionDenied
+
 # ==============================================================================
 # VIEWS DE PARCEIROS (DADOS MESTRE E ESTEIRAS)
 # ==============================================================================
 
 @login_required
+@user_passes_test(check_lastmile_group)
 def partner_list(request):
     """Lista APENAS os parceiros ATIVOS (A operação real)."""
     partners_queryset = Partner.objects.filter(status='ativo').order_by('-id')
@@ -32,6 +48,7 @@ def partner_list(request):
     })
 
 @login_required
+@user_passes_test(check_lastmile_group)
 def partner_inactive_list(request):
     """Esteira de Reativação (Win-back) para parceiros inativos."""
     # Traz todo mundo que NÃO está ativo (inativo, negociacao, inviavel)
@@ -47,6 +64,7 @@ def partner_inactive_list(request):
     })
 
 @login_required
+@user_passes_test(check_lastmile_group)
 def partner_detail(request, pk):
     """Exibe o perfil do parceiro, propostas e o HISTÓRICO (Timeline)."""
     partner = get_object_or_404(Partner, pk=pk)
@@ -76,6 +94,7 @@ def partner_detail(request, pk):
     })
 
 @login_required
+@user_passes_test(check_lastmile_group)
 def partner_add_historico(request, pk):
     """Mini-view que recebe o POST do comentário/anexo na tela do Parceiro"""
     partner = get_object_or_404(Partner, pk=pk)
@@ -103,6 +122,7 @@ def partner_add_historico(request, pk):
 # ==============================================================================
 
 @login_required
+@user_passes_test(check_lastmile_group)
 def update_partner_status(request, pk):
     """Inativa o parceiro a partir da lista de Ativos."""
     if request.method == 'POST':
@@ -133,6 +153,7 @@ def update_partner_status(request, pk):
     return redirect('partner_list')
 
 @login_required
+@user_passes_test(check_lastmile_group)
 def update_winback_status(request, pk):
     """Avança o estágio na esteira de reativação (Win-back)."""
     if request.method == 'POST':
@@ -190,6 +211,7 @@ def update_winback_status(request, pk):
 # ==============================================================================
 
 @login_required
+@user_passes_test(check_lastmile_group)
 def proposal_create(request, partner_pk):
     partner = get_object_or_404(Partner, pk=partner_pk)
     proposal = Proposal(partner=partner)
@@ -205,6 +227,7 @@ def proposal_create(request, partner_pk):
     return redirect('proposal_update', pk=proposal.pk)
 
 @login_required
+@user_passes_test(check_lastmile_group)
 def proposal_update(request, pk):
     proposal = get_object_or_404(Proposal, pk=pk)
     partner = proposal.partner
@@ -285,6 +308,7 @@ def proposal_update(request, pk):
     return render(request, 'partners/proposal_form.html', {'form': form, 'proposal': proposal, 'partner': partner})
 
 @login_required
+@user_passes_test(check_lastmile_group)
 def proposal_delete(request, pk):
     proposal = get_object_or_404(Proposal, pk=pk)
     partner_pk = proposal.partner.pk
@@ -293,6 +317,7 @@ def proposal_delete(request, pk):
     return redirect('partner_detail', pk=partner_pk)
 
 @login_required
+@user_passes_test(check_lastmile_group)
 def proposal_global_list(request):
     proposals = Proposal.objects.all().select_related('partner', 'cliente').order_by('-id')
     total_receita = proposals.aggregate(Sum('valor_mensal'))['valor_mensal__sum'] or 0
@@ -303,6 +328,7 @@ def proposal_global_list(request):
 # ==============================================================================
 
 @login_required
+@user_passes_test(check_lastmile_group)
 def address_proposals_list(request, address_id):
     endereco = get_object_or_404(Endereco, pk=address_id)
     proposals = Proposal.objects.filter(client_address=endereco).select_related('partner', 'cliente')
@@ -310,6 +336,7 @@ def address_proposals_list(request, address_id):
     return render(request, 'partners/address_proposals_list.html', {'endereco': endereco, 'proposals': proposals, 'partners': partners})
 
 @login_required
+@user_passes_test(check_lastmile_group)
 def partner_clients_list(request, pk):
     partner = get_object_or_404(Partner, pk=pk)
     proposals = Proposal.objects.filter(partner=partner).select_related('cliente', 'client_address')

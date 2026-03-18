@@ -11,11 +11,27 @@ from django.db.models import Q, Count
 import json
 from django.views.decorators.http import require_POST
 
+from django.contrib.auth.decorators import login_required, user_passes_test
+from django.core.exceptions import PermissionDenied
+
+# ==========================================
+# 🛡️ REGRA DE ACESSO: SGP_LastMile
+# ==========================================
+def check_lastmile_group(user):
+    """
+    Libera acesso apenas para Superusuários ou 
+    quem estiver na pasta SGP_LastMile do AD.
+    """
+    if user.is_superuser or user.groups.filter(name='SGP_LastMile').exists():
+        return True
+    raise PermissionDenied
+
 # ==========================================
 # LISTAGEM DE CLIENTES
 # ==========================================
 
 @login_required
+@user_passes_test(check_lastmile_group)
 def cliente_list(request):
     # Pega os parâmetros da URL
     q = request.GET.get('q', '').strip()
@@ -63,6 +79,7 @@ def cliente_list(request):
     })
 
 @login_required
+@user_passes_test(check_lastmile_group)
 def cliente_create(request):
     if request.method == 'POST':
         form = ClienteForm(request.POST)
@@ -75,6 +92,7 @@ def cliente_create(request):
     return render(request, 'clientes/cliente_form.html', {'form': form})
 
 @login_required 
+@user_passes_test(check_lastmile_group)
 def cliente_detail(request, pk):
     cliente = get_object_or_404(Cliente, pk=pk)
     proposals = cliente.proposals.all().order_by('-id')
@@ -100,6 +118,7 @@ class ClienteUpdateView(LoginRequiredMixin, UpdateView):
 # No arquivo views.py
 
 @login_required
+@user_passes_test(check_lastmile_group)
 def endereco_list(request, pk):
     cliente = get_object_or_404(Cliente, pk=pk)
     
@@ -151,6 +170,7 @@ def endereco_list(request, pk):
     })
 
 @login_required
+@user_passes_test(check_lastmile_group)
 def endereco_create(request, pk):
     cliente = get_object_or_404(Cliente, pk=pk)
     
@@ -186,6 +206,7 @@ class EnderecoUpdateView(LoginRequiredMixin, UpdateView):
 # APIS DE BUSCA E ATUALIZAÇÃO
 # ==========================================
 @login_required
+@user_passes_test(check_lastmile_group)
 def api_cliente_search(request):
     """API para busca rápida: agora busca também pelo ID do IXC"""
     q = request.GET.get('q', '')
@@ -205,6 +226,7 @@ def api_cliente_search(request):
     return JsonResponse(data, safe=False)
 
 @login_required
+@user_passes_test(check_lastmile_group)
 def api_cliente_enderecos(request, pk):
     """Retorna endereços de um cliente específico"""
     cliente = get_object_or_404(Cliente, pk=pk)
@@ -223,6 +245,7 @@ def api_cliente_enderecos(request, pk):
 
 @login_required
 @require_POST
+@user_passes_test(check_lastmile_group)
 def api_update_unit_status(request, pk):
     """API para atualização rápida de status via Modal"""
     try:

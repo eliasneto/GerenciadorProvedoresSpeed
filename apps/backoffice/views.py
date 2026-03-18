@@ -1,15 +1,29 @@
 from django.shortcuts import render, redirect
-from django.contrib.auth.decorators import login_required
+from django.contrib.auth.decorators import login_required, user_passes_test # 👈 Adicionado
+from django.core.exceptions import PermissionDenied # 👈 Importante para o teu 403.html
 from django.contrib import messages
 from django.http import HttpResponse
 from io import BytesIO
 import pandas as pd
 
-# 🚀 IMPORTAÇÕES DOS SCRIPTS DE INTEGRAÇÃO
+# 🚀 IMPORTAÇÕES DOS SCRIPTS
 from scripts.integracoes.backoffice.cria_login_atendimento import executar_cadastro_ixc
 from scripts.integracoes.backoffice.cria_atendimento_ixc import executar_abertura_atendimento
 
+# ==========================================
+# 🛡️ DEFINIÇÃO DA REGRA DE ACESSO (Obrigatório estar antes dos decoradores)
+# ==========================================
+def check_backoffice_group(user):
+    """
+    Retorna True se for Superusuário ou estiver no grupo do AD.
+    Caso contrário, dispara o erro 403 (Acesso Negado).
+    """
+    if user.is_superuser or user.groups.filter(name='SGP_BackOffice').exists():
+        return True
+    raise PermissionDenied
+
 @login_required
+@user_passes_test(check_backoffice_group)
 def cotacao_import(request):
     if request.method == 'POST' and request.FILES.get('arquivo_cotacao'):
         arquivo = request.FILES['arquivo_cotacao']
@@ -71,6 +85,7 @@ def cotacao_import(request):
 
 
 @login_required
+@user_passes_test(check_backoffice_group)
 def download_modelo_cotacao(request):
     # 1. Colunas para preenchimento (Aba Principal)
     colunas = [
@@ -130,6 +145,7 @@ def download_modelo_cotacao(request):
 # ==========================================
 
 @login_required
+@user_passes_test(check_backoffice_group)
 def download_modelo_atendimento(request):
     colunas = [
         'Cliente_ID', 'Login_ID', 'Filial_ID', 'Assunto_ID', 
@@ -151,6 +167,7 @@ def download_modelo_atendimento(request):
 
 
 @login_required
+@user_passes_test(check_backoffice_group)
 def atendimento_import(request):
     if request.method == 'POST' and request.FILES.get('arquivo_atendimento'):
         arquivo = request.FILES['arquivo_atendimento']

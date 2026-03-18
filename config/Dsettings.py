@@ -1,16 +1,16 @@
 import os
 import sys
+import ldap
 from pathlib import Path
 from dotenv import load_dotenv
 from decouple import config
+from django_auth_ldap.config import LDAPSearch, ActiveDirectoryGroupType
 
 # ============================================
 #  CARREGA VARIÁVEIS DE AMBIENTE
 # ============================================
 load_dotenv()
-
-# Forçamos False para ignorar a biblioteca LDAP que está dando erro
-USE_AD_AUTH = False 
+USE_AD_AUTH = os.getenv("USE_AD_AUTH", "false").lower() == "true"
 
 # Build paths inside the project
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -21,7 +21,7 @@ sys.path.insert(0, os.path.join(BASE_DIR, 'apps'))
 SECRET_KEY = 'django-insecure-g*+p+x_hnds@(5j#v-=n6#5^+4-te5s*hn$0qw6ef2l5m$jo17'
 
 # SEGURANÇA: Mude para False em produção para o WhiteNoise funcionar 100%
-DEBUG = True # Voltei para True para você ver erros detalhados se ocorrerem
+DEBUG = False
 
 ALLOWED_HOSTS = ['*'] 
 
@@ -50,7 +50,7 @@ INSTALLED_APPS = [
 # ============================================
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
-    'whitenoise.middleware.WhiteNoiseMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware', # Essencial para arquivos estáticos
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -100,17 +100,76 @@ DATABASES = {
 # ============================================
 # 🌐 CONFIGURAÇÃO DE AUTENTICAÇÃO (AD / LDAP)
 # ============================================
-# O Bloco de LDAP foi removido/desativado para evitar erro de importação
-AUTHENTICATION_BACKENDS = [
-    "django.contrib.auth.backends.ModelBackend",
-]
+# ============================================
+# 🌐 CONFIGURAÇÃO DE AUTENTICAÇÃO (AD / LDAP)
+# ============================================
+if USE_AD_AUTH:
+    AUTHENTICATION_BACKENDS = [
+        "django_auth_ldap.backend.LDAPBackend",
+        "django.contrib.auth.backends.ModelBackend",
+    ]
+
+    AUTH_LDAP_SERVER_URI = os.getenv("AD_SERVER_URI")
+    AUTH_LDAP_BIND_DN = os.getenv("AD_BIND_DN")
+    AUTH_LDAP_BIND_PASSWORD = os.getenv("AD_BIND_PASSWORD")
+
+    AUTH_LDAP_USER_SEARCH = LDAPSearch(
+        os.getenv("AD_USER_SEARCH_BASE"),
+        ldap.SCOPE_SUBTREE,
+        "(sAMAccountName=%(user)s)",
+    )
+
+    # --- 1. PORTARIA PRINCIPAL (Só loga se estiver no SGP_Sistema) ---
+    # Ajuste o DN conforme a localização real no seu AD
+    AUTH_LDAP_REQUIRE_GROUP = "CN=SGP_Sistema,OU=Grupos,DC=howbe,DC=local"
+
+    AUTH_LDAP_GROUP_SEARCH = LDAPSearch(
+        os.getenv("AD_GROUP_SEARCH_BASE"),
+        ldap.SCOPE_SUBTREE,
+        "(objectClass=group)",
+    )
+    AUTH_LDAP_GROUP_TYPE = ActiveDirectoryGroupType()
+
+    # --- 2. MAPEAMENTO DE STATUS (is_staff e is_superuser) ---
+    AUTH_LDAP_USER_FLAGS_BY_GROUP = {
+        # Todo mundo que entra no SGP_Sistema pode ver o Admin (Staff)
+        "is_staff": "CN=SGP_Sistema,OU=Grupos,DC=howbe,DC=local",
+        # Opcional: Criar um grupo SGP_Admin para ser superuser
+        "is_superuser": "CN=SGP_Admin,OU=Grupos,DC=howbe,DC=local",
+    }
+
+    AUTH_LDAP_USER_ATTR_MAP = {
+        "first_name": "displayName", 
+        "last_name": "sn",
+        "email": "mail",
+    }
+
+    AUTH_LDAP_ALWAYS_UPDATE_USER = True
+    AUTH_LDAP_MIRROR_GROUPS = True # Mantém os grupos do AD sincronizados no Django
+    AUTH_LDAP_USER_DOMAIN = os.getenv("AD_DEFAULT_DOMAIN")
+
+    AUTH_LDAP_CONNECTION_OPTIONS = {
+        ldap.OPT_REFERRALS: 0,
+    }
+else:
+    AUTHENTICATION_BACKENDS = [
+        "django.contrib.auth.backends.ModelBackend",
+    ]
 
 # ==========================================
 # 📁 ARQUIVOS ESTÁTICOS E MÍDIA
 # ==========================================
 STATIC_URL = 'static/'
-STATICFILES_DIRS = [os.path.join(BASE_DIR, 'static')]
+
+# Onde o Django busca arquivos durante o desenvolvimento
+STATICFILES_DIRS = [
+    os.path.join(BASE_DIR, 'static'),
+]
+
+# Onde o Django joga os arquivos para o servidor ler (Produção)
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
+
+# Armazenamento com compressão para performance
 STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
 MEDIA_URL = '/media/'
@@ -138,7 +197,8 @@ LOGIN_URL = 'login'
 LOGIN_REDIRECT_URL = 'home'
 LOGOUT_REDIRECT_URL = 'login'
 
-SESSION_COOKIE_AGE = 3600 # Aumentado para 1 hora para facilitar seu teste
+# Segurança de Sessão (10 minutos)
+SESSION_COOKIE_AGE = 600
 SESSION_SAVE_EVERY_REQUEST = True
 SESSION_EXPIRE_AT_BROWSER_CLOSE = True
 

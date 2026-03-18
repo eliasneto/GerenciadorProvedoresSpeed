@@ -6,6 +6,8 @@ import base64
 import urllib3
 from tqdm import tqdm
 import traceback
+from django.utils import timezone
+from django.contrib.auth import get_user_model
 
 # ==========================================
 # ⚙️ CONFIGURAÇÃO DO AMBIENTE DJANGO
@@ -25,9 +27,7 @@ os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings')
 import django
 django.setup()
 
-# 🚀 NOVO: Adicionado a importação do modelo Endereco
 from clientes.models import Cliente, ClienteExcluido, Endereco, EnderecoExcluido, HistoricoSincronizacao
-from django.utils import timezone
 
 # ==========================================
 # 🌐 CONFIGURAÇÕES DA API DO IXC
@@ -52,48 +52,48 @@ def consultar_ixc(tabela, payload):
     except Exception:
         return None
 
-def executar_faxina():
+def executar_faxina(historico): # <-- ADICIONADO: recebe o histórico
     print("🧹 Iniciando busca por clientes e logins removidos no IXC...")
     
-    # 1. Pega a lista de IDs de clientes ativos no IXC
     payload_cli = {"qtype": "id", "query": "0", "oper": ">", "rp": "20000"}
     resposta_cli = consultar_ixc("cliente", payload_cli)
     
     if not resposta_cli or 'registros' not in resposta_cli:
-        raise Exception("❌ Erro ao conectar com IXC. A API não retornou dados de clientes. Faxina abortada.")
+        raise Exception("❌ Erro ao conectar com IXC. Faxina abortada.")
 
     ids_clientes_ixc = {str(r['id']) for r in resposta_cli['registros']}
     
-    # 🚀 NOVO: 2. Pega a lista de logins (radusuarios) que existem no IXC
     payload_logins = {"qtype": "id", "query": "0", "oper": ">", "rp": "50000"}
     resposta_logins = consultar_ixc("radusuarios", payload_logins)
     logins_ixc = {str(r['login']).strip() for r in resposta_logins.get('registros', [])} if resposta_logins else set()
 
-    # ====================================================
-    # FASE 1: LIMPEZA DE CLIENTES EXCLUÍDOS
-    # ====================================================
     clientes_locais = Cliente.objects.all()
     clientes_removidos = 0
     logins_removidos = 0
 
     print(f"🔍 Comparando {clientes_locais.count()} clientes locais com o IXC...")
 
+    # --- FASE 1: CLIENTES ---
     for cli in tqdm(clientes_locais, desc="Auditando Clientes", unit="cli"):
+        # 🛑 CHECK DE PARADA
+        historico.refresh_from_db()
+        if historico.detalhes == "STOP":
+            raise KeyboardInterrupt("Faxina interrompida via Admin")
+
         if str(cli.id_ixc) not in ids_clientes_ixc:
-            # MOVER PARA O LIXO
             lixo_cli = ClienteExcluido.objects.create(
                 id_ixc=cli.id_ixc,
                 razao_social=cli.razao_social,
                 cnpj_cpf=cli.cnpj_cpf,
-                dados_originais_json={
+                dados_completos_json={ 
                     "fantasia": getattr(cli, 'nome_fantasia', ''),
                     "email": getattr(cli, 'email', ''),
                     "telefone": getattr(cli, 'telefone', ''),
                     "contato": getattr(cli, 'contato_nome', '')
-                }
+                },
+                data_exclusao=timezone.now()
             )
             
-            # Move endereços/logins associados
             for end in cli.enderecos.all():
                 EnderecoExcluido.objects.create(
                     cliente_excluido=lixo_cli,
@@ -108,44 +108,63 @@ def executar_faxina():
                     }
                 )
             
-            # DELETA DA BASE PRINCIPAL
             cli.delete()
             clientes_removidos += 1
 
-    # ====================================================
-    # FASE 2: LIMPEZA DE LOGINS EXCLUÍDOS (Unidades avulsas)
-    # ====================================================
+    # --- FASE 2: LOGINS ---
     enderecos_locais = Endereco.objects.all()
     print(f"\n🔍 Verificando {enderecos_locais.count()} logins locais...")
 
     for end in tqdm(enderecos_locais, desc="Auditando Logins", unit="login"):
-        login_atual = str(end.login_ixc).strip()
+        # 🛑 CHECK DE PARADA
+        historico.refresh_from_db()
+        if historico.detalhes == "STOP":
+            raise KeyboardInterrupt("Faxina interrompida via Admin")
 
-        # Ignoramos endereços/unidades criados manualmente que não têm login do IXC
+        login_atual = str(end.login_ixc).strip()
         if not login_atual or login_atual == "MANUAL / SEM LOGIN":
             continue
 
         if login_atual not in logins_ixc:
-            # O login foi deletado no IXC, então deletamos a unidade localmente
             end.delete()
             logins_removidos += 1
 
-    total_limpeza = clientes_removidos + logins_removidos
-    print(f"✅ Faxina finalizada! {clientes_removidos} clientes para o lixo e {logins_removidos} logins avulsos removidos.")
-    return total_limpeza
+    return clientes_removidos + logins_removidos
 
 if __name__ == "__main__":
     urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
     
-    historico = HistoricoSincronizacao.objects.create(tipo='faxina', status='rodando')
+    eh_manual = 'manual' in sys.argv
+    origem_detectada = 'manual' if eh_manual else 'automatica'
+    
+    usuario_executor = None
+    if eh_manual:
+        User = get_user_model()
+        usuario_executor = User.objects.filter(is_superuser=True).first()
+    
+    print(f"🤖 Faxina detectada como: {origem_detectada.upper()}")
+
+    historico = HistoricoSincronizacao.objects.create(
+        tipo='faxina', 
+        status='rodando',
+        origem=origem_detectada,
+        executado_por=usuario_executor
+    )
     
     try:
-        total_removidos = executar_faxina()
+        # Passamos o objeto historico para a função
+        total_removidos = executar_faxina(historico)
         
         historico.status = 'sucesso'
         historico.registros_processados = total_removidos
-        historico.detalhes = f"Faxina concluída. {total_removidos} registros removidos da base principal."
+        historico.detalhes = f"Faxina concluída via {origem_detectada}. {total_removidos} registros movidos para o lixo."
         
+    except KeyboardInterrupt as e:
+        historico.status = 'erro'
+        msg_erro = str(e) if "Parada" in str(e) else "Faxina interrompida manualmente (Ctrl+C)."
+        historico.detalhes = msg_erro
+        print(f"\n⚠️ {msg_erro}")
+
     except Exception as e:
         historico.status = 'erro'
         historico.detalhes = traceback.format_exc()
@@ -154,4 +173,4 @@ if __name__ == "__main__":
     finally:
         historico.data_fim = timezone.now()
         historico.save()
-        print(f"✅ Fim da rotina {historico.tipo}.")
+        print(f"✅ Fim da rotina {historico.tipo} ({origem_detectada}).")

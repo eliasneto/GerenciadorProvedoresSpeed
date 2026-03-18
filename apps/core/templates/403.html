@@ -1,0 +1,60 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <title>Acesso Negado | Speed</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;700;800&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>body { font-family: 'Plus Jakarta Sans', sans-serif; }</style>
+</head>
+<body class="bg-[#0F0F0F] text-white flex items-center justify-center min-h-screen p-6">
+    <div class="max-w-md w-full text-center space-y-8 animate-in fade-in zoom-in duration-500">
+        
+        <div class="flex justify-center gap-4 opacity-50 mb-8">
+            <img src="{% static 'img/logo1.png' %}" class="h-8 w-auto">
+            <img src="{% static 'img/logo2.png' %}" class="h-8 w-auto">
+        </div>
+
+        <div class="relative inline-block">
+            <div class="absolute inset-0 bg-red-500 blur-3xl opacity-20 animate-pulse"></div>
+            <div class="relative bg-red-500/10 border border-red-500/20 p-6 rounded-full">
+                <i data-lucide="shield-alert" class="w-16 h-16 text-red-500"></i>
+            </div>
+        </div>
+
+        <div class="space-y-4">
+            <h1 class="text-4xl font-black uppercase tracking-tighter">Acesso Restrito</h1>
+            <p class="text-gray-400 text-sm leading-relaxed">
+                Ops, <span class="text-white font-bold">{{ user.username }}</span>. <br>
+                Parece que você não tem permissão para acessar esta área.
+            </p>
+        </div>
+
+        <div class="bg-white/5 border border-white/10 rounded-3xl p-6 text-left">
+            <div class="flex items-start gap-3">
+                <i data-lucide="info" class="w-5 h-5 text-[#FFC107] shrink-0 mt-0.5"></i>
+                <div class="space-y-1">
+                    <p class="text-[10px] font-black uppercase tracking-widest text-[#FFC107]">Como resolver?</p>
+                    <p class="text-[11px] text-gray-300">Este módulo requer que sua conta esteja vinculada ao grupo correto no <b>Active Directory</b>. Entre em contato com o suporte de T.I. para solicitar acesso.</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="flex flex-col gap-3">
+            <a href="{% url 'home' %}" class="w-full bg-[#FFC107] text-black font-black py-4 rounded-2xl hover:scale-[1.02] transition-all uppercase tracking-widest text-xs flex items-center justify-center gap-2">
+                <i data-lucide="home" class="w-4 h-4"></i> Voltar para Home
+            </a>
+            <form action="{% url 'logout' %}" method="post">
+                {% csrf_token %}
+                <button type="submit" class="w-full text-gray-500 hover:text-red-400 text-[10px] font-bold uppercase tracking-[0.2em] transition-colors">
+                    Tentar com outra conta
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <script>lucide.createIcons();</script>
+</body>
+</html>

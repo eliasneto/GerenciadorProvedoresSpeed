@@ -14,6 +14,10 @@ urlpatterns = [
     path('ferramentas/', include('apps.core_admin.urls')),
 ]
 
+handler403 = 'django.views.defaults.permission_denied' # Isso já é o padrão
+# Mas se você quiser uma lógica extra, pode apontar para uma view específica.
+# Por padrão, o Django já busca por um arquivo '403.html' na pasta templates.
+
 # ==========================================
 # CONFIGURAÇÃO PARA SERVIR UPLOADS DA SPEED
 # ==========================================

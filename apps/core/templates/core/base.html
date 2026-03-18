@@ -1,4 +1,5 @@
 {% load static %}
+{% load auth_extras %}
 <!DOCTYPE html>
 <html lang="pt-br">
 <head>
@@ -81,6 +82,7 @@
 
             <p class="text-[10px] uppercase text-gray-600 font-extrabold px-4 py-3 tracking-widest mt-6">Operações</p>
 
+            {% if user|has_group:"SGP_LastMile" or user.is_superuser %}
             <div class="mb-1 relative">
                 <button onclick="toggleSubmenu('submenu-posvenda', 'seta-posvenda')" 
                         class="w-full flex items-center justify-between px-4 py-3 rounded-xl transition-all duration-200 group
@@ -115,7 +117,9 @@
 
                 </div>
             </div>
+            {% endif %}
 
+            {% if user|has_group:"SGP_BackOffice" or user.is_superuser %}
             <div class="mb-1 relative">
                 <button onclick="toggleSubmenu('submenu-backoffice', 'seta-backoffice')" 
                         class="w-full flex items-center justify-between px-4 py-3 rounded-xl transition-all duration-200 group
@@ -129,11 +133,12 @@
                 <div id="submenu-backoffice" class="{% if 'cotacao' not in request.path %}hidden{% endif %} flex flex-col gap-1 bg-black/20 rounded-xl mt-1 py-2 overflow-hidden">
                     
                     <a href="{% url 'backoffice:cotacao_import' %}" class="pl-[3.25rem] pr-4 py-2 text-sm font-semibold transition-colors flex items-center gap-2 {% if 'cotacao' in request.path %} text-ageis-yellow {% else %} text-gray-500 hover:text-gray-300 {% endif %}">
-                        <div class="w-1.5 h-1.5 rounded-full {% if 'cotacao' in request.path %} bg-ageis-yellow {% else %} bg-gray-500 {% endif %}"></div> Cotação Parceiro
+                        <div class="w-1.5 h-1.5 rounded-full {% if 'cotacao' in request.path %} bg-ageis-yellow {% else %} bg-gray-500 {% endif %}"></div> Central Automações
                     </a>
 
                 </div>
             </div>
+            {% endif %}
 
             <p class="text-[10px] uppercase text-gray-600 font-extrabold px-4 py-3 tracking-widest mt-6">Administração</p>
             <a href="{% url 'import_prospects' %}" class="flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 text-gray-400 hover:bg-white/5 hover:text-white group">
@@ -230,7 +235,6 @@
             }
         }
 
-        // Highlight Active Link (Para links normais fora dos submenus)
         document.querySelectorAll('nav > a').forEach(link => {
             if (link.href === window.location.href) {
                 link.classList.add('sidebar-link-active');
@@ -240,7 +244,6 @@
             }
         });
 
-        // Auto-hide Alerts
         document.addEventListener('DOMContentLoaded', function() {
             const alerts = document.querySelectorAll('.messages-container > div');
             alerts.forEach(alert => {
