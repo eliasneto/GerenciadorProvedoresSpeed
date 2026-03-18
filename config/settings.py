@@ -121,9 +121,6 @@ if USE_AD_AUTH:
         "(sAMAccountName=%(user)s)",
     )
 
-    # 🛡️ COMENTADO PARA PERMITIR LOGIN E MOSTRAR 403 DEPOIS
-    # AUTH_LDAP_REQUIRE_GROUP = "CN=SGP_Sistema,OU=Grupos,DC=howbe,DC=local"
-
     AUTH_LDAP_GROUP_SEARCH = LDAPSearch(
         os.getenv("AD_GROUP_SEARCH_BASE"),
         ldap.SCOPE_SUBTREE,
@@ -131,21 +128,21 @@ if USE_AD_AUTH:
     )
     AUTH_LDAP_GROUP_TYPE = ActiveDirectoryGroupType()
 
+    AUTH_LDAP_REQUIRE_GROUP = os.getenv("AD_GROUP_SGP_ACCESS")
+
     AUTH_LDAP_USER_FLAGS_BY_GROUP = {
-        "is_staff": "CN=SGP_Sistema,OU=Grupos,DC=howbe,DC=local",
-        "is_superuser": "CN=SGP_Admin,OU=Grupos,DC=howbe,DC=local",
+        "is_staff": os.getenv("AD_GROUP_SGP_ACCESS"),
     }
 
     AUTH_LDAP_USER_ATTR_MAP = {
-        "first_name": "displayName", 
+        "first_name": "givenName",
         "last_name": "sn",
         "email": "mail",
     }
 
     AUTH_LDAP_ALWAYS_UPDATE_USER = True
     AUTH_LDAP_MIRROR_GROUPS = True
-    AUTH_LDAP_USER_DOMAIN = os.getenv("AD_DEFAULT_DOMAIN")
-    AUTH_LDAP_CONNECTION_OPTIONS = { ldap.OPT_REFERRALS: 0 }
+    AUTH_LDAP_CONNECTION_OPTIONS = {ldap.OPT_REFERRALS: 0}
 
     # --- LOGS DE DEBUG (Mantenha isso até o login funcionar 100%) ---
     import logging
