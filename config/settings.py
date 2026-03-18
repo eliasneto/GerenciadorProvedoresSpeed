@@ -4,7 +4,11 @@ import ldap
 from pathlib import Path
 from dotenv import load_dotenv
 from decouple import config
-from django_auth_ldap.config import LDAPSearch, ActiveDirectoryGroupType
+from django_auth_ldap.config import (
+    LDAPSearch,
+    ActiveDirectoryGroupType,
+    LDAPGroupQuery,
+)
 
 # ============================================
 #  CARREGA VARIÁVEIS DE AMBIENTE
@@ -23,7 +27,7 @@ SECRET_KEY = 'django-insecure-g*+p+x_hnds@(5j#v-=n6#5^+4-te5s*hn$0qw6ef2l5m$jo17
 # SEGURANÇA: False em produção para o WhiteNoise funcionar
 DEBUG = False
 
-ALLOWED_HOSTS = ['*'] 
+ALLOWED_HOSTS = ['*']
 
 # ============================================
 #  APLICAÇÕES (INSTALLED_APPS)
@@ -35,7 +39,7 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-    
+
     # Suas Apps
     'core',
     'leads',
@@ -64,7 +68,7 @@ ROOT_URLCONF = 'config.urls'
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [BASE_DIR / 'templates'], 
+        'DIRS': [BASE_DIR / 'templates'],
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
@@ -106,23 +110,19 @@ if USE_AD_AUTH:
         "django.contrib.auth.backends.ModelBackend",
     ]
 
-    # Credenciais do Servidor
+    # Credenciais do servidor LDAP
     AUTH_LDAP_SERVER_URI = os.getenv("AD_SERVER_URI")
     AUTH_LDAP_BIND_DN = os.getenv("AD_BIND_DN")
     AUTH_LDAP_BIND_PASSWORD = os.getenv("AD_BIND_PASSWORD")
 
-    # Busca de Usuário
+    # Busca do usuário no AD pelo login digitado
     AUTH_LDAP_USER_SEARCH = LDAPSearch(
         os.getenv("AD_USER_SEARCH_BASE"),
         ldap.SCOPE_SUBTREE,
         "(sAMAccountName=%(user)s)",
     )
 
-    # 🛑 BARREIRA DE ENTRADA (Comentada para permitir o teste do 403)
-    # Se descomentar, usuários sem este grupo verão "Usuário/Senha inválidos"
-    # AUTH_LDAP_REQUIRE_GROUP = os.getenv("AD_GROUP_SGP_ACCESS")
-
-    # Configuração de Grupos
+    # Busca de grupos no AD
     AUTH_LDAP_GROUP_SEARCH = LDAPSearch(
         os.getenv("AD_GROUP_SEARCH_BASE"),
         ldap.SCOPE_SUBTREE,
@@ -130,25 +130,38 @@ if USE_AD_AUTH:
     )
     AUTH_LDAP_GROUP_TYPE = ActiveDirectoryGroupType()
 
-    # Mapeamento de Status por Grupo do AD
-    # Staff = Acesso ao /admin | Superuser = Poder total
+    # Grupos permitidos
+    grupo_sistema = os.getenv("AD_GROUP_SGP_SISTEMA")
+    grupo_lastmile = os.getenv("AD_GROUP_SGP_LASTMILE")
+    grupo_backoffice = os.getenv("AD_GROUP_SGP_BACKOFFICE")
+
+    grupos_permitidos = (
+        LDAPGroupQuery(grupo_sistema) |
+        LDAPGroupQuery(grupo_lastmile) |
+        LDAPGroupQuery(grupo_backoffice)
+    )
+
+    # Exige que o usuário esteja em pelo menos um dos grupos
+    AUTH_LDAP_REQUIRE_GROUP = grupos_permitidos
+
+    # Define staff para quem está em qualquer grupo permitido
     AUTH_LDAP_USER_FLAGS_BY_GROUP = {
-        "is_staff": os.getenv("AD_GROUP_SGP_ACCESS"),
-        "is_superuser": "CN=SGP_Admin,OU=Grupos,DC=howbe,DC=local",
+        "is_staff": grupos_permitidos,
     }
 
-    # Sincronização de Atributos (AD -> Django)
+    # Sincronização de atributos AD -> Django
     AUTH_LDAP_USER_ATTR_MAP = {
-        "first_name": "displayName", 
+        "first_name": "givenName",
         "last_name": "sn",
         "email": "mail",
     }
 
     AUTH_LDAP_ALWAYS_UPDATE_USER = True
-    AUTH_LDAP_MIRROR_GROUPS = True 
-    AUTH_LDAP_USER_DOMAIN = os.getenv("AD_DEFAULT_DOMAIN")
-    AUTH_LDAP_CONNECTION_OPTIONS = { ldap.OPT_REFERRALS: 0 }
-    
+    AUTH_LDAP_MIRROR_GROUPS = True
+    AUTH_LDAP_CONNECTION_OPTIONS = {
+        ldap.OPT_REFERRALS: 0
+    }
+
 else:
     AUTHENTICATION_BACKENDS = [
         "django.contrib.auth.backends.ModelBackend",
@@ -202,17 +215,29 @@ CSRF_TRUSTED_ORIGINS = [
 # 🛠️ SISTEMA DE LOGS (DEBUG LDAP PARA DOCKER)
 # ==========================================
 LOGGING = {
-    'version': 1,
-    'disable_existing_loggers': False,
-    'handlers': {
-        'console': {
-            'class': 'logging.StreamHandler',
+    "version": 1,
+    "disable_existing_loggers": False,
+    "formatters": {
+        "verbose": {
+            "format": "%(levelname)s %(asctime)s %(name)s %(message)s",
         },
     },
-    'loggers': {
-        'django_auth_ldap': {
-            'handlers': ['console'],
-            'level': 'DEBUG',
+    "handlers": {
+        "console": {
+            "class": "logging.StreamHandler",
+            "formatter": "verbose",
+        },
+    },
+    "loggers": {
+        "django_auth_ldap": {
+            "handlers": ["console"],
+            "level": "DEBUG",
+            "propagate": False,
+        },
+        "ldap": {
+            "handlers": ["console"],
+            "level": "DEBUG",
+            "propagate": False,
         },
     },
 }
