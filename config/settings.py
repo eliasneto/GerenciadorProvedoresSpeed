@@ -199,9 +199,20 @@ CSRF_TRUSTED_ORIGINS = [
 ]
 
 # ==========================================
-# 🛠️ LOGS DE SISTEMA (DEBUG LDAP)
+# 🛠️ SISTEMA DE LOGS (DEBUG LDAP PARA DOCKER)
 # ==========================================
-import logging
-logger = logging.getLogger('django_auth_ldap')
-logger.addHandler(logging.StreamHandler())
-logger.setLevel(logging.DEBUG)
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'handlers': {
+        'console': {
+            'class': 'logging.StreamHandler',
+        },
+    },
+    'loggers': {
+        'django_auth_ldap': {
+            'handlers': ['console'],
+            'level': 'DEBUG',
+        },
+    },
+}
