@@ -1,67 +1,120 @@
 {% extends "core/base.html" %}
+{% load static %}
 
 {% block content %}
-<div class="w-full max-w-[900px] mx-auto"> 
-    <div class="flex flex-col md:flex-row bg-white rounded-[2.5rem] overflow-hidden shadow-2xl">
+<div class="w-full max-w-[950px] mx-auto animate-in fade-in zoom-in duration-700"> 
+    <div class="flex flex-col md:flex-row bg-white rounded-[3rem] overflow-hidden shadow-[0_20px_50px_rgba(0,0,0,0.3)] border border-white/10">
         
-        <div class="w-full md:w-1/2 bg-ageis-black p-12 flex flex-col justify-between text-white">
-            <div>
-                <div class="flex items-center gap-2 mb-8">
-                    <div class="w-6 h-6 bg-ageis-yellow rounded-md"></div>
-                    <span class="text-xl font-bold italic">SPEED</span>
+        <div class="w-full md:w-1/2 bg-ageis-black p-12 flex flex-col justify-between text-white relative overflow-hidden">
+            <div class="absolute -top-24 -left-24 w-64 h-64 bg-ageis-yellow/10 blur-[100px] rounded-full"></div>
+            
+            <div class="relative z-10">
+                <div class="inline-flex items-center gap-4 bg-white/5 backdrop-blur-md p-4 rounded-3xl border border-white/10 mb-12 shadow-2xl">
+                    <div class="flex items-center justify-center">
+                        <img src="{% static 'img/logo1.png' %}" alt="Logo 1" class="h-7 w-auto object-contain">
+                    </div>
+                    <div class="w-px h-5 bg-white/20"></div>
+                    <div class="flex items-center justify-center">
+                        <img src="{% static 'img/logo2.png' %}" alt="Logo 2" class="h-7 w-auto object-contain">
+                    </div>
+                    <div class="w-px h-5 bg-white/20"></div>
+                    <div class="flex items-center justify-center">
+                        <img src="{% static 'img/logo3.png' %}" alt="Logo 3" class="h-7 w-auto object-contain">
+                    </div>
                 </div>
-                <h1 class="text-4xl font-black italic uppercase leading-none mb-4">Gestão Parceiros</h1>
-                <p class="text-gray-400 text-sm">Acesse de forma centralizada a gestão de parceiros, fornecedores e prospecções da empresa.</p>
+
+                <div class="space-y-4">
+                    <div class="flex items-center gap-3">
+                        <div class="w-8 h-1 bg-ageis-yellow rounded-full"></div>
+                        <span class="text-ageis-yellow font-black tracking-[0.3em] text-xs uppercase italic">Sistema Integrado</span>
+                    </div>
+                    <h1 class="text-5xl font-black italic uppercase leading-[0.9] tracking-tighter">
+                    
+                        <span class="text-white/50 text-3xl">Gestão de</span><br>
+                        Parceiros
+                    </h1>
+                    <p class="text-gray-400 text-sm max-w-[280px] leading-relaxed pt-4">
+                        Acesse de forma centralizada a inteligência de LastMile e BackOffice da sua operação.
+                    </p>
+                </div>
             </div>
-            <div class="mt-8">
-                <span class="text-[10px] py-1 px-3 bg-white/10 rounded-full text-ageis-yellow font-bold uppercase tracking-widest border border-ageis-yellow/20">
-                    Ambiente Corporativo Autenticado
-                </span>
+
+            <div class="relative z-10 mt-12">
+                <div class="flex items-center gap-2">
+                    <span class="flex h-2 w-2">
+                        <span class="animate-ping absolute inline-flex h-2 w-2 rounded-full bg-ageis-yellow opacity-75"></span>
+                        <span class="relative inline-flex rounded-full h-2 w-2 bg-ageis-yellow"></span>
+                    </span>
+                    <span class="text-[10px] text-gray-400 font-bold uppercase tracking-widest">
+                        Servidor Online & Protegido
+                    </span>
+                </div>
             </div>
         </div>
 
-        <div class="w-full md:w-1/2 p-12 bg-white">
-            <h2 class="text-2xl font-bold text-gray-900 mb-2">Entrar</h2>
-            <p class="text-sm text-gray-400 mb-8">Credenciais necessárias para acesso ao painel.</p>
+        <div class="w-full md:w-1/2 p-12 bg-white flex flex-col justify-center">
+            <div class="mb-10 text-center md:text-left">
+                <h2 class="text-3xl font-black text-gray-900 tracking-tight">Login</h2>
+                <p class="text-sm text-gray-400 mt-1">Insira suas credenciais.</p>
+            </div>
 
             {% if form.errors or error %}
-                <div class="p-4 mb-6 text-sm text-red-700 bg-red-50 border border-red-100 rounded-2xl flex items-center gap-2">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                        <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
-                    </svg>
-                    <span>Usuário ou senha incorretos.</span>
+                <div class="p-4 mb-8 text-xs font-bold text-red-700 bg-red-50 border border-red-100 rounded-2xl flex items-center gap-3 animate-shake">
+                    <i data-lucide="alert-circle" class="w-5 h-5"></i>
+                    <span>Usuário ou senha inválidos no domínio.</span>
                 </div>
             {% endif %}
 
             <form method="POST" class="space-y-6">
                 {% csrf_token %}
                 
-                <div class="space-y-1">
-                    <label class="text-xs font-bold text-gray-700 uppercase tracking-wider">Usuário</label>
-                    <input type="text" name="username" required 
-                           class="w-full p-4 bg-gray-50 border border-gray-100 rounded-2xl outline-none focus:ring-2 focus:ring-ageis-yellow transition-all"
-                           placeholder="Digite seu usuário">
+                <div class="space-y-2">
+                    <label class="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Usuário da Rede</label>
+                    <div class="relative group">
+                        <span class="absolute inset-y-0 left-0 flex items-center pl-4 text-gray-400 group-focus-within:text-ageis-yellow transition-colors">
+                            <i data-lucide="user" class="w-5 h-5"></i>
+                        </span>
+                        <input type="text" name="username" required 
+                               class="w-full pl-12 pr-4 py-4 bg-gray-50 border border-gray-100 rounded-2xl outline-none focus:ring-4 focus:ring-ageis-yellow/10 focus:border-ageis-yellow transition-all placeholder:text-gray-300"
+                               placeholder="ex: elias.neto">
+                    </div>
                 </div>
 
-                <div class="space-y-1">
-                    <label class="text-xs font-bold text-gray-700 uppercase tracking-wider">Senha</label>
-                    <input type="password" name="password" required 
-                           class="w-full p-4 bg-gray-50 border border-gray-100 rounded-2xl outline-none focus:ring-2 focus:ring-ageis-yellow transition-all"
-                           placeholder="••••••••">
+                <div class="space-y-2">
+                    <label class="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Senha de Acesso</label>
+                    <div class="relative group">
+                        <span class="absolute inset-y-0 left-0 flex items-center pl-4 text-gray-400 group-focus-within:text-ageis-yellow transition-colors">
+                            <i data-lucide="lock" class="w-5 h-5"></i>
+                        </span>
+                        <input type="password" name="password" required 
+                               class="w-full pl-12 pr-4 py-4 bg-gray-50 border border-gray-100 rounded-2xl outline-none focus:ring-4 focus:ring-ageis-yellow/10 focus:border-ageis-yellow transition-all placeholder:text-gray-300"
+                               placeholder="••••••••">
+                    </div>
                 </div>
                 
-                <button type="submit" class="w-full bg-ageis-yellow text-black font-black py-4 rounded-2xl shadow-lg hover:scale-[1.02] active:scale-[0.98] transition-all flex justify-center items-center gap-2">
-                    <span>Entrar no Painel</span>
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                        <path fill-rule="evenodd" d="M10.293 3.293a1 1 0 011.414 0l6 6a1 1 0 010 1.414l-6 6a1 1 0 01-1.414-1.414L14.586 11H3a1 1 0 110-2h11.586l-4.293-4.293a1 1 0 010-1.414z" clip-rule="evenodd" />
-                    </svg>
+                <button type="submit" class="w-full bg-ageis-yellow text-black font-black py-5 rounded-2xl shadow-[0_10px_30px_rgba(255,193,7,0.3)] hover:scale-[1.02] active:scale-[0.98] transition-all flex justify-center items-center gap-3 group">
+                    <span class="uppercase tracking-widest text-xs">Entrar no Sistema</span>
+                    <i data-lucide="arrow-right" class="w-4 h-4 group-hover:translate-x-1 transition-transform"></i>
                 </button>
             </form>
             
-            <p class="mt-8 text-center text-[10px] text-gray-400 uppercase tracking-widest">
-                Desenvolvido por Speed/HowBe
-            </p>
+            <div class="mt-12 flex items-center justify-center gap-4">
+                <div class="h-px w-8 bg-gray-100"></div>
+                <p class="text-[9px] text-gray-300 font-bold uppercase tracking-[0.3em]">
+                    Speed Engine v3.0
+                </p>
+                <div class="h-px w-8 bg-gray-100"></div>
+            </div>
         </div>
     </div>
 </div>
+
+<style>
+    @keyframes shake {
+        0%, 100% { transform: translateX(0); }
+        25% { transform: translateX(-5px); }
+        75% { transform: translateX(5px); }
+    }
+    .animate-shake { animation: shake 0.4s ease-in-out; }
+</style>
 {% endblock %}
