@@ -121,7 +121,7 @@ if USE_AD_AUTH:
 
     # --- 1. PORTARIA PRINCIPAL (Só loga se estiver no SGP_Sistema) ---
     # Ajuste o DN conforme a localização real no seu AD
-    AUTH_LDAP_REQUIRE_GROUP = "CN=SGP_Sistema,OU=Grupos,DC=howbe,DC=local"
+    #AUTH_LDAP_REQUIRE_GROUP = "CN=SGP_Sistema,OU=Grupos,DC=howbe,DC=local"
 
     AUTH_LDAP_GROUP_SEARCH = LDAPSearch(
         os.getenv("AD_GROUP_SEARCH_BASE"),
