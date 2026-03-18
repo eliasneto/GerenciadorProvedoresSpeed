@@ -3,59 +3,84 @@ from django.contrib.auth.decorators import login_required
 from django.contrib.contenttypes.models import ContentType
 from django.contrib import messages
 
-# Importações dos modelos
-from leads.models import Lead 
-from .models import RegistroHistorico # Importa a Timeline que criamos no models do core
+from leads.models import Lead
+from .models import RegistroHistorico
+
 
 @login_required
 def home(request):
-    """Página inicial com contadores de parceiros e prospecções"""
+    """Página inicial com contadores."""
     context = {
         'total_leads': Lead.objects.count(),
-        # Aqui você adicionará outros contadores conforme criar os apps
     }
     return render(request, 'core/home.html', context)
+
 
 @login_required
 def timeline_global(request, app_label, model_name, object_id):
     """
-    Tela Global de Histórico.
-    Funciona para leads, partners, proposals, ou qualquer outra tabela futura.
+    Tela global de histórico para qualquer objeto do sistema.
+    Exemplo:
+    /timeline/leads/lead/1/
     """
-    # 1. Descobre qual é a tabela do banco dinamicamente (ex: app 'leads', model 'lead')
-    content_type = get_object_or_404(ContentType, app_label=app_label, model=model_name)
-    
-    # 2. Busca o objeto real (o Lead ou Parceiro) só para pegar o nome dele
+
+    content_type = get_object_or_404(
+        ContentType,
+        app_label=app_label,
+        model=model_name
+    )
+
     obj_class = content_type.model_class()
     obj = get_object_or_404(obj_class, pk=object_id)
-    
-    # Tenta pegar a Razão Social ou Nome Fantasia. Se não achar, pega o padrão do sistema
-    nome_objeto = getattr(obj, 'nome_fantasia', getattr(obj, 'razao_social', str(obj)))
 
-    # 3. Busca o histórico atrelado a este objeto
-    historico = RegistroHistorico.objects.filter(content_type=content_type, object_id=object_id)
+    nome_objeto = (
+        getattr(obj, 'nome_fantasia', None)
+        or getattr(obj, 'razao_social', None)
+        or getattr(obj, 'nome', None)
+        or str(obj)
+    )
 
-    # 4. Salva um novo registro (se a requisição for um POST do formulário)
+    historico = RegistroHistorico.objects.filter(
+        content_type=content_type,
+        object_id=object_id
+    ).order_by('-data')
+
     if request.method == 'POST':
-        descricao = request.POST.get('descricao')
+        descricao = (request.POST.get('descricao') or '').strip()
         arquivo = request.FILES.get('arquivo')
-        
-        if descricao or arquivo:
-            tipo = 'anexo' if arquivo else 'comentario'
-            RegistroHistorico.objects.create(
-                tipo=tipo,
-                descricao=descricao,
-                arquivo=arquivo,
-                criado_por=request.user,
-                content_type=content_type,
+
+        if not descricao and not arquivo:
+            messages.warning(request, "Informe uma descrição ou envie um arquivo.")
+            return redirect(
+                'timeline_global',
+                app_label=app_label,
+                model_name=model_name,
                 object_id=object_id
             )
-            messages.success(request, "Registro salvo com sucesso!")
-            # Redireciona para a mesma página para limpar o formulário e evitar reenvio
-            return redirect('timeline_global', app_label=app_label, model_name=model_name, object_id=object_id)
 
-    return render(request, 'core/timeline_global.html', {
+        tipo = 'anexo' if arquivo else 'comentario'
+
+        RegistroHistorico.objects.create(
+            tipo=tipo,
+            acao=descricao if descricao else None,
+            arquivo=arquivo,
+            usuario=request.user,
+            content_type=content_type,
+            object_id=object_id
+        )
+
+        messages.success(request, "Registro salvo com sucesso!")
+        return redirect(
+            'timeline_global',
+            app_label=app_label,
+            model_name=model_name,
+            object_id=object_id
+        )
+
+    context = {
         'historico': historico,
         'nome_objeto': nome_objeto,
-        'modulo_origem': model_name.upper() # Fica bonito na tela (Ex: LEAD, PARTNER)
-    })
+        'modulo_origem': model_name.upper(),
+        'objeto': obj,
+    }
+    return render(request, 'core/timeline_global.html', context)

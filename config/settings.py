@@ -11,26 +11,20 @@ from django_auth_ldap.config import (
 )
 
 # ============================================
-#  CARREGA VARIÁVEIS DE AMBIENTE
+# 🔧 VARIÁVEIS DE AMBIENTE
 # ============================================
 load_dotenv()
 USE_AD_AUTH = os.getenv("USE_AD_AUTH", "false").lower() == "true"
 
-# Build paths inside the project
 BASE_DIR = Path(__file__).resolve().parent.parent
-
-# Adiciona a pasta 'apps' ao PATH para organização do Django
 sys.path.insert(0, os.path.join(BASE_DIR, 'apps'))
 
-SECRET_KEY = 'django-insecure-g*+p+x_hnds@(5j#v-=n6#5^+4-te5s*hn$0qw6ef2l5m$jo17'
-
-# SEGURANÇA: False em produção para o WhiteNoise funcionar
+SECRET_KEY = 'django-insecure-CHANGE-ME'
 DEBUG = False
-
 ALLOWED_HOSTS = ['*']
 
 # ============================================
-#  APLICAÇÕES (INSTALLED_APPS)
+# 📦 APPS
 # ============================================
 INSTALLED_APPS = [
     'django.contrib.admin',
@@ -40,7 +34,6 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
 
-    # Suas Apps
     'core',
     'leads',
     'partners',
@@ -50,7 +43,7 @@ INSTALLED_APPS = [
 ]
 
 # ============================================
-#  MIDDLEWARES
+# 🧱 MIDDLEWARE
 # ============================================
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
@@ -84,16 +77,16 @@ TEMPLATES = [
 WSGI_APPLICATION = 'config.wsgi.application'
 
 # ==========================================
-# 💾 BANCO DE DADOS (MySQL)
+# 💾 DATABASE
 # ==========================================
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.mysql',
-        'NAME': config('DB_NAME', default='speed_banco'),
-        'USER': config('DB_USER', default='speed_user'),
-        'PASSWORD': config('DB_PASSWORD', default='speed_password'),
-        'HOST': config('DB_HOST', default='speed_db'),
-        'PORT': config('DB_PORT', default='3306'),
+        'NAME': config('DB_NAME'),
+        'USER': config('DB_USER'),
+        'PASSWORD': config('DB_PASSWORD'),
+        'HOST': config('DB_HOST'),
+        'PORT': config('DB_PORT'),
         'OPTIONS': {
             'init_command': "SET sql_mode='STRICT_TRANS_TABLES'",
             'charset': 'utf8mb4',
@@ -102,7 +95,7 @@ DATABASES = {
 }
 
 # ============================================
-# 🌐 CONFIGURAÇÃO DE AUTENTICAÇÃO (AD / LDAP)
+# 🌐 LDAP / ACTIVE DIRECTORY
 # ============================================
 if USE_AD_AUTH:
     AUTHENTICATION_BACKENDS = [
@@ -110,46 +103,45 @@ if USE_AD_AUTH:
         "django.contrib.auth.backends.ModelBackend",
     ]
 
-    # Credenciais do servidor LDAP
     AUTH_LDAP_SERVER_URI = os.getenv("AD_SERVER_URI")
     AUTH_LDAP_BIND_DN = os.getenv("AD_BIND_DN")
     AUTH_LDAP_BIND_PASSWORD = os.getenv("AD_BIND_PASSWORD")
 
-    # Busca do usuário no AD pelo login digitado
     AUTH_LDAP_USER_SEARCH = LDAPSearch(
         os.getenv("AD_USER_SEARCH_BASE"),
         ldap.SCOPE_SUBTREE,
         "(sAMAccountName=%(user)s)",
     )
 
-    # Busca de grupos no AD
     AUTH_LDAP_GROUP_SEARCH = LDAPSearch(
         os.getenv("AD_GROUP_SEARCH_BASE"),
         ldap.SCOPE_SUBTREE,
         "(objectClass=group)",
     )
+
     AUTH_LDAP_GROUP_TYPE = ActiveDirectoryGroupType()
 
-    # Grupos permitidos
+    # 🔐 Grupos permitidos
     grupo_sistema = os.getenv("AD_GROUP_SGP_SISTEMA")
     grupo_lastmile = os.getenv("AD_GROUP_SGP_LASTMILE")
     grupo_backoffice = os.getenv("AD_GROUP_SGP_BACKOFFICE")
 
-    grupos_permitidos = (
-        LDAPGroupQuery(grupo_sistema) |
-        LDAPGroupQuery(grupo_lastmile) |
-        LDAPGroupQuery(grupo_backoffice)
-    )
+    queries = []
+    for g in [grupo_sistema, grupo_lastmile, grupo_backoffice]:
+        if g:
+            queries.append(LDAPGroupQuery(g))
 
-    # Exige que o usuário esteja em pelo menos um dos grupos
-    AUTH_LDAP_REQUIRE_GROUP = grupos_permitidos
+    if queries:
+        grupos_permitidos = queries[0]
+        for q in queries[1:]:
+            grupos_permitidos = grupos_permitidos | q
 
-    # Define staff para quem está em qualquer grupo permitido
-    AUTH_LDAP_USER_FLAGS_BY_GROUP = {
-        "is_staff": grupos_permitidos,
-    }
+        AUTH_LDAP_REQUIRE_GROUP = grupos_permitidos
 
-    # Sincronização de atributos AD -> Django
+        AUTH_LDAP_USER_FLAGS_BY_GROUP = {
+            "is_staff": grupos_permitidos,
+        }
+
     AUTH_LDAP_USER_ATTR_MAP = {
         "first_name": "givenName",
         "last_name": "sn",
@@ -158,9 +150,7 @@ if USE_AD_AUTH:
 
     AUTH_LDAP_ALWAYS_UPDATE_USER = True
     AUTH_LDAP_MIRROR_GROUPS = True
-    AUTH_LDAP_CONNECTION_OPTIONS = {
-        ldap.OPT_REFERRALS: 0
-    }
+    AUTH_LDAP_CONNECTION_OPTIONS = {ldap.OPT_REFERRALS: 0}
 
 else:
     AUTHENTICATION_BACKENDS = [
@@ -168,7 +158,7 @@ else:
     ]
 
 # ==========================================
-# 📁 ARQUIVOS ESTÁTICOS E MÍDIA
+# 📁 STATIC / MEDIA
 # ==========================================
 STATIC_URL = 'static/'
 STATICFILES_DIRS = [os.path.join(BASE_DIR, 'static')]
@@ -179,32 +169,30 @@ MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 
 # ==========================================
-# 🌍 LOCALIZAÇÃO E SEGURANÇA
+# 🌍 LOCALE
 # ==========================================
 LANGUAGE_CODE = 'pt-br'
 TIME_ZONE = 'America/Fortaleza'
 USE_I18N = True
 USE_TZ = False
 
+# ==========================================
+# 🔐 AUTH
+# ==========================================
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 AUTH_USER_MODEL = 'core.User'
-
-AUTH_PASSWORD_VALIDATORS = [
-    {'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator'},
-    {'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator'},
-    {'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator'},
-    {'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator'},
-]
 
 LOGIN_URL = 'login'
 LOGIN_REDIRECT_URL = 'home'
 LOGOUT_REDIRECT_URL = 'login'
 
-# Segurança de Sessão (10 minutos de inatividade)
 SESSION_COOKIE_AGE = 600
 SESSION_SAVE_EVERY_REQUEST = True
 SESSION_EXPIRE_AT_BROWSER_CLOSE = True
 
+# ==========================================
+# 🛡️ CSRF
+# ==========================================
 CSRF_TRUSTED_ORIGINS = [
     "http://localhost:8003",
     "http://127.0.0.1:8003",
@@ -212,7 +200,7 @@ CSRF_TRUSTED_ORIGINS = [
 ]
 
 # ==========================================
-# 🛠️ SISTEMA DE LOGS (DEBUG LDAP PARA DOCKER)
+# 🪵 LOGS (LDAP DEBUG)
 # ==========================================
 LOGGING = {
     "version": 1,

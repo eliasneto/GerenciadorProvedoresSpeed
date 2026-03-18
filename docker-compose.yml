@@ -29,12 +29,14 @@ services:
       - DB_HOST=speed_db
       - DB_PORT=3306
       - USE_AD_AUTH=true
-      - AD_SERVER_URI=ldap://192.168.90.51
+      - AD_SERVER_URI=ldap://192.168.90.51:389
       - AD_BIND_DN=servico.ti@howbe.local
-      - AD_BIND_PASSWORD=HowB3@dm1n
+      - AD_BIND_PASSWORD=SENHA_CORRETA_AQUI
       - AD_USER_SEARCH_BASE=DC=howbe,DC=local
       - AD_GROUP_SEARCH_BASE=DC=howbe,DC=local
-      - AD_DEFAULT_DOMAIN=HOWBE
+      - AD_GROUP_SGP_SISTEMA=CN=SGP_sistema,OU=Grupos,DC=howbe,DC=local
+      - AD_GROUP_SGP_LASTMILE=CN=SGP_Lastmile,OU=Grupos,DC=howbe,DC=local
+      - AD_GROUP_SGP_BACKOFFICE=CN=SGP_BackOffice,OU=Grupos,DC=howbe,DC=local
     extra_hosts:
       - "howbe.local:192.168.90.51"
     command: >
