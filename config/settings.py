@@ -15,12 +15,12 @@ USE_AD_AUTH = os.getenv("USE_AD_AUTH", "false").lower() == "true"
 # Build paths inside the project
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-# Adiciona a pasta 'apps' ao PATH
+# Adiciona a pasta 'apps' ao PATH para organização do Django
 sys.path.insert(0, os.path.join(BASE_DIR, 'apps'))
 
 SECRET_KEY = 'django-insecure-g*+p+x_hnds@(5j#v-=n6#5^+4-te5s*hn$0qw6ef2l5m$jo17'
 
-# SEGURANÇA: Mude para False em produção para o WhiteNoise funcionar 100%
+# SEGURANÇA: False em produção para o WhiteNoise funcionar
 DEBUG = False
 
 ALLOWED_HOSTS = ['*'] 
@@ -50,7 +50,7 @@ INSTALLED_APPS = [
 # ============================================
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
-    'whitenoise.middleware.WhiteNoiseMiddleware', # Essencial para arquivos estáticos
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -100,27 +100,29 @@ DATABASES = {
 # ============================================
 # 🌐 CONFIGURAÇÃO DE AUTENTICAÇÃO (AD / LDAP)
 # ============================================
-# ============================================
-# 🌐 CONFIGURAÇÃO DE AUTENTICAÇÃO (AD / LDAP)
-# ============================================
-# ... (mantenha seus imports e apps) ...
-
 if USE_AD_AUTH:
     AUTHENTICATION_BACKENDS = [
         "django_auth_ldap.backend.LDAPBackend",
         "django.contrib.auth.backends.ModelBackend",
     ]
 
+    # Credenciais do Servidor
     AUTH_LDAP_SERVER_URI = os.getenv("AD_SERVER_URI")
     AUTH_LDAP_BIND_DN = os.getenv("AD_BIND_DN")
     AUTH_LDAP_BIND_PASSWORD = os.getenv("AD_BIND_PASSWORD")
 
+    # Busca de Usuário
     AUTH_LDAP_USER_SEARCH = LDAPSearch(
         os.getenv("AD_USER_SEARCH_BASE"),
         ldap.SCOPE_SUBTREE,
         "(sAMAccountName=%(user)s)",
     )
 
+    # 🛑 BARREIRA DE ENTRADA (Comentada para permitir o teste do 403)
+    # Se descomentar, usuários sem este grupo verão "Usuário/Senha inválidos"
+    # AUTH_LDAP_REQUIRE_GROUP = os.getenv("AD_GROUP_SGP_ACCESS")
+
+    # Configuração de Grupos
     AUTH_LDAP_GROUP_SEARCH = LDAPSearch(
         os.getenv("AD_GROUP_SEARCH_BASE"),
         ldap.SCOPE_SUBTREE,
@@ -128,27 +130,24 @@ if USE_AD_AUTH:
     )
     AUTH_LDAP_GROUP_TYPE = ActiveDirectoryGroupType()
 
-    AUTH_LDAP_REQUIRE_GROUP = os.getenv("AD_GROUP_SGP_ACCESS")
-
+    # Mapeamento de Status por Grupo do AD
+    # Staff = Acesso ao /admin | Superuser = Poder total
     AUTH_LDAP_USER_FLAGS_BY_GROUP = {
         "is_staff": os.getenv("AD_GROUP_SGP_ACCESS"),
+        "is_superuser": "CN=SGP_Admin,OU=Grupos,DC=howbe,DC=local",
     }
 
+    # Sincronização de Atributos (AD -> Django)
     AUTH_LDAP_USER_ATTR_MAP = {
-        "first_name": "givenName",
+        "first_name": "displayName", 
         "last_name": "sn",
         "email": "mail",
     }
 
     AUTH_LDAP_ALWAYS_UPDATE_USER = True
-    AUTH_LDAP_MIRROR_GROUPS = True
-    AUTH_LDAP_CONNECTION_OPTIONS = {ldap.OPT_REFERRALS: 0}
-
-    # --- LOGS DE DEBUG (Mantenha isso até o login funcionar 100%) ---
-    import logging
-    logger = logging.getLogger('django_auth_ldap')
-    logger.addHandler(logging.StreamHandler())
-    logger.setLevel(logging.DEBUG)
+    AUTH_LDAP_MIRROR_GROUPS = True 
+    AUTH_LDAP_USER_DOMAIN = os.getenv("AD_DEFAULT_DOMAIN")
+    AUTH_LDAP_CONNECTION_OPTIONS = { ldap.OPT_REFERRALS: 0 }
     
 else:
     AUTHENTICATION_BACKENDS = [
@@ -159,16 +158,8 @@ else:
 # 📁 ARQUIVOS ESTÁTICOS E MÍDIA
 # ==========================================
 STATIC_URL = 'static/'
-
-# Onde o Django busca arquivos durante o desenvolvimento
-STATICFILES_DIRS = [
-    os.path.join(BASE_DIR, 'static'),
-]
-
-# Onde o Django joga os arquivos para o servidor ler (Produção)
+STATICFILES_DIRS = [os.path.join(BASE_DIR, 'static')]
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
-
-# Armazenamento com compressão para performance
 STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
 MEDIA_URL = '/media/'
@@ -196,7 +187,7 @@ LOGIN_URL = 'login'
 LOGIN_REDIRECT_URL = 'home'
 LOGOUT_REDIRECT_URL = 'login'
 
-# Segurança de Sessão (10 minutos)
+# Segurança de Sessão (10 minutos de inatividade)
 SESSION_COOKIE_AGE = 600
 SESSION_SAVE_EVERY_REQUEST = True
 SESSION_EXPIRE_AT_BROWSER_CLOSE = True
@@ -207,9 +198,10 @@ CSRF_TRUSTED_ORIGINS = [
     "http://192.168.90.202:8090",
 ]
 
-
+# ==========================================
+# 🛠️ LOGS DE SISTEMA (DEBUG LDAP)
+# ==========================================
 import logging
-
 logger = logging.getLogger('django_auth_ldap')
 logger.addHandler(logging.StreamHandler())
 logger.setLevel(logging.DEBUG)
