@@ -207,3 +207,10 @@ CSRF_TRUSTED_ORIGINS = [
     "http://127.0.0.1:8003",
     "http://192.168.90.202:8090",
 ]
+
+
+import logging
+
+logger = logging.getLogger('django_auth_ldap')
+logger.addHandler(logging.StreamHandler())
+logger.setLevel(logging.DEBUG)
