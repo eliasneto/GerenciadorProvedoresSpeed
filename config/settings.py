@@ -103,6 +103,8 @@ DATABASES = {
 # ============================================
 # 🌐 CONFIGURAÇÃO DE AUTENTICAÇÃO (AD / LDAP)
 # ============================================
+# ... (mantenha seus imports e apps) ...
+
 if USE_AD_AUTH:
     AUTHENTICATION_BACKENDS = [
         "django_auth_ldap.backend.LDAPBackend",
@@ -119,9 +121,8 @@ if USE_AD_AUTH:
         "(sAMAccountName=%(user)s)",
     )
 
-    # --- 1. PORTARIA PRINCIPAL (Só loga se estiver no SGP_Sistema) ---
-    # Ajuste o DN conforme a localização real no seu AD
-    #AUTH_LDAP_REQUIRE_GROUP = "CN=SGP_Sistema,OU=Grupos,DC=howbe,DC=local"
+    # 🛡️ COMENTADO PARA PERMITIR LOGIN E MOSTRAR 403 DEPOIS
+    # AUTH_LDAP_REQUIRE_GROUP = "CN=SGP_Sistema,OU=Grupos,DC=howbe,DC=local"
 
     AUTH_LDAP_GROUP_SEARCH = LDAPSearch(
         os.getenv("AD_GROUP_SEARCH_BASE"),
@@ -130,11 +131,8 @@ if USE_AD_AUTH:
     )
     AUTH_LDAP_GROUP_TYPE = ActiveDirectoryGroupType()
 
-    # --- 2. MAPEAMENTO DE STATUS (is_staff e is_superuser) ---
     AUTH_LDAP_USER_FLAGS_BY_GROUP = {
-        # Todo mundo que entra no SGP_Sistema pode ver o Admin (Staff)
         "is_staff": "CN=SGP_Sistema,OU=Grupos,DC=howbe,DC=local",
-        # Opcional: Criar um grupo SGP_Admin para ser superuser
         "is_superuser": "CN=SGP_Admin,OU=Grupos,DC=howbe,DC=local",
     }
 
@@ -145,12 +143,16 @@ if USE_AD_AUTH:
     }
 
     AUTH_LDAP_ALWAYS_UPDATE_USER = True
-    AUTH_LDAP_MIRROR_GROUPS = True # Mantém os grupos do AD sincronizados no Django
+    AUTH_LDAP_MIRROR_GROUPS = True
     AUTH_LDAP_USER_DOMAIN = os.getenv("AD_DEFAULT_DOMAIN")
+    AUTH_LDAP_CONNECTION_OPTIONS = { ldap.OPT_REFERRALS: 0 }
 
-    AUTH_LDAP_CONNECTION_OPTIONS = {
-        ldap.OPT_REFERRALS: 0,
-    }
+    # --- LOGS DE DEBUG (Mantenha isso até o login funcionar 100%) ---
+    import logging
+    logger = logging.getLogger('django_auth_ldap')
+    logger.addHandler(logging.StreamHandler())
+    logger.setLevel(logging.DEBUG)
+    
 else:
     AUTHENTICATION_BACKENDS = [
         "django.contrib.auth.backends.ModelBackend",
