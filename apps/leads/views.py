@@ -3,6 +3,12 @@ from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
 from django.contrib import messages
 from django.contrib.contenttypes.models import ContentType
+from scripts.integracoes.Lastmile._APIGoogle_BuscaFornecedores import processar_planilha
+
+import os
+from django.http import HttpResponse, JsonResponse
+from django.conf import settings
+from django.core.files.storage import FileSystemStorage
 
 from .models import Lead
 from .forms import LeadForm
@@ -308,3 +314,76 @@ def lead_convert(request, pk):
         'partner': partner_draft, 
         'is_lead_conversion': True
     })
+
+
+
+def integracoes_view(request):
+    if request.method == 'POST':
+        planilha = request.FILES.get('arquivo_planilha')
+        
+        if not planilha:
+            return JsonResponse({'erro': 'Nenhum arquivo anexado.'}, status=400)
+
+        # 1. Cria uma pasta temporária (se não existir) para salvar as planilhas
+        temp_dir = os.path.join(settings.BASE_DIR, 'media', 'temp_google')
+        os.makedirs(temp_dir, exist_ok=True)
+
+        # 2. Salva o arquivo enviado pelo usuário
+        fs = FileSystemStorage(location=temp_dir)
+        filename = fs.save(planilha.name, planilha)
+        caminho_entrada = os.path.join(temp_dir, filename)
+        
+        # 3. Define o nome do arquivo de saída
+        caminho_saida = os.path.join(temp_dir, f"resultado_{filename}")
+
+        try:
+            # 4. CHAMA O SEU SCRIPT DO GOOGLE!
+            # Ele vai ler a entrada e criar a saída preenchida
+            processar_planilha(caminho_entrada, caminho_saida)
+            
+            # 5. Verifica se o script gerou o arquivo de saída
+            if os.path.exists(caminho_saida):
+                with open(caminho_saida, 'rb') as f:
+                    response = HttpResponse(
+                        f.read(), 
+                        content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+                    )
+                    # Força o navegador a baixar o arquivo
+                    response['Content-Disposition'] = f'attachment; filename="Resultado_Fornecedores.xlsx"'
+                    
+                    # Limpeza: Apaga os arquivos temporários após enviar
+                    os.remove(caminho_entrada)
+                    os.remove(caminho_saida)
+                    
+                    return response
+            else:
+                return JsonResponse({'erro': 'Falha ao gerar o arquivo de saída.'}, status=500)
+
+        except Exception as e:
+            # Se der algum erro (ex: cartão não cadastrado no Google)
+            return JsonResponse({'erro': str(e)}, status=500)
+            
+    # Se for GET, apenas renderiza a página
+    return render(request, 'leads/integracoes.html')
+
+import pandas as pd # Adicione isso no topo do arquivo se já não tiver
+from django.http import HttpResponse
+
+def download_modelo_google_view(request):
+    # 1. Cria a estrutura da planilha com as colunas exatas
+    df = pd.DataFrame(columns=['Serviço', 'Cidade', 'Estado'])
+    
+    # 2. Adiciona dados de exemplo para o usuário entender como preencher
+    df.loc[0] = ['Provedor de Internet', 'Fortaleza', 'CE']
+    df.loc[1] = ['Link Dedicado', 'Eusébio', 'CE']
+    
+    # 3. Prepara a resposta HTTP avisando que é um arquivo Excel
+    response = HttpResponse(
+        content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    )
+    response['Content-Disposition'] = 'attachment; filename="Modelo_Busca_Google.xlsx"'
+    
+    # 4. Salva os dados direto na resposta (sem criar arquivo no HD do servidor)
+    df.to_excel(response, index=False)
+    
+    return response    

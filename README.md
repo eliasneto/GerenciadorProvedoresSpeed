@@ -27,3 +27,5 @@ docker exec -it speed_sistema python scripts/integracoes/ixc_api.py
 docker exec -it speed_sistema python scripts/integracoes/ixc_faxina.py
 
 API IXC: https://wikiapiprovedor.ixcsoft.com.br/
+
+PAinel Google: https://console.cloud.google.com/project/_/billing/enable

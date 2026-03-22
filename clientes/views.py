@@ -243,3 +243,30 @@ def api_update_unit_status(request, pk):
         return JsonResponse({'success': True})
     except Exception as e:
         return JsonResponse({'success': False, 'error': str(e)}, status=400)
+
+@login_required
+def disparar_sincronizacao_manual(request):
+    # 1. Cria o registro marcando QUEM clicou
+    historico = HistoricoSincronizacao.objects.create(
+        tipo='total',
+        status='rodando',
+        origem='manual',
+        executado_por=request.user # Salva o usuário logado
+    )
+    
+    try:
+        # Aqui você chama a sua função de extração e salvamento
+        mapa_f = buscar_mapa_filiais()
+        meus_dados = extrair_todos_os_clientes()
+        salvar_clientes_no_django(meus_dados, mapa_f)
+        
+        historico.status = 'sucesso'
+        historico.detalhes = "Execução manual finalizada pelo usuário."
+    except Exception as e:
+        historico.status = 'erro'
+        historico.detalhes = str(e)
+    finally:
+        historico.data_fim = timezone.now()
+        historico.save()
+        
+    return JsonResponse({'status': 'ok'})        

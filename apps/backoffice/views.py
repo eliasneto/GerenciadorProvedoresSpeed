@@ -216,3 +216,5 @@ def atendimento_import(request):
             return HttpResponse(status=400)
             
     return redirect('backoffice:cotacao_import')
+
+

@@ -63,3 +63,5 @@ docker exec -it speed_sistema python manage.py makemigrations
 
 # Cria as tabelas de verdade no MySQL
 docker exec -it speed_sistema python manage.py migrate
+
+# Destruir um volume: docker compose down -v

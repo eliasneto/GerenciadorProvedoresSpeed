@@ -20,3 +20,8 @@ urlpatterns = [
 # Ensina o Django a entregar os arquivos físicos (PDFs, Excel, Imagens) durante o desenvolvimento
 if settings.DEBUG:
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+
+# --- 🎨 CUSTOMIZAÇÃO DO ADMIN ---
+admin.site.site_header = "Control System - Admin" # O texto da barra superior
+admin.site.site_title = "Portal Speed/HowBe"          # O texto da aba do navegador
+admin.site.index_title = "Gestão de Parceiros"  # O subtítulo na página inicial    

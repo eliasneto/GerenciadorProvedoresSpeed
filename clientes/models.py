@@ -1,4 +1,5 @@
 from django.db import models
+from django.conf import settings
 
 class Cliente(models.Model):
     id_ixc = models.CharField('ID IXC', max_length=50, unique=True, blank=True, null=True)
@@ -76,11 +77,26 @@ class HistoricoSincronizacao(models.Model):
         ('total', 'Carga Total'),
         ('faxina', 'Faxina/Lixo'),
     ]
+
+    ORIGEM_CHOICES = [
+        ('manual', 'Manual'),
+        ('automatica', 'Automática'),
+    ]
     
-    # Novo campo para identificar a integração
     tipo = models.CharField('Tipo de Sync', max_length=20, choices=TIPO_CHOICES, default='incremental')
-    
     status = models.CharField('Status', max_length=20, choices=[('rodando', 'Rodando...'), ('sucesso', 'Sucesso'), ('erro', 'Erro')], default='rodando')
+    
+    # --- NOVOS CAMPOS ---
+    origem = models.CharField('Origem', max_length=20, choices=ORIGEM_CHOICES, default='automatica')
+    executado_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL, 
+        on_delete=models.SET_NULL, 
+        null=True, 
+        blank=True,
+        verbose_name='Usuário Responsável'
+    )
+    # --------------------
+
     data_inicio = models.DateTimeField('Início', auto_now_add=True)
     data_fim = models.DateTimeField('Fim', null=True, blank=True)
     registros_processados = models.IntegerField('Registros', default=0)
@@ -92,7 +108,8 @@ class HistoricoSincronizacao(models.Model):
         ordering = ['-data_inicio']
 
     def __str__(self):
-        return f"{self.get_tipo_display()} - {self.data_inicio.strftime('%d/%m/%Y %H:%M')}"
+        executor = self.executado_por.get_full_name() if self.executado_por else "Sistema"
+        return f"{self.get_tipo_display()} ({self.get_origem_display()}) - {executor} - {self.data_inicio.strftime('%d/%m/%Y %H:%M')}"
 
 class LogAlteracaoIXC(models.Model):
     cliente = models.ForeignKey(Cliente, on_delete=models.CASCADE, related_name='logs_alteracoes')

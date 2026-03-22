@@ -1,0 +1,138 @@
+{% extends "core/base.html" %}
+
+{% block title %}Speed | LastMile API Google{% endblock %}
+
+{% block content %}
+<div class="min-h-[80vh] px-4 py-8 max-w-7xl mx-auto">
+
+    <div class="text-center mb-12">
+        <div class="w-16 h-16 bg-ageis-yellow rounded-full flex items-center justify-center mx-auto mb-4 shadow-lg border-4 border-white">
+            <i data-lucide="map-pin" class="w-8 h-8 text-black"></i>
+        </div>
+        <h1 class="text-3xl font-black text-gray-900 italic uppercase tracking-tighter">Integraçoes</h1>
+        <p class="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-2">LastMile - Busca de Fornecedores</p>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 justify-center">
+
+        <!-- CARD ÚNICO: BUSCA DE FORNECEDORES -->
+        <div class="bg-white p-8 rounded-[2rem] shadow-xl border border-gray-100 flex flex-col relative overflow-hidden transition-all hover:shadow-2xl md:col-start-2">
+            
+            <div class="flex items-center gap-4 mb-6">
+                <div class="w-12 h-12 bg-gray-900 rounded-2xl flex items-center justify-center shadow-md">
+                    <i data-lucide="search" class="w-6 h-6 text-ageis-yellow"></i>
+                </div>
+                <div>
+                    <h2 class="text-lg font-black text-gray-900 uppercase italic tracking-tight">Buscar Fornecedores</h2>
+                    <p class="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Via Planilha de Cidades</p>
+                </div>
+            </div>
+
+            <!-- Botão de Baixar Modelo Temporário -->
+            <div class="border-2 border-dashed border-gray-200 rounded-2xl p-4 text-center mb-6 bg-gray-50/50">
+                <!-- Remova o onclick e coloque a tag de URL no href -->
+                <a href="{% url 'download_modelo_google' %}" class="inline-flex items-center gap-2 text-[10px] font-black text-gray-900 hover:text-ageis-yellow transition-colors uppercase tracking-widest">
+                    <i data-lucide="download" class="w-3 h-3"></i> Baixar Planilha Modelo
+                </a>
+            </div>
+
+            <form method="POST" action="{% url 'integracoes_lastmile' %}" enctype="multipart/form-data" class="space-y-6 flex-1 flex flex-col justify-end" id="formBuscaGoogle">
+                {% csrf_token %}
+                
+                <div>
+                    <label class="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Arquivo de Consulta</label>
+                    
+                    <input type="file" name="arquivo_planilha" id="arquivo_planilha" accept=".xlsx, .xls, .csv" required class="hidden">
+                    
+                    <label for="arquivo_planilha" class="flex items-center w-full bg-gray-50 border border-gray-100 rounded-xl cursor-pointer hover:bg-gray-100 transition-all overflow-hidden group">
+                        <div class="bg-gray-900 text-ageis-yellow group-hover:text-white text-[10px] font-black uppercase tracking-wider py-3 px-4 shadow-sm transition-all flex items-center gap-2">
+                            <i data-lucide="upload-cloud" class="w-3 h-3"></i> Planilha
+                        </div>
+                        <span id="nome_arquivo_planilha" class="text-xs font-medium text-gray-500 px-4 truncate flex-1">Nenhum arquivo...</span>
+                    </label>
+                </div>
+
+                <div id="areaLoadingGoogle" class="hidden flex flex-col items-center justify-center gap-3 mt-4 py-2">
+                    <div class="w-6 h-6 border-4 border-gray-100 border-t-ageis-yellow rounded-full animate-spin"></div>
+                    <span class="text-[10px] font-black uppercase tracking-widest text-gray-500">Buscando no Google...</span>
+                </div>
+
+                <div id="areaSucessoGoogle" class="hidden flex items-center justify-center gap-2 mt-4 bg-green-50 border border-green-100 py-3 px-4 rounded-xl">
+                    <i data-lucide="check-circle" class="w-5 h-5 text-green-500"></i>
+                    <span class="text-[10px] font-black uppercase tracking-widest text-green-700">Busca Concluída!</span>
+                </div>
+
+                <button type="submit" id="btnSubmitGoogle" class="w-full bg-ageis-black hover:bg-gray-900 text-ageis-yellow font-black uppercase italic tracking-widest py-4 rounded-2xl shadow-lg transition-all flex items-center justify-center gap-2 group mt-auto">
+                    <i data-lucide="play" class="w-4 h-4 group-hover:scale-110 transition-transform"></i>
+                    Iniciar Busca
+                </button>
+            </form>
+        </div>
+
+    </div>
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        
+        // UI: TROCAR TEXTO DO BOTÃO AO ESCOLHER ARQUIVO
+        document.getElementById('arquivo_planilha').addEventListener('change', function(e) {
+            const fileName = e.target.files[0] ? e.target.files[0].name : 'Nenhum arquivo...';
+            document.getElementById('nome_arquivo_planilha').textContent = fileName;
+        });
+
+        // SCRIPT AJAX: PROCESSAR PLANILHA
+        const formGoogle = document.getElementById('formBuscaGoogle');
+        const btnSubmitGoogle = document.getElementById('btnSubmitGoogle');
+        const areaLoadingGoogle = document.getElementById('areaLoadingGoogle');
+        const areaSucessoGoogle = document.getElementById('areaSucessoGoogle');
+        const arquivoInputGoogle = document.getElementById('arquivo_planilha');
+
+        formGoogle.addEventListener('submit', async function (e) {
+            e.preventDefault();
+            if (arquivoInputGoogle.files.length === 0) return;
+
+            btnSubmitGoogle.classList.add('hidden');
+            areaSucessoGoogle.classList.add('hidden');
+            areaLoadingGoogle.classList.remove('hidden');
+
+            try {
+                const formData = new FormData(formGoogle);
+                const response = await fetch(formGoogle.action, {
+                    method: 'POST',
+                    body: formData,
+                    headers: { 'X-Requested-With': 'XMLHttpRequest' }
+                });
+
+                if (response.ok) {
+                    const blob = await response.blob();
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = 'Resultado_Fornecedores_Google.xlsx';
+                    document.body.appendChild(a);
+                    a.click();
+                    a.remove();
+                    window.URL.revokeObjectURL(url);
+
+                    areaLoadingGoogle.classList.add('hidden');
+                    areaSucessoGoogle.classList.remove('hidden');
+                    formGoogle.reset();
+                    document.getElementById('nome_arquivo_planilha').textContent = 'Nenhum arquivo...';
+
+                    setTimeout(() => {
+                        areaSucessoGoogle.classList.add('hidden');
+                        btnSubmitGoogle.classList.remove('hidden');
+                    }, 5000);
+                } else {
+                    alert("Ocorreu um erro no servidor ao processar a planilha.");
+                    window.location.reload();
+                }
+            } catch (error) {
+                alert("Falha na conexão com o servidor. Tente novamente.");
+                window.location.reload();
+            }
+        });
+    });
+</script>
+{% endblock %}

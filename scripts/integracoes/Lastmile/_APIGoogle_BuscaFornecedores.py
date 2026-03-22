@@ -68,3 +68,34 @@ def processar_planilha(caminho_entrada, caminho_saida):
     df_final.to_excel(caminho_saida, index=False)
     print(f"\n✅ Automação concluída! Encontrados {len(resultados)} fornecedores.")
     print(f"📁 Arquivo salvo em: {caminho_saida}")
+
+
+# --- COLE ISSO NO FINAL DO SEU ARQUIVO APIGoogle_BuscaFornecedores.py ---
+
+if __name__ == "__main__":
+    import os
+    
+    # 1. Cria dados falsos para o teste
+    print("🛠️ Criando planilha de teste...")
+    dados_teste = {
+        'Serviço': ['Provedor de Internet', 'Link Dedicado'],
+        'Cidade': ['Fortaleza', 'Eusébio'],
+        'Estado': ['CE', 'CE']
+    }
+    
+    # Transformamos o dicionário em um DataFrame do Pandas
+    df_teste = pd.DataFrame(dados_teste)
+    
+    # Nomes dos arquivos temporários
+    arquivo_entrada = 'planilha_teste_entrada.xlsx'
+    arquivo_saida = 'planilha_teste_saida.xlsx'
+    
+    # Salva o arquivo de entrada
+    df_teste.to_excel(arquivo_entrada, index=False)
+    print(f"✅ Planilha {arquivo_entrada} criada com sucesso!")
+    
+    # 2. Roda a função principal usando o arquivo que acabamos de criar
+    print("\n🚀 Iniciando a comunicação com a API do Google...")
+    processar_planilha(arquivo_entrada, arquivo_saida)
+    
+    print(f"\n🎉 Teste finalizado! Abra o arquivo '{arquivo_saida}' no seu computador para conferir se ele trouxe os 5 fornecedores de cada cidade.")

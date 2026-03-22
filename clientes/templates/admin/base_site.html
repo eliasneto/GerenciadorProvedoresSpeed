@@ -1,0 +1,14 @@
+{% extends "admin/base_site.html" %}
+{% load static %}
+
+{% block branding %}
+<div id="site-name" style="display: flex; align-items: center; gap: 15px;">
+    <!-- Aqui entra a sua logo (certifique-se de que o nome está certo) -->
+    <img src="{% static 'img/logo2.png' %}" alt="Logo Speed" style="height: 35px; object-fit: contain;">
+    
+    <!-- O Texto customizado ao lado da logo -->
+    <a href="{% url 'admin:index' %}" style="color: #FFC107; font-weight: 900; font-style: italic; font-size: 20px; text-transform: uppercase;">
+        Speed Engine
+    </a>
+</div>
+{% endblock %}a lgo

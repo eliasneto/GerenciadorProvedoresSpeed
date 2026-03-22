@@ -62,10 +62,9 @@ def buscar_mapa_filiais():
             mapa[str(f['id'])] = f.get('razao') or f.get('filial') or f"Filial {f['id']}"
     return mapa
 
-def extrair_clientes_recentes(dias_retroativos=0):
+def extrair_clientes_recentes(historico, dias_retroativos=0): # <-- Adicionado: recebe o histórico
     """
-    Lógica Incremental Turbinada: Busca por data de alteração no cliente 
-    E pelos logins mais recentes (resolve o caso de novos logins em clientes antigos).
+    Lógica Incremental Turbinada com Check de Parada.
     """
     data_limite = (datetime.now() - timedelta(days=dias_retroativos)).strftime('%Y-%m-%d 00:00:00')
     ids_para_processar = set() 
@@ -82,7 +81,7 @@ def extrair_clientes_recentes(dias_retroativos=0):
         for c in res_cli['registros']:
             ids_para_processar.add(str(c['id']))
 
-    # 2. Busca os últimos logins (Gatilho para novos logins como o CASA 2)
+    # 2. Busca os últimos logins (Gatilho para novos logins)
     payload_logins = {
         "qtype": "id", "query": "0", "oper": ">",
         "rp": "100", "sortname": "id", "sortorder": "desc" 
@@ -102,6 +101,11 @@ def extrair_clientes_recentes(dias_retroativos=0):
     pbar = tqdm(total=len(ids_para_processar), desc="📥 Processando IXC", unit="cli")
 
     for id_cli in ids_para_processar:
+        # --- 🛑 CHECK DE PARADA NO LOOP DA API ---
+        historico.refresh_from_db()
+        if historico.detalhes == "STOP":
+            raise KeyboardInterrupt("Parada solicitada via Admin")
+
         cliente = consultar_ixc(f"cliente/{id_cli}", {})
         if not cliente or 'id' not in cliente:
             pbar.update(1)
@@ -134,7 +138,7 @@ def extrair_clientes_recentes(dias_retroativos=0):
     pbar.close()
     return base_de_dados_local
 
-def salvar_clientes_no_django(dados_ixc, mapa_filiais):
+def salvar_clientes_no_django(dados_ixc, mapa_filiais, historico): # <-- Adicionado: recebe o histórico
     if not dados_ixc:
         return
 
@@ -142,11 +146,15 @@ def salvar_clientes_no_django(dados_ixc, mapa_filiais):
     pbar_save = tqdm(total=len(dados_ixc), desc="💾 Gravando no Banco", unit="cli")
 
     for dado in dados_ixc:
+        # --- 🛑 CHECK DE PARADA NO LOOP DO BANCO ---
+        historico.refresh_from_db()
+        if historico.detalhes == "STOP":
+            raise KeyboardInterrupt("Parada solicitada via Admin")
+
         id_ixc = dado['id_ixc']
         cnpj_novo = str(dado.get('cpf_cnpj') or '').strip()
         razao_nova = dado['nome_com_id']
         
-        # --- AUDITORIA DE CLIENTE ---
         cliente_obj = Cliente.objects.filter(id_ixc=id_ixc).first()
         if cliente_obj:
             if cliente_obj.cnpj_cpf != cnpj_novo:
@@ -169,7 +177,6 @@ def salvar_clientes_no_django(dados_ixc, mapa_filiais):
             status_novo = 'cancelado' if status_con_ixc in ['C', 'D', 'CM', 'CANCELADO'] else ('inativo' if status_login_ixc == 'N' else 'ativo')
             filial_nova = mapa_filiais.get(str(con_pai.get('id_filial')), "Filial Não Informada")
 
-            # --- AUDITORIA DE ENDEREÇO/LOGIN ---
             end_atual = Endereco.objects.filter(cliente=cliente_obj, login_ixc=login_nome).first()
             if end_atual:
                 if end_atual.status != status_novo:
@@ -199,22 +206,55 @@ def salvar_clientes_no_django(dados_ixc, mapa_filiais):
 if __name__ == "__main__":
     urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
     
-    # Criamos o histórico identificando como INCREMENTAL
-    historico = HistoricoSincronizacao.objects.create(tipo='incremental', status='rodando')
+    eh_manual = 'manual' in sys.argv
+    origem_detectada = 'manual' if eh_manual else 'automatica'
+    
+    usuario_executor = None
+    if eh_manual:
+        from django.contrib.auth import get_user_model
+        User = get_user_model()
+        usuario_executor = User.objects.filter(is_superuser=True).first()
+    
+    print(f"⚡ Incremental detectado como: {origem_detectada.upper()}")
+
+    historico = HistoricoSincronizacao.objects.create(
+        tipo='incremental', 
+        status='rodando',
+        origem=origem_detectada,
+        executado_por=usuario_executor
+    )
     
     try:
         mapa_f = buscar_mapa_filiais()
-        meus_dados = extrair_clientes_recentes(dias_retroativos=0) 
-        salvar_clientes_no_django(meus_dados, mapa_f)
         
+        # Lê dias retroativos se passado via comando
+        dias = int(sys.argv[2]) if len(sys.argv) > 2 and sys.argv[2].isdigit() else 0
+        
+        # --- Chamada passando o objeto histórico ---
+        meus_dados = extrair_clientes_recentes(historico, dias_retroativos=dias) 
+        
+        if meus_dados:
+            salvar_clientes_no_django(meus_dados, mapa_f, historico)
+            historico.registros_processados = len(meus_dados)
+            historico.detalhes = f"Sincronização {origem_detectada} concluída. {len(meus_dados)} clientes atualizados."
+        else:
+            historico.registros_processados = 0
+            historico.detalhes = "Nenhuma alteração detectada no IXC para o período informado."
+            
         historico.status = 'sucesso'
-        historico.registros_processados = len(meus_dados)
-        historico.detalhes = f"Sincronização concluída. {len(meus_dados)} clientes atualizados."
+
+    except KeyboardInterrupt as e:
+        historico.status = 'erro'
+        msg = str(e) if "Parada" in str(e) else "Sincronização interrompida manualmente (Ctrl+C)."
+        historico.detalhes = msg
+        print(f"\n⚠️ {msg}")
+
     except Exception:
         historico.status = 'erro'
         historico.detalhes = traceback.format_exc()
         print("❌ Erro fatal registrado no banco.")
+        
     finally:
         historico.data_fim = timezone.now()
         historico.save()
-        print(f"✅ Fim da rotina {historico.tipo}.")
+        print(f"✅ Fim da rotina {historico.tipo} ({origem_detectada}).")
