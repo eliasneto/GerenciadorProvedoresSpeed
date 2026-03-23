@@ -68,26 +68,26 @@
                                 {{ item.get_tipo_display }}
                             </span>
                             <span class="text-xs font-bold text-gray-400 flex items-center gap-1">
-                                <i data-lucide="clock" class="w-3 h-3"></i> {{ item.criado_em|date:"d/m/Y - H:i" }}
+                                <i data-lucide="clock" class="w-3 h-3"></i> {{ item.data|date:"d/m/Y - H:i" }}
                             </span>
                         </div>
                         
-                        {% if item.descricao %}
-                            <p class="text-sm text-gray-800 font-medium mb-4 leading-relaxed">{{ item.descricao|linebreaksbr }}</p>
+                        {% if item.acao %}
+                            <p class="text-sm text-gray-800 font-medium mb-4 leading-relaxed">{{ item.acao|linebreaksbr }}</p>
                         {% endif %}
 
                         {% if item.arquivo %}
-                            <a href="{{ item.arquivo.url }}" target="_blank" class="inline-flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 rounded-xl text-xs font-bold text-blue-600 hover:border-blue-300 transition shadow-sm">
+                            <a href="{{ item.arquivo.url }}" target="_blank" class="inline-flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 rounded-xl text-xs font-bold text-blue-600 hover:border-blue-300 transition shadow-sm mb-4">
                                 <i data-lucide="download-cloud" class="w-4 h-4"></i> Visualizar Anexo
                             </a>
                         {% endif %}
                         
                         <div class="flex items-center gap-2 mt-4 pt-4 border-t border-gray-200">
                             <div class="w-6 h-6 bg-gray-200 rounded-full flex items-center justify-center text-[10px] font-black text-gray-500">
-                                {{ item.criado_por.email|default:"S"|make_list|first|upper }}
+                                {{ item.usuario.email|default:"S"|make_list|first|upper }}
                             </div>
                             <p class="text-[10px] font-bold text-gray-500 uppercase">
-                                Feito por: <span class="text-gray-900">{{ item.criado_por.email|default:"Sistema Speed" }}</span>
+                                Feito por: <span class="text-gray-900">{{ item.usuario.email|default:"Sistema Speed" }}</span>
                             </p>
                         </div>
                     </div>

@@ -60,7 +60,7 @@ services:
       - speed_db
     command: >
       sh -c "
-      echo '🚀 Aguardando banco de dados estabilizar...';
+      echo ' Aguardando banco de dados estabilizar...';
       sleep 25;
       
       # Inicializa os marcadores
@@ -72,13 +72,13 @@ services:
         DATA_HOJE=$$(date +%Y%m%d);
         AGORA_SEC=$$(date +%s);
         
-        # 1. INCREMENTAL (A cada 5 minutos)
-        echo '⚡ ['$$(date +%H:%M)'] Iniciando sincronização incremental...';
+        # 1. INCREMENTAL (A cada 1 hora)
+        echo ' ['$$(date +%H:%M)'] Iniciando sincronização incremental...';
         python scripts/integracoes/ixc_api_incremental.py;
 
         # 2. CARGA TOTAL (Roda apenas às 23h se não rodou hoje)
         if [ \"$$HORA_AGORA\" -eq \"23\" ] && [ \"$$DATA_HOJE\" != \"$$ULTIMA_DATA_TOTAL\" ]; then
-          echo '📦 ['$$(date +%H:%M)'] Iniciando Carga Total Programada (23h)...';
+          echo ' ['$$(date +%H:%M)'] Iniciando Carga Total Programada (23h)...';
           python scripts/integracoes/ixc_api.py;
           ULTIMA_DATA_TOTAL=$$DATA_HOJE;
         fi
@@ -91,8 +91,8 @@ services:
           ULTIMA_FAXINA=$$AGORA_SEC;
         fi
 
-        echo '😴 Ciclo finalizado. Próximo incremental em 5 minutos...';
-        sleep 300;
+        echo ' Ciclo finalizado. Próximo incremental em 5 minutos...';
+        sleep 3600;
       done"
 
 volumes:

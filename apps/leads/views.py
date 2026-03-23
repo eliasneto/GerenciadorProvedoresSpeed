@@ -110,23 +110,22 @@ def lead_add_historico(request, pk):
     lead = get_object_or_404(Lead, pk=pk)
     
     if request.method == 'POST':
-        descricao = request.POST.get('descricao')
-        arquivo = request.FILES.get('arquivo') # Pega o anexo (se houver)
+        descricao_texto = request.POST.get('descricao')
+        arquivo = request.FILES.get('arquivo') 
         
-        if descricao or arquivo:
+        if descricao_texto or arquivo:
             tipo = 'anexo' if arquivo else 'comentario'
             
             RegistroHistorico.objects.create(
                 tipo=tipo,
-                descricao=descricao,
+                acao=descricao_texto,      # CORRIGIDO: de descricao para acao
                 arquivo=arquivo,
-                criado_por=request.user,
+                usuario=request.user,      # CORRIGIDO: de criado_por para usuario
                 content_type=ContentType.objects.get_for_model(Lead),
                 object_id=lead.id
             )
             messages.success(request, "Registro adicionado à linha do tempo do lead!")
             
-    # Devolve o usuário para a tela de edição do lead (onde está a timeline)
     return redirect('lead_update', pk=pk)
 
 @login_required
@@ -150,15 +149,13 @@ def update_lead_status(request, pk):
         status_antigo = lead.status 
         
         if novo_status == 'andamento':
-            # 1. Validação de campos obrigatórios para virar Parceiro
+            # 1. Validação de campos obrigatórios para virar Parceiro (AGORA SÓ EXIGE CNPJ)
             campos_faltantes = []
             if not lead.cnpj_cpf: campos_faltantes.append("CNPJ/CPF")
-            if not lead.email: campos_faltantes.append("E-mail")
-            if not lead.telefone: campos_faltantes.append("Telefone")
 
             if campos_faltantes:
                 msg = ", ".join(campos_faltantes)
-                messages.error(request, f"Não é possível converter: Os campos [{msg}] são obrigatórios.")
+                messages.error(request, f"Não é possível converter: O campo [{msg}] é obrigatório.")
                 return redirect('lead_list')
 
             # 2. Evita duplicidade (verificando na base de parceiros)
@@ -186,9 +183,9 @@ def update_lead_status(request, pk):
                 
                 RegistroHistorico.objects.create(
                     tipo=tipo_hist,
-                    descricao=texto_historico,
+                    acao=texto_historico,
                     arquivo=arquivo,
-                    criado_por=request.user,
+                    usuario=request.user,
                     content_type=ContentType.objects.get_for_model(Lead),
                     object_id=lead.id
                 )
@@ -214,8 +211,8 @@ def update_lead_status(request, pk):
                 
                 RegistroHistorico.objects.create(
                     tipo='sistema',
-                    descricao=f"🔄 Status da prospecção alterado de [{nome_antigo}] para [EM NEGOCIAÇÃO].",
-                    criado_por=request.user,
+                    acao=f"🔄 Status da prospecção alterado de [{nome_antigo}] para [EM NEGOCIAÇÃO].",
+                    usuario=request.user,
                     content_type=ContentType.objects.get_for_model(Lead),
                     object_id=lead.id
                 )
@@ -332,8 +329,8 @@ def lead_convert(request, pk):
             # Log Automático do Sistema gravando a "Fotografia" inicial estruturada
             RegistroHistorico.objects.create(
                 tipo='sistema',
-                descricao=texto_snapshot.strip(), 
-                criado_por=request.user,
+                acao=texto_snapshot.strip(), # <--- CORREÇÃO AQUI
+                usuario=request.user,        # <--- CORREÇÃO AQUI
                 content_type=partner_type,
                 object_id=partner_draft.id
             )

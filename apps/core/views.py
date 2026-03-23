@@ -44,9 +44,9 @@ def timeline_global(request, app_label, model_name, object_id):
             tipo = 'anexo' if arquivo else 'comentario'
             RegistroHistorico.objects.create(
                 tipo=tipo,
-                descricao=descricao,
+                acao=descricao,         # <--- CORRIGIDO AQUI
                 arquivo=arquivo,
-                criado_por=request.user,
+                usuario=request.user,   # <--- CORRIGIDO AQUI
                 content_type=content_type,
                 object_id=object_id
             )
