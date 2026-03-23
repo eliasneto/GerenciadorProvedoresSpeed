@@ -18,16 +18,53 @@ from partners.forms import ProposalForm
 # IMPORTAÇÃO DA TIMELINE (HISTÓRICO)
 from core.models import RegistroHistorico
 
+# Adicione essa linha junto com as outras importações lá no topo do arquivo:
+from django.db.models import Q
+
 @login_required
 def lead_list(request):
-    """Lista todos os leads com paginação"""
+    """Lista todos os leads com paginação e filtros"""
+    # 1. Pega todos os leads
     leads_list = Lead.objects.all().order_by('-id')
-    paginator = Paginator(leads_list, 10)
 
+    # 2. Captura os parâmetros digitados nos filtros (se houver)
+    busca_empresa = request.GET.get('empresa', '')
+    busca_status = request.GET.get('status', '')
+    busca_cidade = request.GET.get('cidade', '')
+    busca_estado = request.GET.get('estado', '')
+
+    # 3. Aplica os filtros na lista
+    if busca_empresa:
+        # Busca tanto no nome fantasia quanto na razão social
+        leads_list = leads_list.filter(
+            Q(nome_fantasia__icontains=busca_empresa) | 
+            Q(razao_social__icontains=busca_empresa)
+        )
+    
+    if busca_status:
+        leads_list = leads_list.filter(status=busca_status)
+        
+    if busca_cidade:
+        leads_list = leads_list.filter(cidade__icontains=busca_cidade)
+        
+    if busca_estado:
+        leads_list = leads_list.filter(estado__iexact=busca_estado)
+
+    # 4. Paginação (10 por página)
+    paginator = Paginator(leads_list, 10)
     page_number = request.GET.get('page')
     page_obj = paginator.get_page(page_number)
     
-    return render(request, 'leads/lead_list.html', {'page_obj': page_obj})
+    # 5. Manda as variáveis de volta para a tela (para os campos não ficarem em branco após filtrar)
+    context = {
+        'page_obj': page_obj,
+        'busca_empresa': busca_empresa,
+        'busca_status': busca_status,
+        'busca_cidade': busca_cidade,
+        'busca_estado': busca_estado,
+    }
+    
+    return render(request, 'leads/lead_list.html', context)
 
 @login_required
 def lead_create(request):
@@ -317,6 +354,7 @@ def lead_convert(request, pk):
 
 
 
+@login_required
 def integracoes_view(request):
     if request.method == 'POST':
         planilha = request.FILES.get('arquivo_planilha')
@@ -337,11 +375,45 @@ def integracoes_view(request):
         caminho_saida = os.path.join(temp_dir, f"resultado_{filename}")
 
         try:
-            # 4. CHAMA O SEU SCRIPT DO GOOGLE!
-            # Ele vai ler a entrada e criar a saída preenchida
-            processar_planilha(caminho_entrada, caminho_saida)
+            # 4. CHAMA O SEU SCRIPT DO SERPER!
+            # Agora ele devolve os dados além de criar a planilha
+            dados_encontrados = processar_planilha(caminho_entrada, caminho_saida)
             
-            # 5. Verifica se o script gerou o arquivo de saída
+            # 5. SALVANDO NO BANCO DE DADOS
+            # Vamos garantir que os dados vieram para não quebrar
+            if dados_encontrados:
+                for item in dados_encontrados:
+                    # Tratamento: Evita salvar "Não informado" em campos URL e lida com campos nulos
+                    site_url = item.get('Site')
+                    if site_url == 'Não informado' or pd.isna(site_url):
+                         site_url = ''
+
+                    tel_str = item.get('Telefone')
+                    if tel_str == 'Não informado' or pd.isna(tel_str):
+                         tel_str = ''
+
+                    end_str = item.get('Endereço Completo')
+                    if end_str == 'Não informado' or pd.isna(end_str):
+                         end_str = ''
+                    
+                    nome_fantasia_str = item.get('Nome Fantasia', 'Lead sem nome')
+
+                    # O get_or_create evita duplicar a mesma empresa na mesma cidade!
+                    Lead.objects.get_or_create(
+                        nome_fantasia=nome_fantasia_str, 
+                        cidade=item.get('Cidade', ''),
+                        estado=item.get('Estado', ''),
+                        defaults={
+                            'razao_social': nome_fantasia_str, # Copia o fantasia provisoriamente
+                            'telefone': tel_str,
+                            'site': site_url,
+                            'endereco': end_str,
+                            'cnpj_cpf': '', # Fica em branco para o consultor preencher depois
+                            'status': 'novo'
+                        }
+                    )
+
+            # 6. Verifica se o script gerou o arquivo de saída
             if os.path.exists(caminho_saida):
                 with open(caminho_saida, 'rb') as f:
                     response = HttpResponse(
@@ -355,12 +427,16 @@ def integracoes_view(request):
                     os.remove(caminho_entrada)
                     os.remove(caminho_saida)
                     
+                    # Como é uma requisição AJAX (Javascript), mensagens do Django não funcionam bem aqui.
+                    # O seu frontend (JS) já mostra "Busca Concluída!" quando o arquivo baixa.
                     return response
             else:
                 return JsonResponse({'erro': 'Falha ao gerar o arquivo de saída.'}, status=500)
 
         except Exception as e:
-            # Se der algum erro (ex: cartão não cadastrado no Google)
+            # Se der algum erro (ex: chave invalida)
+            import traceback
+            traceback.print_exc() # Isso ajuda a ver o erro exato no console do Docker
             return JsonResponse({'erro': str(e)}, status=500)
             
     # Se for GET, apenas renderiza a página

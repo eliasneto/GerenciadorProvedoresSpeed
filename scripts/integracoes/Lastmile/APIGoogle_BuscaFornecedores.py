@@ -47,34 +47,40 @@ def processar_planilha(caminho_entrada, caminho_saida):
                 continue
             
             # Pega apenas os 5 primeiros fornecedores da lista
-            lugares = dados.get('places', [])[:5]
+            lugares = dados.get('places', [])[:20]
             
             # RAIO-X: Verifica se a pesquisa não trouxe nada
             if not lugares:
                 print(f"   ⚠️ API funcionou, mas não achou fornecedores. Retorno: {dados.keys()}")
             
             for lugar in lugares:
+                nome_da_empresa = lugar.get('title', 'Não informado')
                 resultados.append({
                     'Busca Original': query,
-                    'Nome Fantasia': lugar.get('title', 'Não informado'),
+                    'Razão Social': nome_da_empresa,
+                    'Nome Fantasia': nome_da_empresa,
                     'Telefone': lugar.get('phoneNumber', 'Não informado'),
                     'Site': lugar.get('website', 'Não informado'),
                     'Endereço Completo': lugar.get('address', 'Não informado'),
                     'Cidade': cidade,
-                    'Estado': estado
+                    'Estado': estado,
+                    'CNPJ': ''
                 })
         
             # Pausa para não sobrecarregar a API
-            time.sleep(1)
+            time.sleep(2)
             
         except Exception as e:
             print(f"Erro Crítico ao processar '{query}': {e}")
 
-    # Gera a nova planilha
+# Gera a nova planilha
     df_final = pd.DataFrame(resultados)
     df_final.to_excel(caminho_saida, index=False)
     print(f"\n✅ Automação concluída! Encontrados {len(resultados)} fornecedores.")
     print(f"📁 Arquivo salvo em: {caminho_saida}")
+    
+    # 👇 ESSA É A LINHA MÁGICA QUE FALTOU 👇
+    return resultados
 
 # --- CÓDIGO DE TESTE ISOLADO ---
 if __name__ == "__main__":
