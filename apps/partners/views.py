@@ -88,9 +88,9 @@ def partner_add_historico(request, pk):
             tipo = 'anexo' if arquivo else 'comentario'
             RegistroHistorico.objects.create(
                 tipo=tipo,
-                descricao=descricao,
+                acao=descricao,         # CORRIGIDO
                 arquivo=arquivo,
-                criado_por=request.user,
+                usuario=request.user,   # CORRIGIDO
                 content_type=ContentType.objects.get_for_model(Partner),
                 object_id=partner.id
             )
@@ -125,8 +125,12 @@ def update_partner_status(request, pk):
                     texto_historico = f"✅ PARCEIRO REATIVADO\n\nStatus operacional alterado para [ATIVO]."
 
                 RegistroHistorico.objects.create(
-                    tipo=tipo_hist, descricao=texto_historico, arquivo=arquivo,
-                    criado_por=request.user, content_type=ContentType.objects.get_for_model(Partner), object_id=partner.id
+                    tipo=tipo_hist, 
+                    acao=texto_historico,   # CORRIGIDO
+                    arquivo=arquivo,
+                    usuario=request.user,   # CORRIGIDO
+                    content_type=ContentType.objects.get_for_model(Partner), 
+                    object_id=partner.id
                 )
             messages.success(request, f"O status da {partner.nome_fantasia or partner.razao_social} foi atualizado para {novo_status.upper()}.")
             
@@ -159,11 +163,11 @@ def update_winback_status(request, pk):
             partner.status = 'ativo'
             partner.save()
             
-            # 4. GERA O LOG INICIAL DO NOVO CICLO (Blindado)
+            # 4. GERA O LOG INICIAL DO NOVO CICLO (Blindado e Corrigido)
             RegistroHistorico.objects.create(
                 tipo='sistema',
-                descricao="🎉 NOVO CICLO DE PARCERIA!\nO parceiro foi reativado na esteira Win-back. O histórico antigo foi arquivado e o perfil foi limpo para a inclusão de novas OS.",
-                criado_por=request.user,
+                acao="🎉 NOVO CICLO DE PARCERIA!\nO parceiro foi reativado na esteira Win-back. O histórico antigo foi arquivado e o perfil foi limpo para a inclusão de novas OS.", # CORRIGIDO
+                usuario=request.user, # CORRIGIDO
                 content_type=tipo_parceiro,
                 object_id=partner.id,
                 arquivado=False
@@ -177,9 +181,14 @@ def update_winback_status(request, pk):
             partner.save()
             
             texto = "🤝 Negociação de reativação iniciada." if novo_status == 'negociacao' else f"❌ Tentativa de reativação recusada/inviável.\nMotivo: {observacao}"
+            
             RegistroHistorico.objects.create(
-                tipo='sistema', descricao=texto, criado_por=request.user,
-                content_type=ContentType.objects.get_for_model(Partner), object_id=partner.id, arquivado=False
+                tipo='sistema', 
+                acao=texto,             # CORRIGIDO
+                usuario=request.user,   # CORRIGIDO
+                content_type=ContentType.objects.get_for_model(Partner), 
+                object_id=partner.id, 
+                arquivado=False
             )
             messages.info(request, f"Estágio atualizado para: {partner.get_status_display()}")
             
@@ -273,8 +282,11 @@ def proposal_update(request, pk):
                     texto_snapshot += "⏳ Antes:\n" + "\n".join(valores_antigos)
 
                 RegistroHistorico.objects.create(
-                    tipo='sistema', descricao=texto_snapshot.strip(), criado_por=request.user,
-                    content_type=ContentType.objects.get_for_model(Partner), object_id=partner.id
+                    tipo='sistema', 
+                    acao=texto_snapshot.strip(), # CORRIGIDO
+                    usuario=request.user,        # CORRIGIDO
+                    content_type=ContentType.objects.get_for_model(Partner), 
+                    object_id=partner.id
                 )
 
             messages.success(request, f"Sucesso! Atualizações salvas para a Speed.")
