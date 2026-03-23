@@ -65,3 +65,6 @@ docker exec -it speed_sistema python manage.py makemigrations
 docker exec -it speed_sistema python manage.py migrate
 
 # Destruir um volume: docker compose down -v
+
+# Sobre escrever o que tem no git:
+git push --force origin main
