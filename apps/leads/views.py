@@ -3,7 +3,7 @@ from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
 from django.contrib import messages
 from django.contrib.contenttypes.models import ContentType
-from scripts.integracoes.Lastmile._APIGoogle_BuscaFornecedores import processar_planilha
+from scripts.integracoes.Lastmile.APIGoogle_BuscaFornecedores import processar_planilha
 
 import os
 from django.http import HttpResponse, JsonResponse
