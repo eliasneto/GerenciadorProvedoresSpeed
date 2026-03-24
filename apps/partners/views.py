@@ -17,7 +17,7 @@ from core.models import RegistroHistorico
 # 1. Cria a regra de verificação
 def grupo_Parceiro_required(user):
     # O Superuser (você) sempre passa. Os outros precisam estar no grupo.
-    if user.groups.filter(name='Backoffice').exists() or user.is_superuser:
+    if user.groups.filter(name='Parceiro').exists() or user.is_superuser:
         return True
     # Se não for do grupo, joga um Erro 403 (Acesso Negado)
     raise PermissionDenied
