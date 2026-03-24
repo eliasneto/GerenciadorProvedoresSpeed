@@ -15,7 +15,7 @@ def processar_planilha(caminho_entrada, caminho_saida):
     print(f"Iniciando processamento de {len(df)} linhas usando Serper.dev...")
 
     # URL oficial do Serper para buscar lugares no Google Maps
-    url = "https://google.serper.dev/places"
+    #url = "https://google.serper.dev/places"
     
     headers = {
         'X-API-KEY': API_KEY,

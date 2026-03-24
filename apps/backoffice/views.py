@@ -132,7 +132,7 @@ def download_modelo_cotacao(request):
 @login_required
 def download_modelo_atendimento(request):
     colunas = [
-        'Cliente_ID', 'Login_ID', 'Filial_ID', 'Assunto_ID', 
+        'Cliente_ID', 'Login_ID','Contrato_ID', 'Filial_ID', 'Assunto_ID', 
         'Departamento_ID', 'Assunto_Descricao', 'Descricao'
     ]
     df = pd.DataFrame(columns=colunas)
