@@ -1,10 +1,10 @@
+from django.contrib.auth.decorators import login_required, user_passes_test
+from django.core.exceptions import PermissionDenied
 from django.shortcuts import render, get_object_or_404, redirect
-from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
 from django.contrib import messages
 from django.contrib.contenttypes.models import ContentType
 from scripts.integracoes.Lastmile.APIGoogle_BuscaFornecedores import processar_planilha
-
 import os
 from django.http import HttpResponse, JsonResponse
 from django.conf import settings
@@ -21,6 +21,15 @@ from core.models import RegistroHistorico
 # Adicione essa linha junto com as outras importações lá no topo do arquivo:
 from django.db.models import Q
 
+# 1. Cria a regra de verificação
+def grupo_LastMile_required(user):
+    # O Superuser (você) sempre passa. Os outros precisam estar no grupo.
+    if user.groups.filter(name='LastMile').exists() or user.is_superuser:
+        return True
+    # Se não for do grupo, joga um Erro 403 (Acesso Negado)
+    raise PermissionDenied
+
+@user_passes_test(grupo_LastMile_required)
 @login_required
 def lead_list(request):
     """Lista todos os leads com paginação e filtros"""
@@ -66,6 +75,7 @@ def lead_list(request):
     
     return render(request, 'leads/lead_list.html', context)
 
+@user_passes_test(grupo_LastMile_required)
 @login_required
 def lead_create(request):
     """Criação de novos leads de prospecção"""
@@ -79,6 +89,7 @@ def lead_create(request):
         form = LeadForm()
     return render(request, 'leads/lead_form.html', {'form': form})
 
+@user_passes_test(grupo_LastMile_required)
 @login_required
 def lead_update(request, pk):
     """Edição de dados básicos do lead e Visualização do Histórico"""
@@ -104,6 +115,7 @@ def lead_update(request, pk):
         'title': 'Editar Lead'
     })
 
+@user_passes_test(grupo_LastMile_required)
 @login_required
 def lead_add_historico(request, pk):
     """Mini-view que recebe o POST do comentário/anexo e salva no banco"""
@@ -128,6 +140,7 @@ def lead_add_historico(request, pk):
             
     return redirect('lead_update', pk=pk)
 
+@user_passes_test(grupo_LastMile_required)
 @login_required
 def lead_delete(request, pk):
     """Remoção de lead da base"""
@@ -138,6 +151,7 @@ def lead_delete(request, pk):
         return redirect('lead_list')
     return redirect('lead_list')
 
+@user_passes_test(grupo_LastMile_required)
 @login_required
 def update_lead_status(request, pk):
     """Valida a intenção e redireciona para a conversão ou atualiza o status."""
@@ -222,6 +236,7 @@ def update_lead_status(request, pk):
         
     return redirect('lead_list')
 
+@user_passes_test(grupo_LastMile_required)
 @login_required
 def lead_convert(request, pk):
     """Tela Oficial de Conversão: Salva Parceiro, Proposta e TRANSFERE HISTÓRICO"""
@@ -350,7 +365,7 @@ def lead_convert(request, pk):
     })
 
 
-
+@user_passes_test(grupo_LastMile_required)
 @login_required
 def integracoes_view(request):
     if request.method == 'POST':

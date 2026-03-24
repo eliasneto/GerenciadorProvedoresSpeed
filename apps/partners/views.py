@@ -1,5 +1,6 @@
 from django.shortcuts import render, get_object_or_404, redirect
-from django.contrib.auth.decorators import login_required
+from django.contrib.auth.decorators import login_required, user_passes_test
+from django.core.exceptions import PermissionDenied
 from django.core.paginator import Paginator
 from django.contrib import messages
 from django.db.models import Sum
@@ -13,10 +14,18 @@ from clientes.models import Endereco
 # --- IMPORTAÇÃO DO HISTÓRICO SPEED ---
 from core.models import RegistroHistorico
 
+# 1. Cria a regra de verificação
+def grupo_Parceiro_required(user):
+    # O Superuser (você) sempre passa. Os outros precisam estar no grupo.
+    if user.groups.filter(name='Backoffice').exists() or user.is_superuser:
+        return True
+    # Se não for do grupo, joga um Erro 403 (Acesso Negado)
+    raise PermissionDenied
+
 # ==============================================================================
 # VIEWS DE PARCEIROS (DADOS MESTRE E ESTEIRAS)
 # ==============================================================================
-
+@user_passes_test(grupo_Parceiro_required)
 @login_required
 def partner_list(request):
     """Lista APENAS os parceiros ATIVOS (A operação real)."""
@@ -30,7 +39,7 @@ def partner_list(request):
         'page_obj': page_obj,
         'total_partners': partners_queryset.count()
     })
-
+@user_passes_test(grupo_Parceiro_required)
 @login_required
 def partner_inactive_list(request):
     """Esteira de Reativação (Win-back) para parceiros inativos."""
@@ -45,7 +54,7 @@ def partner_inactive_list(request):
         'page_obj': page_obj,
         'total_inativos': partners_inativos.count()
     })
-
+@user_passes_test(grupo_Parceiro_required)
 @login_required
 def partner_detail(request, pk):
     """Exibe o perfil do parceiro, propostas e o HISTÓRICO (Timeline)."""
@@ -74,7 +83,7 @@ def partner_detail(request, pk):
         'qtd_antigo': qtd_antigo,
         'mostrando_antigos': ver_antigos
     })
-
+@user_passes_test(grupo_Parceiro_required)
 @login_required
 def partner_add_historico(request, pk):
     """Mini-view que recebe o POST do comentário/anexo na tela do Parceiro"""
@@ -101,7 +110,7 @@ def partner_add_historico(request, pk):
 # ==============================================================================
 # MUDANÇAS DE STATUS (MODAIS)
 # ==============================================================================
-
+@user_passes_test(grupo_Parceiro_required)
 @login_required
 def update_partner_status(request, pk):
     """Inativa o parceiro a partir da lista de Ativos."""
@@ -135,7 +144,7 @@ def update_partner_status(request, pk):
             messages.success(request, f"O status da {partner.nome_fantasia or partner.razao_social} foi atualizado para {novo_status.upper()}.")
             
     return redirect('partner_list')
-
+@user_passes_test(grupo_Parceiro_required)
 @login_required
 def update_winback_status(request, pk):
     """Avança o estágio na esteira de reativação (Win-back)."""
@@ -197,7 +206,7 @@ def update_winback_status(request, pk):
 # ==============================================================================
 # VIEWS DE PROPOSTAS / ORDEM DE SERVIÇO
 # ==============================================================================
-
+@user_passes_test(grupo_Parceiro_required)
 @login_required
 def proposal_create(request, partner_pk):
     partner = get_object_or_404(Partner, pk=partner_pk)
@@ -212,7 +221,7 @@ def proposal_create(request, partner_pk):
     proposal.save()
     messages.success(request, f"Nova OS iniciada para {partner.nome_fantasia or partner.razao_social}")
     return redirect('proposal_update', pk=proposal.pk)
-
+@user_passes_test(grupo_Parceiro_required)
 @login_required
 def proposal_update(request, pk):
     proposal = get_object_or_404(Proposal, pk=pk)
@@ -296,6 +305,7 @@ def proposal_update(request, pk):
 
     return render(request, 'partners/proposal_form.html', {'form': form, 'proposal': proposal, 'partner': partner})
 
+@user_passes_test(grupo_Parceiro_required)
 @login_required
 def proposal_delete(request, pk):
     proposal = get_object_or_404(Proposal, pk=pk)
@@ -304,6 +314,7 @@ def proposal_delete(request, pk):
     messages.warning(request, "Proposta removida do sistema.")
     return redirect('partner_detail', pk=partner_pk)
 
+@user_passes_test(grupo_Parceiro_required)
 @login_required
 def proposal_global_list(request):
     proposals = Proposal.objects.all().select_related('partner', 'cliente').order_by('-id')
@@ -313,7 +324,7 @@ def proposal_global_list(request):
 # ==============================================================================
 # VIEWS DE RASTREABILIDADE (UNIDADES E CLIENTES)
 # ==============================================================================
-
+@user_passes_test(grupo_Parceiro_required)
 @login_required
 def address_proposals_list(request, address_id):
     endereco = get_object_or_404(Endereco, pk=address_id)
@@ -321,6 +332,7 @@ def address_proposals_list(request, address_id):
     partners = Partner.objects.all().order_by('nome_fantasia')
     return render(request, 'partners/address_proposals_list.html', {'endereco': endereco, 'proposals': proposals, 'partners': partners})
 
+@user_passes_test(grupo_Parceiro_required)
 @login_required
 def partner_clients_list(request, pk):
     partner = get_object_or_404(Partner, pk=pk)

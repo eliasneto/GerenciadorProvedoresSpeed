@@ -17,12 +17,12 @@ class UserAdmin(BaseUserAdmin):
     )
     
     # 3. Organiza o formulário de CRIAÇÃO (Puxando apenas o essencial para o AD)
-    add_fieldsets = (
-        (None, {
-            'classes': ('wide',),
-            'fields': ('username', 'email', 'is_gestor', 'is_staff', 'is_active'),
-        }),
-    )
+    add_fieldsets = BaseUserAdmin.add_fieldsets + (
+            ('Configurações Speed', {
+                'classes': ('wide',),
+                'fields': ('is_gestor',),
+            }),
+        )
 
     # Colunas na listagem
     list_display = ('username', 'email', 'is_gestor', 'is_staff', 'is_active')

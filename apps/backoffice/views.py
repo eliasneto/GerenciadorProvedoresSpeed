@@ -1,5 +1,6 @@
 from django.shortcuts import render, redirect
-from django.contrib.auth.decorators import login_required
+from django.contrib.auth.decorators import login_required, user_passes_test
+from django.core.exceptions import PermissionDenied
 from django.contrib import messages
 from django.http import HttpResponse
 from io import BytesIO
@@ -9,6 +10,15 @@ import pandas as pd
 from scripts.integracoes.backoffice.cria_login_atendimento import executar_cadastro_ixc
 from scripts.integracoes.backoffice.cria_atendimento_ixc import executar_abertura_atendimento
 
+# 1. Cria a regra de verificação
+def grupo_backoffice_required(user):
+    # O Superuser (você) sempre passa. Os outros precisam estar no grupo.
+    if user.groups.filter(name='Backoffice').exists() or user.is_superuser:
+        return True
+    # Se não for do grupo, joga um Erro 403 (Acesso Negado)
+    raise PermissionDenied
+
+@user_passes_test(grupo_backoffice_required)
 @login_required
 def cotacao_import(request):
     if request.method == 'POST' and request.FILES.get('arquivo_cotacao'):
@@ -69,7 +79,7 @@ def cotacao_import(request):
 
     return render(request, 'backoffice/cotacao_import.html')
 
-
+@user_passes_test(grupo_backoffice_required)
 @login_required
 def download_modelo_cotacao(request):
     # 1. Colunas para preenchimento (Aba Principal)
@@ -128,7 +138,7 @@ def download_modelo_cotacao(request):
 # ==========================================
 # NOVA AUTOMAÇÃO: IMPORTAÇÃO DE ATENDIMENTOS (OS)
 # ==========================================
-
+@user_passes_test(grupo_backoffice_required)
 @login_required
 def download_modelo_atendimento(request):
     colunas = [
@@ -149,7 +159,7 @@ def download_modelo_atendimento(request):
     response['Content-Disposition'] = 'attachment; filename=Modelo_Importacao_OS_IXC.xlsx'
     return response
 
-
+@user_passes_test(grupo_backoffice_required)
 @login_required
 def atendimento_import(request):
     if request.method == 'POST' and request.FILES.get('arquivo_atendimento'):
