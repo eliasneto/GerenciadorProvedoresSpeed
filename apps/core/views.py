@@ -1,7 +1,6 @@
 from django.shortcuts import render, get_object_or_404, redirect
 from django.contrib.auth.decorators import login_required, user_passes_test
 from django.core.exceptions import PermissionDenied
-from django.contrib.auth.decorators import login_required
 from django.contrib.contenttypes.models import ContentType
 from django.contrib import messages
 
@@ -9,14 +8,18 @@ from django.contrib import messages
 from leads.models import Lead 
 from .models import RegistroHistorico # Importa a Timeline que criamos no models do core
 
-# 1. Cria a regra de verificação
+# 1. Cria a regra de verificação para Administradores
 def grupo_Administrador_required(user):
-    # O Superuser (você) sempre passa. Os outros precisam estar no grupo.
     if user.groups.filter(name='Administrador').exists() or user.is_superuser:
         return True
-    # Se não for do grupo, joga um Erro 403 (Acesso Negado)
     raise PermissionDenied
 
+# 🚀 NOVA REGRA: Libera para todo mundo da operação (LastMile, Parceiros, BackOffice) e Admins
+def grupo_Operacao_required(user):
+    grupos_permitidos = ['Administrador', 'LastMile', 'Parceiros', 'BackOffice']
+    if user.groups.filter(name__in=grupos_permitidos).exists() or user.is_superuser:
+        return True
+    raise PermissionDenied
 
 @login_required
 def home(request):
@@ -27,7 +30,8 @@ def home(request):
     }
     return render(request, 'core/home.html', context)
 
-@user_passes_test(grupo_Administrador_required)
+# 🚀 TROCAMOS A TRAVA AQUI! Agora usa a regra 'grupo_Operacao_required'
+@user_passes_test(grupo_Operacao_required)
 @login_required
 def timeline_global(request, app_label, model_name, object_id):
     """
@@ -56,9 +60,9 @@ def timeline_global(request, app_label, model_name, object_id):
             tipo = 'anexo' if arquivo else 'comentario'
             RegistroHistorico.objects.create(
                 tipo=tipo,
-                acao=descricao,         # <--- CORRIGIDO AQUI
+                acao=descricao,
                 arquivo=arquivo,
-                usuario=request.user,   # <--- CORRIGIDO AQUI
+                usuario=request.user,
                 content_type=content_type,
                 object_id=object_id
             )

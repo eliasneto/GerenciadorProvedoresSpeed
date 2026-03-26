@@ -204,19 +204,22 @@ def api_cliente_search(request):
     
     return JsonResponse(data, safe=False)
 
+# Em apps/clientes/views.py
+
 @login_required
 def api_cliente_enderecos(request, pk):
-    """Retorna endereços de um cliente específico"""
+    """Retorna endereços de um cliente específico (AGORA COM O LOGIN IXC)"""
     cliente = get_object_or_404(Cliente, pk=pk)
     enderecos = cliente.enderecos.all().order_by('logradouro')
     
     data = [{
         'id': e.id, 
-        'endereco': e.logradouro, 
-        'numero': e.numero,
+        'endereco': e.logradouro if e.logradouro else f"Unidade: {e.tipo}", 
+        'numero': e.numero if e.numero else "S/N",
         'cidade': e.cidade,
         'cep': e.cep,
-        'display': f"{e.logradouro}, {e.numero} ({e.cidade})"
+        # ⚡ MÁGICA AQUI: Mandamos o Login do IXC para o Frontend!
+        'login_ixc': e.login_ixc if e.login_ixc else "[Pendente/Não Sincronizado no IXC]",
     } for e in enderecos]
     
     return JsonResponse(data, safe=False)

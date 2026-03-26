@@ -66,8 +66,15 @@ class Endereco(models.Model):
         ordering = ['status', 'logradouro']
 
     def __str__(self):
-        identificador = self.login_ixc if self.login_ixc else self.tipo
-        return f"{identificador} - {self.cidade}/{self.estado}"
+        # 1. Tenta pegar o Login IXC. Se estiver vazio, avisa que está pendente.
+        login_str = f"Login: {self.login_ixc}" if self.login_ixc else "Login: [Pendente/Não Sincronizado]"
+        
+        # 2. Monta a rua e o número. Se a rua estiver vazia, usa o Tipo (ex: Matriz)
+        rua_str = self.logradouro if self.logradouro else f"Unidade: {self.tipo}"
+        numero_str = self.numero if self.numero else "S/N"
+        
+        # 3. Junta tudo num formato bonito e fácil de ler para o consultor
+        return f"{login_str} ➔ {rua_str}, {numero_str} ({self.cidade}/{self.estado})"
 
 # Em apps/clientes/models.py
 

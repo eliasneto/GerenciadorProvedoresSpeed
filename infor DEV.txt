@@ -68,3 +68,8 @@ docker exec -it speed_sistema python manage.py migrate
 
 # Sobre escrever o que tem no git:
 git push --force origin main
+
+
+Eu queria uma melhoria no meu sistema, eu queria que uma proposta fosse lincada a um prospecto e que um prospecto possa ter varias proposta.
+Porque isso?. Eu quero ter um botão dentro do prospecto onde tenha a opção de proposta, ai tenha uma tela com todas as proposta desse cliente.
+cada proposta vai ter o status de "Em negociação". "Inviavel", "Proposta Aceita".

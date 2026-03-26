@@ -1,7 +1,6 @@
 from django.db import models
 
 class Lead(models.Model):
-    # Status atualizados com as novas opções solicitadas
     STATUS_CHOICES = [
         ('novo', 'Novo'),
         ('negociacao', 'Em Negociação'),
@@ -10,7 +9,7 @@ class Lead(models.Model):
         ('inviavel', 'Inviável / Não Avançou'),
     ]
 
-    # Identificação básica - Tudo é opcional (blank=True, null=True)
+    # Identificação básica
     razao_social = models.CharField('Razão Social / Nome', max_length=200, blank=True, null=True)
     cnpj_cpf = models.CharField('CNPJ/CPF', max_length=20, blank=True, null=True)
     nome_fantasia = models.CharField('Nome Fantasia', max_length=200, blank=True, null=True)
@@ -26,20 +25,27 @@ class Lead(models.Model):
     email = models.EmailField('E-mail', blank=True, null=True)
     telefone = models.CharField('Telefone/WhatsApp', max_length=20, blank=True, null=True)
     
-    # Controle de status com o padrão forçado para 'novo'
+    # ==========================================
+    # 🚀 NOVOS CAMPOS DA INTEGRAÇÃO IA (SERPER)
+    # ==========================================
+    fonte = models.CharField('Fonte de Captação', max_length=100, blank=True, null=True)
+    confianca = models.CharField('Confiança dos Dados', max_length=50, blank=True, null=True)
+    instagram_username = models.CharField('Usuário Instagram', max_length=100, blank=True, null=True)
+    instagram_url = models.URLField('Link Instagram', max_length=255, blank=True, null=True)
+    bio_instagram = models.TextField('Bio do Instagram', blank=True, null=True)
+    observacao_ia = models.TextField('Observação da IA', blank=True, null=True)
+    # ==========================================
+    
     status = models.CharField(
         max_length=20, 
         choices=STATUS_CHOICES, 
         default='novo'
     )
     
-    # Metadados
     data_criacao = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        # Ordenação decrescente: os leads mais novos aparecem primeiro no grid
         ordering = ['-data_criacao']
 
     def __str__(self):
-        # Exibe o Nome Fantasia no Admin/Formulários; se vazio, usa Razão Social
         return self.nome_fantasia or self.razao_social or "Lead sem nome"

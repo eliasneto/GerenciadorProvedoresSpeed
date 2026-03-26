@@ -89,6 +89,28 @@
 
             <div class="pt-4">
                 <div class="flex items-center gap-2 mb-6 border-b border-gray-50 pb-4">
+                    <i data-lucide="instagram" class="w-5 h-5 text-pink-500"></i>
+                    <h3 class="font-black text-sm uppercase tracking-widest text-gray-800">(Instagram)</h3>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                        <label class="text-[10px] font-black uppercase text-gray-400 mb-2 block tracking-widest">@ Usuário Instagram</label>
+                        <div class="relative flex items-center">
+                            <span class="absolute left-4 text-gray-400 font-black">@</span>
+                            {{ form.instagram_username }}
+                        </div>
+                        <script>document.addEventListener('DOMContentLoaded', () => { document.querySelector('input[name="instagram_username"]').classList.add('pl-10'); });</script>
+                    </div>
+                    <div>
+                        <label class="text-[10px] font-black uppercase text-gray-400 mb-2 block tracking-widest">URL do Perfil (Link Completo)</label>
+                        {{ form.instagram_url }}
+                    </div>
+                </div>
+            </div>
+
+            <div class="pt-4">
+                <div class="flex items-center gap-2 mb-6 border-b border-gray-50 pb-4">
                     <i data-lucide="phone" class="w-5 h-5 text-ageis-yellow"></i>
                     <h3 class="font-black text-sm uppercase tracking-widest text-gray-800">Informações de Contato</h3>
                 </div>

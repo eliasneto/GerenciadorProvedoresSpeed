@@ -18,8 +18,8 @@ from partners.forms import ProposalForm
 # IMPORTAÇÃO DA TIMELINE (HISTÓRICO)
 from core.models import RegistroHistorico
 
-# Adicione essa linha junto com as outras importações lá no topo do arquivo:
 from django.db.models import Q
+import pandas as pd
 
 # 1. Cria a regra de verificação
 def grupo_LastMile_required(user):
@@ -130,9 +130,9 @@ def lead_add_historico(request, pk):
             
             RegistroHistorico.objects.create(
                 tipo=tipo,
-                acao=descricao_texto,      # CORRIGIDO: de descricao para acao
+                acao=descricao_texto,
                 arquivo=arquivo,
-                usuario=request.user,      # CORRIGIDO: de criado_por para usuario
+                usuario=request.user,
                 content_type=ContentType.objects.get_for_model(Lead),
                 object_id=lead.id
             )
@@ -208,9 +208,6 @@ def update_lead_status(request, pk):
             return redirect('lead_list')
             
         elif novo_status == 'negociacao':
-            # =========================================================
-            # LÓGICA DE NEGOCIAÇÃO: Salva e gera Histórico
-            # =========================================================
             lead.status = 'negociacao'
             lead.save()
 
@@ -219,7 +216,6 @@ def update_lead_status(request, pk):
                 from core.models import RegistroHistorico
                 from django.contrib.contenttypes.models import ContentType
                 
-                # Pega o nome bonitinho do status antigo para o log
                 status_dict = dict(Lead.STATUS_CHOICES)
                 nome_antigo = status_dict.get(status_antigo, status_antigo).upper()
                 
@@ -258,7 +254,6 @@ def lead_convert(request, pk):
                 messages.error(request, "Selecione pelo menos uma unidade de instalação.")
                 return render(request, 'partners/proposal_form.html', {'form': form, 'partner': partner_draft, 'is_lead_conversion': True})
 
-            # SALVA UMA CÓPIA DA LISTA ORIGINAL PARA O RELATÓRIO ANTES DO POP()
             lista_ids_historico = list(enderecos_ids)
 
             # SALVAMENTO EM CASCATA
@@ -282,22 +277,18 @@ def lead_convert(request, pk):
                 clone.save()
 
             # --- TRANSFERÊNCIA DO HISTÓRICO SPEED ---
-            # Pega todo o histórico do Lead antigo
             lead_type = ContentType.objects.get_for_model(Lead)
             partner_type = ContentType.objects.get_for_model(Partner)
             
             historicos = RegistroHistorico.objects.filter(content_type=lead_type, object_id=lead.id)
-            
-            # Muda a titularidade de todos os eventos para o novo Parceiro
             historicos.update(content_type=partner_type, object_id=partner_draft.id)
             
-            # --- NOVO: SNAPSHOT INTELIGENTE COM VÍNCULO RELACIONAL ---
+            # --- SNAPSHOT INTELIGENTE COM VÍNCULO RELACIONAL ---
             dados_vinculo = []
             dados_tecnicos = []
             dados_financeiros = []
             outros_dados = []
 
-            # 1. CAPTURA OS DADOS DE VÍNCULO RELACIONAL (Cliente e Endereços)
             enderecos_objs = Endereco.objects.filter(id__in=lista_ids_historico)
             if enderecos_objs.exists():
                 cliente_alvo = enderecos_objs.first().cliente
@@ -305,12 +296,10 @@ def lead_convert(request, pk):
                 for end in enderecos_objs:
                     dados_vinculo.append(f"• Unidade de Instalação: {end}")
 
-            # 2. CAPTURA OS DADOS DO FORMULÁRIO (Financeiro e Técnico)
             for campo, valor in form.cleaned_data.items():
                 if valor and campo not in ['enderecos_selecionados', 'partner', 'cliente', 'client_address']:
                     nome_campo = campo.replace('_', ' ').title()
                     
-                    # Se o nome do campo der a entender que é dinheiro, coloca R$
                     if any(palavra in campo for palavra in ['valor', 'taxa', 'custo', 'pago']):
                         valor_str = f"R$ {valor}"
                     elif campo in ['vigencia', 'tempo_contrato']:
@@ -320,7 +309,6 @@ def lead_convert(request, pk):
 
                     linha = f"• {nome_campo}: {valor_str}"
 
-                    # Separa os campos nas categorias certas
                     if any(palavra in campo for palavra in ['valor', 'taxa', 'custo', 'pago', 'vigencia', 'email']):
                         dados_financeiros.append(linha)
                     elif any(palavra in campo for palavra in ['velocidade', 'tecnologia', 'contato', 'telefone']):
@@ -328,7 +316,6 @@ def lead_convert(request, pk):
                     else:
                         outros_dados.append(linha)
             
-            # Monta o relatório estruturado completo
             qtd_links = len(lista_ids_historico)
             texto_snapshot = f"🚀 Lead convertido para Parceiro Ativo com {qtd_links} link(s) configurado(s).\n\n"
             
@@ -341,16 +328,14 @@ def lead_convert(request, pk):
             if outros_dados:
                 texto_snapshot += "📋 OUTRAS INFORMAÇÕES:\n" + "\n".join(outros_dados)
 
-            # Log Automático do Sistema gravando a "Fotografia" inicial estruturada
             RegistroHistorico.objects.create(
                 tipo='sistema',
-                acao=texto_snapshot.strip(), # <--- CORREÇÃO AQUI
-                usuario=request.user,        # <--- CORREÇÃO AQUI
+                acao=texto_snapshot.strip(),
+                usuario=request.user,
                 content_type=partner_type,
                 object_id=partner_draft.id
             )
 
-            # Agora podemos deletar o Lead, o histórico já está a salvo!
             lead.delete() 
             
             messages.success(request, f"Conversão Concluída! {qtd_links} links gerados para {partner_draft.nome_fantasia}.")
@@ -374,104 +359,101 @@ def integracoes_view(request):
         if not planilha:
             return JsonResponse({'erro': 'Nenhum arquivo anexado.'}, status=400)
 
-        # 1. Cria uma pasta temporária (se não existir) para salvar as planilhas
         temp_dir = os.path.join(settings.BASE_DIR, 'media', 'temp_google')
         os.makedirs(temp_dir, exist_ok=True)
 
-        # 2. Salva o arquivo enviado pelo usuário
         fs = FileSystemStorage(location=temp_dir)
         filename = fs.save(planilha.name, planilha)
         caminho_entrada = os.path.join(temp_dir, filename)
         
-        # 3. Define o nome do arquivo de saída
         caminho_saida = os.path.join(temp_dir, f"resultado_{filename}")
 
         try:
-            # 4. CHAMA O SEU SCRIPT DO SERPER!
-            # Agora ele devolve os dados além de criar a planilha
             dados_encontrados = processar_planilha(caminho_entrada, caminho_saida)
             
             # 5. SALVANDO NO BANCO DE DADOS
-            # Vamos garantir que os dados vieram para não quebrar
             if dados_encontrados:
                 for item in dados_encontrados:
-                    # Tratamento: Evita salvar "Não informado" em campos URL e lida com campos nulos
-                    site_url = item.get('Site')
-                    if site_url == 'Não informado' or pd.isna(site_url):
-                         site_url = ''
-
-                    tel_str = item.get('Telefone')
-                    if tel_str == 'Não informado' or pd.isna(tel_str):
-                         tel_str = ''
-
-                    end_str = item.get('Endereço Completo')
-                    if end_str == 'Não informado' or pd.isna(end_str):
-                         end_str = ''
+                    # 1. Tratamento e Normalização Básica
+                    nome_fantasia_str = str(item.get('Nome Fantasia') or item.get('Razão Social') or 'Lead Sem Nome').strip()[:200]
+                    razao_social_str = str(item.get('Razão Social') or nome_fantasia_str).strip()[:200]
                     
-                    nome_fantasia_str = item.get('Nome Fantasia', 'Lead sem nome')
+                    site_url = str(item.get('Site', '')).strip()
+                    if site_url == 'Não informado' or pd.isna(item.get('Site')): site_url = ''
 
-                    # O get_or_create evita duplicar a mesma empresa na mesma cidade!
+                    email_str = str(item.get('Email', '')).strip()
+                    if email_str == 'Não informado' or pd.isna(item.get('Email')): email_str = ''
+
+                    tel_str = str(item.get('WhatsApp') or item.get('Telefone', '')).strip()
+                    if tel_str == 'Não informado' or pd.isna(tel_str): tel_str = ''
+
+                    end_str = str(item.get('Endereço Completo', '')).strip()
+                    if end_str == 'Não informado' or pd.isna(item.get('Endereço Completo')): end_str = ''
+
+                    # 2. Captura dos Novos Dados da IA
+                    fonte_str = str(item.get('Fonte', '')).strip()[:100]
+                    confianca_str = str(item.get('Confiança', '')).strip()[:50]
+                    insta_user = str(item.get('Instagram Username', '')).strip()[:100]
+                    insta_url = str(item.get('Instagram URL', '')).strip()[:255]
+                    bio = str(item.get('Bio Instagram', '')).strip()
+                    obs = str(item.get('Observação', '')).strip()
+
+                    # 3. O get_or_create com as colunas novas
                     Lead.objects.get_or_create(
                         nome_fantasia=nome_fantasia_str, 
-                        cidade=item.get('Cidade', ''),
-                        estado=item.get('Estado', ''),
+                        cidade=str(item.get('Cidade', '')).strip()[:100],
+                        estado=str(item.get('Estado', '')).strip()[:2].upper(),
                         defaults={
-                            'razao_social': nome_fantasia_str, # Copia o fantasia provisoriamente
-                            'telefone': tel_str,
-                            'site': site_url,
-                            'endereco': end_str,
-                            'cnpj_cpf': '', # Fica em branco para o consultor preencher depois
-                            'status': 'novo'
+                            'razao_social': razao_social_str,
+                            'telefone': tel_str[:20],
+                            'site': site_url[:200],
+                            'endereco': end_str[:255],
+                            'cnpj_cpf': str(item.get('CNPJ', '')).strip()[:20], 
+                            'email': email_str[:254],
+                            'status': 'novo',
+                            # 🚀 Salvando os dados nas colunas novas:
+                            'fonte': fonte_str,
+                            'confianca': confianca_str,
+                            'instagram_username': insta_user,
+                            'instagram_url': insta_url,
+                            'bio_instagram': bio,
+                            'observacao_ia': obs
                         }
                     )
 
-            # 6. Verifica se o script gerou o arquivo de saída
             if os.path.exists(caminho_saida):
                 with open(caminho_saida, 'rb') as f:
                     response = HttpResponse(
                         f.read(), 
                         content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
                     )
-                    # Força o navegador a baixar o arquivo
                     response['Content-Disposition'] = f'attachment; filename="Resultado_Fornecedores.xlsx"'
                     
-                    # Limpeza: Apaga os arquivos temporários após enviar
                     os.remove(caminho_entrada)
                     os.remove(caminho_saida)
                     
-                    # Como é uma requisição AJAX (Javascript), mensagens do Django não funcionam bem aqui.
-                    # O seu frontend (JS) já mostra "Busca Concluída!" quando o arquivo baixa.
                     return response
             else:
                 return JsonResponse({'erro': 'Falha ao gerar o arquivo de saída.'}, status=500)
 
         except Exception as e:
-            # Se der algum erro (ex: chave invalida)
             import traceback
-            traceback.print_exc() # Isso ajuda a ver o erro exato no console do Docker
+            traceback.print_exc()
             return JsonResponse({'erro': str(e)}, status=500)
             
-    # Se for GET, apenas renderiza a página
     return render(request, 'leads/integracoes.html')
 
-import pandas as pd # Adicione isso no topo do arquivo se já não tiver
-from django.http import HttpResponse
-
 def download_modelo_google_view(request):
-    # 1. Cria a estrutura da planilha com as colunas exatas
     df = pd.DataFrame(columns=['Serviço', 'Cidade', 'Estado'])
     
-    # 2. Adiciona dados de exemplo para o usuário entender como preencher
     df.loc[0] = ['Provedor de Internet', 'Fortaleza', 'CE']
     df.loc[1] = ['Link Dedicado', 'Eusébio', 'CE']
     
-    # 3. Prepara a resposta HTTP avisando que é um arquivo Excel
     response = HttpResponse(
         content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
     )
     response['Content-Disposition'] = 'attachment; filename="Modelo_Busca_Google.xlsx"'
     
-    # 4. Salva os dados direto na resposta (sem criar arquivo no HD do servidor)
     df.to_excel(response, index=False)
     
-    return response    
+    return response

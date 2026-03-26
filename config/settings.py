@@ -126,12 +126,12 @@ if USE_AD_AUTH:
     # AUTH_LDAP_REQUIRE_GROUP = "CN=Acesso_SGP,OU=Grupos,DC=howbe,DC=local"
 
     # Configurações de Grupo
-    AUTH_LDAP_GROUP_SEARCH = LDAPSearch(
-        os.getenv("AD_GROUP_SEARCH_BASE"),
-        ldap.SCOPE_SUBTREE,
-        "(objectClass=group)",
-    )
-    AUTH_LDAP_GROUP_TYPE = ActiveDirectoryGroupType()
+    #AUTH_LDAP_GROUP_SEARCH = LDAPSearch(
+    #    os.getenv("AD_GROUP_SEARCH_BASE"),
+    #    ldap.SCOPE_SUBTREE,
+    #    "(objectClass=group)",
+    #)
+    #AUTH_LDAP_GROUP_TYPE = ActiveDirectoryGroupType()
 
     # Mapeamento de atributos (Corrigido: displayName para pegar nome completo)
     AUTH_LDAP_USER_ATTR_MAP = {
