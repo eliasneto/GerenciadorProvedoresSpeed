@@ -73,6 +73,9 @@ git push --force origin main
 # ALTERA BRANCH
 git checkout homolog
 
+#Altera a branch e copia o main
+git checkout -b homolog
+
 O pacote do Linux: Mesmo o Docker fazendo o trabalho pesado, o "motor" do Linux hospedeiro precisa saber como falar com o Windows. No terminal do seu servidor Linux, você só precisa rodar este comando uma única vez na vida para dar essa habilidade ao servidor:
 Bash
 sudo apt-get update && sudo apt-get install cifs-utils -y

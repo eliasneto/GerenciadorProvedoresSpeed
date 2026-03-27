@@ -1,7 +1,7 @@
 services:
   speed_db:
     image: mysql:8.0
-    container_name: speed_mysql
+    container_name: speed_mysql_homolog
     restart: always
     environment:
       - TZ=America/Fortaleza
@@ -10,16 +10,16 @@ services:
       - MYSQL_PASSWORD=speed_password
       - MYSQL_ROOT_PASSWORD=root_super_password
     ports:
-      - "3303:3306"
+      - "3304:3306"
     volumes:
-      - speed_db_data:/var/lib/mysql
+      - speed_db_data_homolog:/var/lib/mysql
 
   speed_web:
     build: .
-    container_name: speed_sistema
+    container_name: speed_sistema_homolog
     restart: always
     ports:
-      - "8090:8000"
+      - "8091:8000"
     environment:
       - TZ=America/Fortaleza
       - TIME_ZONE=America/Fortaleza
@@ -37,12 +37,8 @@ services:
       - AD_DEFAULT_DOMAIN=HOWBE
     extra_hosts:
       - "howbe.local:192.168.90.51"
-    # =========================================================
-    # 🚀 A SALVAÇÃO DOS ARQUIVOS (TÚNEL PARA O SEU WINDOWS)
-    # =========================================================
     volumes:
       - ./media:/app/media
-    # =========================================================
     command: >
       sh -c "mkdir -p /app/media && 
              chmod -R 777 /app/media && 
@@ -53,7 +49,7 @@ services:
 
   speed_sincronizador:
     build: .
-    container_name: speed_sincronizador_ixc
+    container_name: speed_sincronizador_ixc_homolog
     restart: always
     environment:
       - TZ=America/Fortaleza
@@ -103,10 +99,9 @@ services:
         sleep 3600;
       done"
 
-  # 🚀 O NOVO CONTAINER DE BACKUP (BASEADO EM UBUNTU E COM LÓGICA CORRIGIDA)
   speed_backup:
     image: ubuntu:22.04
-    container_name: speed_backup_diario
+    container_name: speed_backup_diario_homolog
     restart: always
     depends_on:
       - speed_db
@@ -114,7 +109,7 @@ services:
       - TZ=America/Fortaleza
     volumes:
       - ./media:/app/media
-      - backup_windows:/mnt/windows # 🔗 Conecta com a pasta do Elias no Windows
+      - backup_windows_homolog:/mnt/windows
     command: >
       sh -c "
       echo 'Configurando ferramentas de backup...';
@@ -151,17 +146,11 @@ services:
         sleep 30; # Checa a hora a cada 30 segundos
       done"
 
-# ==========================================
-# ⚙️ BLOCO ÚNICO DE VOLUMES LÁ NO FINAL
-# ==========================================
 volumes:
-  speed_db_data:
+  speed_db_data_homolog:
   
-  # A Mágica: Conexão direta com a rede Windows (Pasta Elias)
-  backup_windows:
+  backup_windows_homolog:
     driver_opts:
       type: cifs
-      # Credenciais sem aspas na senha + permissões totais
       o: "username=elias.neto,password=Gustavo@1027,domain=HOWBE,vers=3.0,iocharset=utf8,file_mode=0777,dir_mode=0777"
-      # Apontando para a pasta certa
-      device: "//192.168.90.53/Publica/Elias"
+      device: "//192.168.90.53/Publica/Elias_Homolog"
