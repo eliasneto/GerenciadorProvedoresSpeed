@@ -154,11 +154,9 @@ services:
 volumes:
   speed_db_data:
   
-  # A Mágica: Conexão direta com a rede Windows
   backup_windows:
     driver_opts:
       type: cifs
-      # Coloque AQUI O SEU USUÁRIO E SENHA de verdade, e note o domain=HOWBE:
-      o: "username=elias.neto,password=ColoqueSuaSenhaAqui,domain=HOWBE,vers=3.0,iocharset=utf8"
-      # Troque o d$$ pelo nome do compartilhamento real que você criou no Windows (Ex: Publica):
+      # 🚀 A MÁGICA ESTÁ AQUI: Senha com aspas simples e usuário sem barra
+      o: "username=elias.neto,password='Gustavo@1027',domain=HOWBE,vers=3.0,iocharset=utf8"
       device: "//192.168.90.53/Publica"
