@@ -157,6 +157,6 @@ volumes:
   backup_windows:
     driver_opts:
       type: cifs
-      # 🚀 A MÁGICA ESTÁ AQUI: Senha com aspas simples e usuário sem barra
-      o: "username=elias.neto,password='Gustavo@1027',domain=HOWBE,vers=3.0,iocharset=utf8"
+      # Removidas as aspas simples da senha:
+      o: "username=elias.neto,password=Gustavo@1027,domain=HOWBE,vers=3.0,iocharset=utf8"
       device: "//192.168.90.53/Publica"
