@@ -5,7 +5,7 @@
 # ==========================================
 # Dados do Windows
 WIN_SHARE="//192.168.90.53/d$/Publica/Elias"
-WIN_USER="elias.neto"
+WIN_USER="howbe/elias.neto"
 WIN_PASS="Gustavo@1027"
 
 # Dados do Linux
