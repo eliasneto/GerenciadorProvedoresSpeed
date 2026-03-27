@@ -10,8 +10,6 @@ Usuário: speed_user (ou root)
 Senha: speed_password (ou root_super_password se usar o root)
 
 
-API google: AIzaSyCtz9rsDfujX9NhIvm1rW1hfkKCsxE3GHk
-
 
 Pontos importantes sobre o custo:
 Como agora estamos usando duas chamadas (places + place_details), o custo é um pouco maior, mas ainda coberto pelos US$ 200 grátis:

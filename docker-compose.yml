@@ -37,8 +37,16 @@ services:
       - AD_DEFAULT_DOMAIN=HOWBE
     extra_hosts:
       - "howbe.local:192.168.90.51"
+    # =========================================================
+    # 🚀 A SALVAÇÃO DOS ARQUIVOS (TÚNEL PARA O SEU WINDOWS)
+    # =========================================================
+    volumes:
+      - ./media:/app/media
+    # =========================================================
     command: >
-      sh -c "python setup_speed.py && 
+      sh -c "mkdir -p /app/media && 
+             chmod -R 777 /app/media && 
+             python setup_speed.py && 
              gunicorn --bind 0.0.0.0:8000 --timeout 300 --workers 3 --log-level debug --access-logfile - config.wsgi:application"
     depends_on:
       - speed_db
@@ -95,5 +103,62 @@ services:
         sleep 3600;
       done"
 
+  # 🚀 O NOVO CONTAINER DE BACKUP
+  speed_backup:
+    image: alpine:latest
+    container_name: speed_backup_diario
+    restart: always
+    depends_on:
+      - speed_db
+    environment:
+      - TZ=America/Fortaleza
+    volumes:
+      - ./media:/app/media
+      - backup_windows:/mnt/windows # 🔗 Conecta com a pasta do Elias no Windows
+    command: >
+      sh -c "
+      echo 'Configurando ferramentas de backup...';
+      apk add --no-cache mariadb-client zip tzdata;
+      
+      echo 'Serviço de backup iniciado. Aguardando 02h00 da manhã...';
+      while true; do
+        HORA=$$(date +%H);
+        MINUTO=$$(date +%M);
+        
+        # Roda todo dia exatamente às 02h00
+        if [ \"$$HORA\" = \"02\" ] && [ \"$$MINUTO\" = \"00\" ]; then
+          DATA=$$(date +%Y-%m-%d_%H-%M);
+          echo \"[$$DATA] Iniciando backup automático...\";
+          
+          # Extrai o banco usando a rede do Docker
+          mysqldump -h speed_db -u speed_user -pspeed_password speed_banco > /tmp/banco_$$DATA.sql;
+          
+          # Compacta a pasta media e o banco, enviando direto pro HD do Windows
+          zip -r /mnt/windows/backup_speed_$$DATA.zip /app/media /tmp/banco_$$DATA.sql > /dev/null;
+          
+          # Limpa o lixo temporário
+          rm /tmp/banco_$$DATA.sql;
+          
+          # Faxina: Apaga backups com mais de 10 dias do Windows
+          find /mnt/windows -name 'backup_speed_*.zip' -mtime +10 -delete;
+          
+          echo \"[$$DATA] Backup finalizado e salvo no Windows com sucesso!\";
+          sleep 60; # Dorme 1 minuto para não correr o risco de rodar duas vezes no mesmo minuto
+        fi;
+        sleep 30; # Checa a hora a cada 30 segundos
+      done"
+
+# ==========================================
+# ⚙️ BLOCO ÚNICO DE VOLUMES LÁ NO FINAL
+# ==========================================
 volumes:
   speed_db_data:
+  
+  # A Mágica: Conexão direta com a rede Windows
+  backup_windows:
+    driver_opts:
+      type: cifs
+      # ⚠️ LEMBRE DE SUBSTITUIR AQUI PELOS SEUS DADOS DO WINDOWS:
+      o: "username=SEU_USUARIO_WINDOWS,password=SUA_SENHA_WINDOWS,vers=3.0,iocharset=utf8"
+      # Usamos 'd$$' com dois cifrões para o Docker não achar que é uma variável
+      device: "//192.168.90.53/d$$/Publica/Elias"

@@ -56,6 +56,7 @@ docker-compose up -d --build
 # LOGS DO CONTAINER:
 docker logs -f speed_sistema
 docker logs --tail 50 -f speed_sistema
+docker logs -f speed_backup_diario
 
 # Comando no docker:
 # Cria os arquivos de migração para todo mundo
@@ -68,6 +69,10 @@ docker exec -it speed_sistema python manage.py migrate
 
 # Sobre escrever o que tem no git:
 git push --force origin main
+
+O pacote do Linux: Mesmo o Docker fazendo o trabalho pesado, o "motor" do Linux hospedeiro precisa saber como falar com o Windows. No terminal do seu servidor Linux, você só precisa rodar este comando uma única vez na vida para dar essa habilidade ao servidor:
+Bash
+sudo apt-get update && sudo apt-get install cifs-utils -y
 
 
 Eu queria uma melhoria no meu sistema, eu queria que uma proposta fosse lincada a um prospecto e que um prospecto possa ter varias proposta.
