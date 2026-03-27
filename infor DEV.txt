@@ -70,6 +70,9 @@ docker exec -it speed_sistema python manage.py migrate
 # Sobre escrever o que tem no git:
 git push --force origin main
 
+# ALTERA BRANCH
+git checkout homolog
+
 O pacote do Linux: Mesmo o Docker fazendo o trabalho pesado, o "motor" do Linux hospedeiro precisa saber como falar com o Windows. No terminal do seu servidor Linux, você só precisa rodar este comando uma única vez na vida para dar essa habilidade ao servidor:
 Bash
 sudo apt-get update && sudo apt-get install cifs-utils -y
@@ -125,3 +128,5 @@ rm -rf tmp/ app/ backup_speed_*.zip
 É isso! Com esse único comando do docker exec -i, o banco de dados lê o .sql, destrói as tabelas corrompidas e recria todas elas exatamente como estavam no momento do backup.
 
 Gostaria de aproveitar que o sistema está todo "azeitado" e simular um teste de restore na prática com aquele .zip de teste que geramos, ou prefere seguir com o desenvolvimento do sistema web?
+
+
