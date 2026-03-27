@@ -158,7 +158,7 @@ volumes:
   backup_windows:
     driver_opts:
       type: cifs
-      # ⚠️ LEMBRE DE SUBSTITUIR AQUI PELOS SEUS DADOS DO WINDOWS:
-      o: "username=SEU_USUARIO_WINDOWS,password=SUA_SENHA_WINDOWS,vers=3.0,iocharset=utf8"
-      # Usamos 'd$$' com dois cifrões para o Docker não achar que é uma variável
-      device: "//192.168.90.53/d$$/Publica/Elias"
+      # Coloque AQUI O SEU USUÁRIO E SENHA de verdade, e note o domain=HOWBE:
+      o: "username=elias.neto,password=ColoqueSuaSenhaAqui,domain=HOWBE,vers=3.0,iocharset=utf8"
+      # Troque o d$$ pelo nome do compartilhamento real que você criou no Windows (Ex: Publica):
+      device: "//192.168.90.53/Publica"
