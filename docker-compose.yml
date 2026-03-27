@@ -103,9 +103,9 @@ services:
         sleep 3600;
       done"
 
-  # 🚀 O NOVO CONTAINER DE BACKUP
+  # 🚀 O NOVO CONTAINER DE BACKUP (BASEADO EM UBUNTU)
   speed_backup:
-    image: alpine:latest
+    image: ubuntu:22.04
     container_name: speed_backup_diario
     restart: always
     depends_on:
@@ -118,7 +118,7 @@ services:
     command: >
       sh -c "
       echo 'Configurando ferramentas de backup...';
-      apk add --no-cache mariadb-client zip tzdata;
+      apt-get update && apt-get install -y mysql-client zip tzdata;
       
       echo 'Serviço de backup iniciado. Aguardando 02h00 da manhã...';
       while true; do
@@ -130,7 +130,7 @@ services:
           DATA=$$(date +%Y-%m-%d_%H-%M);
           echo \"[$$DATA] Iniciando backup automático...\";
           
-          # Extrai o banco usando a rede do Docker
+          # Extrai o banco usando a rede do Docker (100% compatível com MySQL 8.0)
           mysqldump -h speed_db -u speed_user -pspeed_password speed_banco > /tmp/banco_$$DATA.sql;
           
           # Compacta a pasta media e o banco, enviando direto pro HD do Windows
@@ -154,9 +154,10 @@ services:
 volumes:
   speed_db_data:
   
+  # A Mágica: Conexão direta com a rede Windows
   backup_windows:
     driver_opts:
       type: cifs
-      # Removidas as aspas simples da senha:
+      # Sem aspas na senha e formatado corretamente para o Active Directory HOWBE
       o: "username=elias.neto,password=Gustavo@1027,domain=HOWBE,vers=3.0,iocharset=utf8"
       device: "//192.168.90.53/Publica"
