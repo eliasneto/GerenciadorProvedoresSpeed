@@ -81,3 +81,47 @@ cada proposta vai ter o status de "Em negociação". "Inviavel", "Proposta Aceit
 
 # COmando para rodar o backup:
 docker exec -it speed_backup_diario sh -c 'DATA=$(date +%Y-%m-%d_TESTE); mysqldump -h speed_db -u speed_user -pspeed_password speed_banco > /tmp/banco_$DATA.sql; zip -r /mnt/windows/backup_speed_$DATA.zip /app/media /tmp/banco_$DATA.sql > /dev/null; rm /tmp/banco_$DATA.sql; echo "Backup manual enviado para o Windows!"'
+
+# PASSO A PASSO HOLLBACK
+Elias, essa é a pergunta de ouro de todo engenheiro de software! Fazer o backup é só 50% do trabalho; os outros 50% são saber fazer o Restore (o rollback) no momento do desespero, quando o banco corrompe ou alguém apaga o que não devia.
+
+O processo de restauração no Docker é extremamente simples. Como o nosso backup salva tanto o banco de dados (.sql) quanto os anexos (media/) dentro de um .zip, o passo a passo é este:
+
+🚑 Guia de Sobrevivência: Restaurando o Banco de Dados
+Passo 1: Traga o arquivo de volta para o Linux
+Vá na sua máquina Windows, pegue o arquivo de backup desejado (ex: backup_speed_2026-03-27_02-00.zip) e copie ele para dentro do seu servidor Linux, na mesma pasta onde está o seu docker-compose.yml (~/SGP_Speed/GerenciadorProvedoresSpeed).
+(Você pode usar programas como WinSCP, FileZilla, ou o MobaXterm para arrastar o arquivo para lá).
+
+Passo 2: Descompacte o cofre
+No terminal do Linux, rode o comando para extrair o .zip:
+
+Bash
+unzip backup_speed_2026-03-27_02-00.zip
+Como nós configuramos o zip para salvar a estrutura exata, ele vai extrair duas coisas na sua pasta atual:
+
+Uma pasta tmp/ (com o seu arquivo .sql dentro).
+
+Uma pasta app/media/ (com os seus anexos).
+
+Passo 3: A Mágica do Restore (Injetando no Banco)
+Agora vamos pegar aquele arquivo .sql que está dentro da pasta tmp/ e "injetar" ele direto para dentro do container do MySQL que está rodando.
+
+Rode este comando (substituindo o nome do arquivo .sql pelo nome exato que foi extraído):
+
+Bash
+docker exec -i speed_mysql mysql -u root -proot_super_password speed_banco < tmp/banco_2026-03-27_02-00.sql
+⚠️ Detalhe Ninja: Note que usamos a setinha < apontando para a esquerda. Ela diz para o Linux: "Pegue todo o texto desse arquivo SQL e jogue para dentro do comando mysql lá no container".
+
+Passo 4: Restaurando os Anexos (Opcional)
+Se você também perdeu os arquivos físicos (fotos, PDFs, etc.) e precisa restaurar a pasta media, é só copiar os arquivos que foram extraídos em app/media/ para a sua pasta ./media verdadeira do projeto:
+
+Bash
+cp -r app/media/* ./media/
+🧹 Limpeza Pós-Crise
+Depois que o banco de dados voltar à vida e o sistema estiver rodando liso novamente, você pode apagar a sujeira que o unzip deixou no seu servidor Linux para não gastar espaço:
+
+Bash
+rm -rf tmp/ app/ backup_speed_*.zip
+É isso! Com esse único comando do docker exec -i, o banco de dados lê o .sql, destrói as tabelas corrompidas e recria todas elas exatamente como estavam no momento do backup.
+
+Gostaria de aproveitar que o sistema está todo "azeitado" e simular um teste de restore na prática com aquele .zip de teste que geramos, ou prefere seguir com o desenvolvimento do sistema web?
