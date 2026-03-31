@@ -1,6 +1,9 @@
 from django.db import models
 from dateutil.relativedelta import relativedelta
-from datetime import date
+from datetime import date, datetime
+from decimal import Decimal
+from django.conf import settings
+from django.utils import timezone
 
 class Partner(models.Model):
     """
@@ -8,6 +11,7 @@ class Partner(models.Model):
     """
     STATUS_CHOICES = [
         ('ativo', 'Ativo'),
+        ('aguardando_ativacao', 'Aguardando Ativação'),
         ('inativo', 'Inativo / Novo'),
         ('negociacao', 'Em Negociação'),
         ('andamento', 'Em Andamento (Reativar)'),
@@ -35,7 +39,32 @@ class Partner(models.Model):
         return self.nome_fantasia or self.razao_social or "Parceiro sem Nome"
 
 
+class ProposalMotivoInviavel(models.Model):
+    STATUS_CHOICES = [
+        ('ativo', 'Ativo'),
+        ('inativo', 'Inativo'),
+    ]
+
+    nome = models.CharField('Nome do Motivo', max_length=120, unique=True)
+    status = models.CharField('Status', max_length=10, choices=STATUS_CHOICES, default='ativo')
+    data_cadastro = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'Motivo de Proposta Inviável'
+        verbose_name_plural = 'Motivos de Proposta Inviável'
+        ordering = ['nome']
+
+    def __str__(self):
+        return self.nome
+
+
 class Proposal(models.Model):
+    STATUS_CHOICES = [
+        ('analise', 'Em Negociação'),
+        ('ativa', 'Convertida'),
+        ('encerrada', 'Inviavel'),
+    ]
+
     partner = models.ForeignKey(Partner, on_delete=models.CASCADE, related_name='proposals')
     
     # VÍNCULO COM CLIENTE
@@ -57,6 +86,9 @@ class Proposal(models.Model):
     )
     
     # --- DADOS TÉCNICOS ---
+    grupo_proposta_id = models.PositiveIntegerField('Grupo da Proposta', null=True, blank=True, db_index=True)
+    codigo_proposta = models.CharField('Código da Proposta', max_length=30, null=True, blank=True, db_index=True)
+    nome_proposta = models.CharField('Nome da Proposta', max_length=150, blank=True, null=True)
     os_numero = models.CharField('OS nº', max_length=50, blank=True, null=True)
     data_emissao = models.DateField('Data de Emissão', null=True, blank=True)
     velocidade = models.CharField('Velocidade', max_length=50, default='50 Mbps')
@@ -66,6 +98,7 @@ class Proposal(models.Model):
     perda_pacote = models.CharField('Perda de Pacote', max_length=10, default='<1%')
     interfaces = models.CharField('Interfaces', max_length=100, default='Gigabit Ethernet (elétrica)')
     ipv4_bloco = models.CharField('IPs (bloco)', max_length=50, default='IPv4 bloco/30')
+    designador = models.CharField('Designador', max_length=100, blank=True, null=True)
     trunk = models.CharField('Interface em Trunk?', max_length=3, default='Não')
     dhcp = models.CharField('DHCP habilitado?', max_length=3, default='Sim')
     latencia = models.IntegerField('Latência (ms)', default=50)
@@ -79,13 +112,28 @@ class Proposal(models.Model):
     inst_cep = models.CharField('CEP Instalação', max_length=20, blank=True, null=True)
     
     # --- COMERCIAL ---
+    ticket_cliente = models.DecimalField('Valor Mensal Cliente', max_digits=10, decimal_places=2, null=True, blank=True)
+    ticket_empresa = models.DecimalField('Target Empresa', max_digits=10, decimal_places=2, null=True, blank=True)
     valor_mensal = models.DecimalField('Valor Mensal', max_digits=10, decimal_places=2, null=True, blank=True)
-    taxa_instalacao = models.DecimalField('Taxa Instalação', max_digits=10, decimal_places=2, null=True, blank=True)
+    taxa_instalacao = models.DecimalField('Taxa de Instalação Parceiro', max_digits=10, decimal_places=2, null=True, blank=True)
     tempo_contrato = models.IntegerField('Tempo Contrato (meses)', default=24)
     email_faturamento = models.EmailField('E-mail Faturamento', blank=True, null=True)
-    valor_parceiro = models.DecimalField('Valor Pago ao parceiro', max_digits=10, decimal_places=2, null=True, blank=True)
+    valor_parceiro = models.DecimalField('Custo Parceiro', max_digits=10, decimal_places=2, null=True, blank=True)
+    resultado_mes_1 = models.DecimalField('Resultado Mês 1', max_digits=12, decimal_places=2, null=True, blank=True)
+    resultado_mensal = models.DecimalField('Resultado Mensal', max_digits=12, decimal_places=2, null=True, blank=True)
+    valor_total_proposta = models.DecimalField('Rentabilidade', max_digits=12, decimal_places=2, null=True, blank=True)
+    motivo_inviavel = models.ForeignKey(
+        ProposalMotivoInviavel,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='propostas',
+        verbose_name='Motivo da Proposta Inviável',
+    )
+    observacao_inviavel = models.CharField('Observação da Proposta Inviável', max_length=150, blank=True, null=True)
 
     # --- CONTROLE DE DATAS ---
+    status = models.CharField('Status da Proposta', max_length=20, choices=STATUS_CHOICES, default='analise')
     data_ativacao = models.DateField('Data de Ativação', null=True, blank=True)
     data_vencimento = models.DateField('Data de Vencimento', null=True, blank=True)
 
@@ -101,10 +149,43 @@ class Proposal(models.Model):
             return self.data_vencimento < date.today()
         return False
 
+    @property
+    def identificador_lote(self):
+        return self.grupo_proposta_id or self.id
+
+    @staticmethod
+    def montar_codigo_proposta(sequencial, referencia=None):
+        if referencia is None:
+            referencia = timezone.localdate() if settings.USE_TZ else date.today()
+        elif isinstance(referencia, datetime):
+            referencia = timezone.localtime(referencia).date() if timezone.is_aware(referencia) else referencia.date()
+        return f"{sequencial}{referencia:%d%m%Y}"
+
+    @property
+    def codigo_exibicao(self):
+        if self.codigo_proposta:
+            return self.codigo_proposta
+        referencia = self.data_emissao or self.data_ativacao or timezone.localdate()
+        return self.montar_codigo_proposta(self.identificador_lote, referencia)
+
     def save(self, *args, **kwargs):
         # Lógica: Cálculo automático do vencimento com base na ativação
         if self.data_ativacao and self.tempo_contrato:
             self.data_vencimento = self.data_ativacao + relativedelta(months=self.tempo_contrato)
+
+        mensal = self.valor_mensal or Decimal('0')
+        instalacao = self.taxa_instalacao or Decimal('0')
+        parceiro = self.valor_parceiro or Decimal('0')
+        vigencia = Decimal(str(self.tempo_contrato or 0))
+        self.resultado_mensal = mensal - parceiro
+        self.resultado_mes_1 = self.resultado_mensal + instalacao
+        if vigencia <= 0:
+            self.valor_total_proposta = Decimal('0')
+        elif vigencia == 1:
+            self.valor_total_proposta = self.resultado_mes_1
+        else:
+            self.valor_total_proposta = self.resultado_mes_1 + (self.resultado_mensal * (vigencia - Decimal('1')))
+
         super().save(*args, **kwargs)
 
     def __str__(self):

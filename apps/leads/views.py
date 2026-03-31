@@ -4,6 +4,7 @@ from django.shortcuts import render, get_object_or_404, redirect
 from django.core.paginator import Paginator
 from django.contrib import messages
 from django.contrib.contenttypes.models import ContentType
+from django.db import transaction
 from scripts.integracoes.Lastmile.APIGoogle_BuscaFornecedores import processar_planilha
 import os
 from django.http import HttpResponse, JsonResponse
@@ -14,11 +15,13 @@ from .models import Lead
 from .forms import LeadForm
 from partners.models import Partner, Proposal
 from partners.forms import ProposalForm
+from clientes.models import Endereco
 
 # IMPORTAÇÃO DA TIMELINE (HISTÓRICO)
 from core.models import RegistroHistorico
 
 from django.db.models import Q
+from decimal import Decimal, InvalidOperation
 import pandas as pd
 
 # 1. Cria a regra de verificação
@@ -29,6 +32,146 @@ def grupo_LastMile_required(user):
     # Se não for do grupo, joga um Erro 403 (Acesso Negado)
     raise PermissionDenied
 
+
+def _converter_lead_em_parceiro_rapido(lead, enderecos, user, ticket_cliente=None, ticket_empresa=None, nome_proposta=None):
+    """Cria ou reaproveita o parceiro e adiciona propostas sem remover o lead da cotacao."""
+    with transaction.atomic():
+        partner, created = Partner.objects.get_or_create(
+            cnpj_cpf=lead.cnpj_cpf,
+            defaults={
+                'nome_fantasia': lead.nome_fantasia or lead.razao_social,
+                'razao_social': lead.razao_social or lead.nome_fantasia,
+                'telefone': lead.telefone,
+                'contato_nome': lead.contato_nome,
+                'email': lead.email,
+                'status': 'ativo',
+            }
+        )
+
+        if not created:
+            campos_atualizados = []
+            if not partner.nome_fantasia and lead.nome_fantasia:
+                partner.nome_fantasia = lead.nome_fantasia
+                campos_atualizados.append('nome_fantasia')
+            if not partner.razao_social and lead.razao_social:
+                partner.razao_social = lead.razao_social
+                campos_atualizados.append('razao_social')
+            if not partner.telefone and lead.telefone:
+                partner.telefone = lead.telefone
+                campos_atualizados.append('telefone')
+            if not partner.contato_nome and lead.contato_nome:
+                partner.contato_nome = lead.contato_nome
+                campos_atualizados.append('contato_nome')
+            if not partner.email and lead.email:
+                partner.email = lead.email
+                campos_atualizados.append('email')
+            if partner.status != 'ativo':
+                partner.status = 'ativo'
+                campos_atualizados.append('status')
+
+            if campos_atualizados:
+                partner.save(update_fields=campos_atualizados)
+
+        proposta_base = Proposal.objects.create(
+            partner=partner,
+            cliente=enderecos[0].cliente,
+            client_address=enderecos[0],
+            nome_proposta=nome_proposta,
+            ticket_cliente=ticket_cliente,
+            ticket_empresa=ticket_empresa,
+        )
+        proposta_base.grupo_proposta_id = proposta_base.id
+        proposta_base.codigo_proposta = Proposal.montar_codigo_proposta(proposta_base.grupo_proposta_id)
+        proposta_base.save(update_fields=['grupo_proposta_id', 'codigo_proposta'])
+
+        proposal_type = ContentType.objects.get_for_model(Proposal)
+        RegistroHistorico.objects.create(
+            tipo='sistema',
+            acao=(
+                "Proposta criada a partir da cotacao.\n\n"
+                f"ID da proposta: #{proposta_base.codigo_exibicao}\n"
+                f"Cliente: {proposta_base.cliente or '--'}\n"
+                f"Unidade: {proposta_base.client_address or '--'}"
+            ),
+            usuario=user,
+            content_type=proposal_type,
+            object_id=proposta_base.id
+        )
+
+        for endereco_extra in enderecos[1:]:
+            clone = Proposal.objects.get(pk=proposta_base.pk)
+            clone.pk = None
+            clone.grupo_proposta_id = proposta_base.grupo_proposta_id
+            clone.codigo_proposta = proposta_base.codigo_proposta
+            clone.nome_proposta = proposta_base.nome_proposta
+            clone.client_address = endereco_extra
+            clone.cliente = endereco_extra.cliente
+            clone.save()
+            RegistroHistorico.objects.create(
+                tipo='sistema',
+                acao=(
+                    "Proposta criada a partir da cotacao.\n\n"
+                    f"ID da proposta: #{clone.codigo_exibicao}\n"
+                    f"Cliente: {clone.cliente or '--'}\n"
+                    f"Unidade: {clone.client_address or '--'}"
+                ),
+                usuario=user,
+                content_type=proposal_type,
+                object_id=clone.id
+            )
+
+        lead_type = ContentType.objects.get_for_model(Lead)
+        partner_type = ContentType.objects.get_for_model(Partner)
+
+        dados_vinculo = [f"Cliente Final: {enderecos[0].cliente}"]
+        for endereco in enderecos:
+            dados_vinculo.append(f"Unidade de Instalacao: {endereco}")
+
+        mensagem_base = (
+            f"{len(enderecos)} link(s) criado(s).\n\n"
+            "VINCULO RELACIONAL:\n"
+            + "\n".join(dados_vinculo)
+        )
+
+        RegistroHistorico.objects.create(
+            tipo='sistema',
+            acao=(
+                ("Parceiro reaproveitado para nova abertura de proposta.\n\n" if not created else "Proposta rapida aberta a partir da cotacao.\n\n")
+                + mensagem_base
+            ),
+            usuario=user,
+            content_type=partner_type,
+            object_id=partner.id
+        )
+
+        RegistroHistorico.objects.create(
+            tipo='sistema',
+            acao=(
+                ("Nova proposta vinculada a parceiro existente.\n\n" if not created else "Proposta rapida aberta a partir da cotacao.\n\n")
+                + mensagem_base
+                + f"\n\nRegistro mantido na base de cotacao para acompanhamento. Parceiro vinculado: {partner}."
+            ),
+            usuario=user,
+            content_type=lead_type,
+            object_id=lead.id
+        )
+
+    return partner
+
+
+def _parse_ticket_value(raw_value):
+    if not raw_value:
+        return None
+
+    valor_limpo = raw_value.strip().replace('R$', '').replace(' ', '')
+    if ',' in valor_limpo:
+        valor_limpo = valor_limpo.replace('.', '').replace(',', '.')
+
+    try:
+        return Decimal(valor_limpo)
+    except (InvalidOperation, AttributeError):
+        return None
+
 @user_passes_test(grupo_LastMile_required)
 @login_required
 def lead_list(request):
@@ -38,7 +181,6 @@ def lead_list(request):
 
     # 2. Captura os parâmetros digitados nos filtros (se houver)
     busca_empresa = request.GET.get('empresa', '')
-    busca_status = request.GET.get('status', '')
     busca_cidade = request.GET.get('cidade', '')
     busca_estado = request.GET.get('estado', '')
 
@@ -50,9 +192,6 @@ def lead_list(request):
             Q(razao_social__icontains=busca_empresa)
         )
     
-    if busca_status:
-        leads_list = leads_list.filter(status=busca_status)
-        
     if busca_cidade:
         leads_list = leads_list.filter(cidade__icontains=busca_cidade)
         
@@ -63,12 +202,30 @@ def lead_list(request):
     paginator = Paginator(leads_list, 10)
     page_number = request.GET.get('page')
     page_obj = paginator.get_page(page_number)
+
+    lead_docs = [lead.cnpj_cpf for lead in page_obj.object_list if lead.cnpj_cpf]
+    parceiros_por_documento = {
+        partner.cnpj_cpf: partner
+        for partner in Partner.objects.filter(cnpj_cpf__in=lead_docs).prefetch_related('proposals')
+    }
+
+    for lead in page_obj.object_list:
+        partner_relacionado = parceiros_por_documento.get(lead.cnpj_cpf)
+        lead.partner_relacionado = partner_relacionado
+        if partner_relacionado:
+            propostas_em_negociacao = partner_relacionado.proposals.filter(status='analise')
+            codigos_unicos = {
+                proposal.codigo_proposta or f"proposal-{proposal.pk}"
+                for proposal in propostas_em_negociacao
+            }
+            lead.total_propostas_relacionadas = len(codigos_unicos)
+        else:
+            lead.total_propostas_relacionadas = 0
     
     # 5. Manda as variáveis de volta para a tela (para os campos não ficarem em branco após filtrar)
     context = {
         'page_obj': page_obj,
         'busca_empresa': busca_empresa,
-        'busca_status': busca_status,
         'busca_cidade': busca_cidade,
         'busca_estado': busca_estado,
     }
@@ -78,7 +235,7 @@ def lead_list(request):
 @user_passes_test(grupo_LastMile_required)
 @login_required
 def lead_create(request):
-    """Criação de novos leads de prospecção"""
+    """Criação de novos leads de cotação"""
     if request.method == 'POST':
         form = LeadForm(request.POST)
         if form.is_valid():
@@ -147,7 +304,7 @@ def lead_delete(request, pk):
     lead = get_object_or_404(Lead, pk=pk)
     if request.method == 'POST':
         lead.delete()
-        messages.warning(request, "Lead removido da base de prospecção.")
+        messages.warning(request, "Lead removido da base de cotação.")
         return redirect('lead_list')
     return redirect('lead_list')
 
@@ -221,7 +378,7 @@ def update_lead_status(request, pk):
                 
                 RegistroHistorico.objects.create(
                     tipo='sistema',
-                    acao=f"🔄 Status da prospecção alterado de [{nome_antigo}] para [EM NEGOCIAÇÃO].",
+                    acao=f"🔄 Status da cotação alterado de [{nome_antigo}] para [EM NEGOCIAÇÃO].",
                     usuario=request.user,
                     content_type=ContentType.objects.get_for_model(Lead),
                     object_id=lead.id
@@ -231,6 +388,71 @@ def update_lead_status(request, pk):
             return redirect('lead_list')
         
     return redirect('lead_list')
+
+
+@user_passes_test(grupo_LastMile_required)
+@login_required
+def lead_quick_proposal(request, pk):
+    """Abertura rápida de proposta diretamente na lista de leads."""
+    if request.method != 'POST':
+        return redirect('lead_list')
+
+    lead = get_object_or_404(Lead, pk=pk)
+    cliente_id = request.POST.get('cliente_id')
+    enderecos_ids = request.POST.getlist('enderecos_selecionados')
+    nome_proposta = (request.POST.get('nome_proposta') or '').strip()
+    ticket_cliente = _parse_ticket_value(request.POST.get('ticket_cliente'))
+    ticket_empresa = _parse_ticket_value(request.POST.get('ticket_empresa'))
+
+    if not lead.cnpj_cpf:
+        messages.error(request, "Não é possível abrir a proposta: o lead precisa ter CNPJ/CPF cadastrado.")
+        return redirect('lead_list')
+
+    if not cliente_id:
+        messages.error(request, "Selecione o cliente final para abrir a proposta.")
+        return redirect('lead_list')
+
+    if not enderecos_ids:
+        messages.error(request, "Selecione pelo menos um login/unidade para abrir a proposta.")
+        return redirect('lead_list')
+
+    if not nome_proposta:
+        messages.error(request, "Informe o nome da proposta para continuar.")
+        return redirect('lead_list')
+
+    if request.POST.get('ticket_cliente') and ticket_cliente is None:
+        messages.error(request, "Informe um valor válido para o ticket do cliente.")
+        return redirect('lead_list')
+
+    if request.POST.get('ticket_empresa') and ticket_empresa is None:
+        messages.error(request, "Informe um valor válido para o ticket da empresa.")
+        return redirect('lead_list')
+
+    enderecos = list(
+        Endereco.objects.filter(
+            cliente_id=cliente_id,
+            pk__in=enderecos_ids,
+        ).select_related('cliente')
+    )
+
+    if len(enderecos) != len(set(enderecos_ids)):
+        messages.error(request, "Os logins selecionados não pertencem ao cliente informado.")
+        return redirect('lead_list')
+
+    partner = _converter_lead_em_parceiro_rapido(
+        lead,
+        enderecos,
+        request.user,
+        ticket_cliente=ticket_cliente,
+        ticket_empresa=ticket_empresa,
+        nome_proposta=nome_proposta or None,
+    )
+    messages.success(
+        request,
+        f"Proposta aberta com sucesso! {len(enderecos)} link(s) criado(s) para {partner.nome_fantasia or partner.razao_social}.",
+    )
+    return redirect('partner_detail', pk=partner.pk)
+
 
 @user_passes_test(grupo_LastMile_required)
 @login_required
@@ -268,13 +490,46 @@ def lead_convert(request, pk):
             proposta_base.client_address = primeiro_endereco
             proposta_base.cliente = primeiro_endereco.cliente
             proposta_base.save() # Cria Proposta Principal
+            proposta_base.grupo_proposta_id = proposta_base.id
+            proposta_base.codigo_proposta = Proposal.montar_codigo_proposta(proposta_base.grupo_proposta_id)
+            proposta_base.save(update_fields=['grupo_proposta_id', 'codigo_proposta'])
+
+            proposal_type = ContentType.objects.get_for_model(Proposal)
+            RegistroHistorico.objects.create(
+                tipo='sistema',
+                acao=(
+                    "Proposta criada na conversao do lead.\n\n"
+                    f"ID da proposta: #{proposta_base.codigo_exibicao}\n"
+                    f"Cliente: {proposta_base.cliente or '--'}\n"
+                    f"Unidade: {proposta_base.client_address or '--'}"
+                ),
+                usuario=request.user,
+                content_type=proposal_type,
+                object_id=proposta_base.id
+            )
 
             for end_id in enderecos_ids:
                 endereco_extra = get_object_or_404(Endereco, pk=end_id)
                 clone = Proposal.objects.get(pk=proposta_base.pk)
                 clone.pk = None
+                clone.grupo_proposta_id = proposta_base.grupo_proposta_id
+                clone.codigo_proposta = proposta_base.codigo_proposta
+                clone.nome_proposta = proposta_base.nome_proposta
                 clone.client_address = endereco_extra
+                clone.cliente = endereco_extra.cliente
                 clone.save()
+                RegistroHistorico.objects.create(
+                    tipo='sistema',
+                    acao=(
+                        "Proposta criada na conversao do lead.\n\n"
+                        f"ID da proposta: #{clone.codigo_exibicao}\n"
+                        f"Cliente: {clone.cliente or '--'}\n"
+                        f"Unidade: {clone.client_address or '--'}"
+                    ),
+                    usuario=request.user,
+                    content_type=proposal_type,
+                    object_id=clone.id
+                )
 
             # --- TRANSFERÊNCIA DO HISTÓRICO SPEED ---
             lead_type = ContentType.objects.get_for_model(Lead)

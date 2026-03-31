@@ -1,0 +1,126 @@
+{% extends "core/base.html" %}
+
+{% block title %}Speed | Histórico da Proposta{% endblock %}
+
+{% block content %}
+<div class="p-6 md:p-10 max-w-6xl mx-auto">
+    {% if messages %}
+    <div class="mb-8 space-y-3">
+        {% for message in messages %}
+        <div class="flex items-center gap-3 p-4 rounded-2xl border {% if message.tags == 'error' %}bg-red-50 border-red-100 text-red-700{% else %}bg-green-50 border-green-100 text-green-700{% endif %}">
+            <i data-lucide="{% if message.tags == 'error' %}alert-circle{% else %}check-circle{% endif %}" class="w-5 h-5"></i>
+            <p class="text-sm font-bold">{{ message }}</p>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    <div class="flex flex-col xl:flex-row xl:items-center justify-between gap-5 mb-8">
+        <div class="flex items-center gap-4 min-w-0">
+            <a href="{% url 'partner_detail' partner.pk %}" class="p-3 bg-white border border-gray-100 rounded-2xl hover:bg-gray-50 transition shadow-sm shrink-0">
+                <i data-lucide="chevron-left" class="w-6 h-6 text-gray-400"></i>
+            </a>
+            <div class="min-w-0">
+                <h1 class="text-3xl font-black text-gray-900 uppercase italic leading-none truncate">
+                    Proposta #{{ proposal.codigo_exibicao }}
+                </h1>
+                <p class="text-sm text-gray-500 mt-2 font-bold uppercase tracking-widest">
+                    {{ partner.nome_fantasia|default:partner.razao_social }} <span class="text-ageis-yellow">/</span> {{ proposal.client_address.login_ixc|default:"Sem login" }}
+                </p>
+            </div>
+        </div>
+
+        <a href="{% url 'proposal_update' proposal.pk %}" class="inline-flex items-center justify-center gap-3 bg-ageis-yellow text-black font-black px-8 py-4 rounded-2xl shadow-xl shadow-yellow-500/20 hover:scale-[1.02] active:scale-95 transition-all uppercase italic tracking-tighter">
+            <i data-lucide="settings-2" class="w-5 h-5"></i> Editar Proposta
+        </a>
+    </div>
+
+    <div class="grid grid-cols-1 xl:grid-cols-3 gap-8">
+        <div class="xl:col-span-1">
+            <div class="bg-white rounded-[2rem] border border-gray-100 shadow-sm p-6 space-y-4">
+                <div>
+                    <p class="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-2">ID Proposta</p>
+                    <a href="{% url 'proposal_batch_detail' proposal.pk %}" class="text-lg font-black text-gray-900 italic hover:text-ageis-yellow transition">#{{ proposal.codigo_exibicao }}</a>
+                </div>
+                <div>
+                    <p class="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-2">Cliente</p>
+                    <p class="text-sm font-black text-gray-900">{{ proposal.cliente|default:"--" }}</p>
+                </div>
+                <div>
+                    <p class="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-2">Login / Unidade</p>
+                    <p class="text-sm font-black text-blue-700">{{ proposal.client_address.login_ixc|default:"[Sem login]" }}</p>
+                    <p class="text-[11px] text-gray-500 font-bold mt-1">{{ proposal.client_address|default:"Sem unidade vinculada" }}</p>
+                </div>
+                <div>
+                    <p class="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-2">Status</p>
+                    <span class="inline-flex px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest {% if proposal.status == 'ativa' %}bg-green-100 text-green-700{% elif proposal.status == 'encerrada' %}bg-red-100 text-red-700{% else %}bg-yellow-100 text-yellow-700{% endif %}">
+                        {{ proposal.get_status_display }}
+                    </span>
+                    <p class="text-[11px] font-bold text-gray-400 mt-3">O status é controlado na tela do lote da proposta.</p>
+                </div>
+                <div>
+                    <p class="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-2">Valor</p>
+                    <p class="text-lg font-black text-green-600">R$ {{ proposal.valor_mensal|default:"--" }}</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="xl:col-span-2">
+            <div class="bg-white rounded-[2rem] border border-gray-100 shadow-sm overflow-hidden">
+                <div class="px-6 py-5 border-b border-gray-100 bg-gray-50/40">
+                    <h2 class="text-sm font-black uppercase tracking-widest text-gray-900">Linha do Tempo da Proposta</h2>
+                    <p class="text-xs text-gray-500 font-bold mt-1">Comentários, anexos e logs desta proposta individual.</p>
+                </div>
+
+                <div class="p-6 border-b border-gray-100 bg-white">
+                    <form method="POST" action="{% url 'proposal_add_historico' proposal.pk %}" enctype="multipart/form-data" class="space-y-4">
+                        {% csrf_token %}
+                        <textarea name="descricao" rows="4" placeholder="Descreva um comentário, negociação ou observação desta proposta..." class="w-full p-4 bg-gray-50 border border-gray-200 text-gray-900 rounded-2xl outline-none focus:ring-2 focus:ring-ageis-yellow transition-all font-bold"></textarea>
+                        <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                            <input type="file" name="arquivo" class="block w-full text-sm text-gray-500 file:mr-4 file:py-3 file:px-4 file:rounded-xl file:border-0 file:bg-gray-100 file:text-gray-700 file:font-black hover:file:bg-gray-200">
+                            <button type="submit" class="inline-flex items-center justify-center gap-2 bg-ageis-black text-ageis-yellow font-black px-6 py-3 rounded-2xl shadow-xl hover:bg-gray-800 transition-all uppercase italic tracking-tighter whitespace-nowrap">
+                                <i data-lucide="send" class="w-4 h-4"></i> Registrar
+                            </button>
+                        </div>
+                    </form>
+                </div>
+
+                <div class="p-6 space-y-4">
+                    {% for item in historico %}
+                    <div class="rounded-[1.5rem] border border-gray-100 bg-gray-50/50 p-5">
+                        <div class="flex flex-col md:flex-row md:items-center justify-between gap-3 mb-3">
+                            <div class="flex items-center gap-3">
+                                <span class="inline-flex px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest {% if item.tipo == 'comentario' %}bg-blue-100 text-blue-700{% elif item.tipo == 'anexo' %}bg-purple-100 text-purple-700{% else %}bg-gray-200 text-gray-700{% endif %}">
+                                    {{ item.get_tipo_display }}
+                                </span>
+                                <span class="text-xs font-black text-gray-500 uppercase tracking-widest">{{ item.usuario|default:"Sistema" }}</span>
+                            </div>
+                            <span class="text-xs font-bold text-gray-400">{{ item.data|date:"d/m/Y H:i" }}</span>
+                        </div>
+                        {% if item.acao %}
+                        <p class="text-sm text-gray-700 font-medium whitespace-pre-line">{{ item.acao }}</p>
+                        {% endif %}
+                        {% if item.arquivo %}
+                        <div class="mt-4">
+                            <a href="{{ item.arquivo.url }}" target="_blank" class="inline-flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 rounded-xl text-xs font-black text-gray-700 hover:text-ageis-yellow transition">
+                                <i data-lucide="paperclip" class="w-4 h-4"></i> Abrir anexo
+                            </a>
+                        </div>
+                        {% endif %}
+                    </div>
+                    {% empty %}
+                    <div class="py-16 text-center text-gray-400">
+                        <i data-lucide="history" class="w-10 h-10 mx-auto mb-3 opacity-30"></i>
+                        <p class="font-black uppercase italic text-sm">Nenhum histórico registrado nesta proposta</p>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    lucide.createIcons();
+</script>
+{% endblock %}

@@ -16,7 +16,13 @@ urlpatterns = [
     path('<int:pk>/historico/add/', views.partner_add_historico, name='partner_add_historico'),
     path('status/<int:pk>/', views.update_partner_status, name='update_partner_status'),
     path('<int:partner_pk>/proposta/nova/', views.proposal_create, name='proposal_create'),
+    path('proposta/<int:pk>/lote/', views.proposal_batch_detail, name='proposal_batch_detail'),
+    path('proposta/<int:pk>/lote/status/', views.proposal_batch_status_update, name='proposal_batch_status_update'),
+    path('proposta/<int:pk>/lote/historico/add/', views.proposal_batch_add_historico, name='proposal_batch_add_historico'),
+    path('proposta/<int:pk>/', views.proposal_detail, name='proposal_detail'),
     path('proposta/<int:pk>/editar/', views.proposal_update, name='proposal_update'),
+    path('proposta/<int:pk>/historico/add/', views.proposal_add_historico, name='proposal_add_historico'),
+    path('proposta/<int:pk>/status/', views.proposal_status_update, name='proposal_status_update'),
     path('proposta/<int:pk>/deletar/', views.proposal_delete, name='proposal_delete'),
     path('endereco/<int:address_id>/propostas/', views.address_proposals_list, name='address_proposals_list'),
 ]

@@ -1,16 +1,22 @@
 import os
 import sys
-import ldap
 from pathlib import Path
-from dotenv import load_dotenv
+
 from decouple import config
-from django_auth_ldap.config import LDAPSearch, ActiveDirectoryGroupType
+from dotenv import load_dotenv
 
 # ============================================
 #  CARREGA VARIÁVEIS DE AMBIENTE
 # ============================================
 load_dotenv()
 USE_AD_AUTH = os.getenv("USE_AD_AUTH", "false").lower() == "true"
+
+if USE_AD_AUTH:
+    try:
+        import ldap
+        from django_auth_ldap.config import LDAPSearch
+    except ImportError:
+        USE_AD_AUTH = False
 
 # Build paths inside the project
 BASE_DIR = Path(__file__).resolve().parent.parent

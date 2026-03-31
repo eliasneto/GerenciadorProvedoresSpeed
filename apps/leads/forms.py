@@ -7,7 +7,7 @@ class LeadForm(forms.ModelForm):
         fields = [
             'razao_social', 'cnpj_cpf', 'nome_fantasia', 'site',
             'endereco', 'cidade', 'estado', 
-            'contato_nome', 'email', 'telefone', 'status',
+            'contato_nome', 'email', 'telefone',
             'instagram_username', 'instagram_url'  # 🚀 Adicionados aqui!
         ]
     

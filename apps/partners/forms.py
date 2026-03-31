@@ -12,6 +12,7 @@ class PartnerForm(forms.ModelForm):
         ]
 
     def __init__(self, *args, **kwargs):
+        lock_relationship_fields = kwargs.pop('lock_relationship_fields', False)
         super().__init__(*args, **kwargs)
         for field in self.fields.values():
             field.widget.attrs.update({
@@ -28,18 +29,18 @@ class ProposalForm(forms.ModelForm):
         model = Proposal
         fields = [
             # VÍNCULOS RELACIONAIS
-            'cliente', 'client_address', 
+            'cliente', 'client_address', 'status', 'nome_proposta',
             
             # DADOS TÉCNICOS
             'velocidade', 'tecnologia', 'disponibilidade', 'mttr', 
-            'perda_pacote', 'latencia', 'interfaces', 'ipv4_bloco',
+            'perda_pacote', 'latencia', 'interfaces', 'ipv4_bloco', 'designador',
             'trunk', 'dhcp', 'prazo_ativacao',
 
             # --- CONTATO SUPORTE---
             'contato_suporte', 'telefone_suporte',
             
             # COMERCIAL
-            'valor_mensal', 'taxa_instalacao', 'valor_parceiro', 'tempo_contrato', 'email_faturamento'
+            'ticket_cliente', 'valor_mensal', 'ticket_empresa', 'taxa_instalacao', 'valor_parceiro', 'tempo_contrato', 'email_faturamento'
         ]
 
         # CONTATOS SUPORTE LABEL
@@ -49,6 +50,7 @@ class ProposalForm(forms.ModelForm):
         }
 
     def __init__(self, *args, **kwargs):
+        lock_relationship_fields = kwargs.pop('lock_relationship_fields', False)
         super().__init__(*args, **kwargs)
         
         # 1. SOLUÇÃO DO ERRO DE SALVAMENTO:
@@ -56,11 +58,17 @@ class ProposalForm(forms.ModelForm):
         # ter acesso a todos os endereços no backend para validar o ID enviado.
         self.fields['client_address'].queryset = Endereco.objects.all()
         self.fields['client_address'].required = False
+        self.fields['nome_proposta'].required = True
 
         # 2. FLEXIBILIDADE DE CAMPOS (Prazo de Ativação):
         # Conforme seu pedido, deixamos o prazo opcional para esta tela.
         if 'prazo_ativacao' in self.fields:
             self.fields['prazo_ativacao'].required = False
+
+        if lock_relationship_fields:
+            self.fields['cliente'].disabled = True
+            self.fields['status'].disabled = True
+            self.fields['client_address'].disabled = True
 
         # 3. ESTILIZAÇÃO AGEIS DE ALTO CONTRASTE:
         # Trocamos bg-gray-50 por bg-gray-100 para destacar os campos no fundo branco.

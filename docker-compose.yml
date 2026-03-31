@@ -2,6 +2,7 @@ services:
   speed_db:
     image: mysql:8.0
     container_name: speed_mysql_homolog
+    init: true
     restart: always
     environment:
       - TZ=America/Fortaleza
@@ -17,6 +18,7 @@ services:
   speed_web:
     build: .
     container_name: speed_sistema_homolog
+    init: true
     restart: always
     ports:
       - "8091:8000"
@@ -50,6 +52,7 @@ services:
   speed_sincronizador:
     build: .
     container_name: speed_sincronizador_ixc_homolog
+    init: true
     restart: always
     environment:
       - TZ=America/Fortaleza
@@ -102,6 +105,7 @@ services:
   speed_backup:
     image: ubuntu:22.04
     container_name: speed_backup_diario_homolog
+    init: true
     restart: always
     depends_on:
       - speed_db
@@ -131,14 +135,15 @@ services:
           # 2. Compacta LOCALMENTE no Linux primeiro (Evita arquivo de 0 KB na rede)
           zip -r /tmp/backup_speed_$$DATA.zip /app/media /tmp/banco_$$DATA.sql > /dev/null;
           
-          # 3. Copia o arquivo pronto para o Windows
-          cp /tmp/backup_speed_$$DATA.zip /mnt/windows/;
+          # 3. Copia o arquivo pronto para a pasta de homolog no Windows
+          mkdir -p /mnt/windows/Elias_Homolog;
+          cp /tmp/backup_speed_$$DATA.zip /mnt/windows/Elias_Homolog/;
           
           # 4. Limpa todo o lixo local do Linux
           rm /tmp/banco_$$DATA.sql /tmp/backup_speed_$$DATA.zip;
           
-          # 5. Faxina: Apaga backups com mais de 10 dias do Windows
-          find /mnt/windows -name 'backup_speed_*.zip' -mtime +10 -delete;
+          # 5. Faxina: Apaga backups com mais de 10 dias da pasta de homolog
+          find /mnt/windows/Elias_Homolog -name 'backup_speed_*.zip' -mtime +10 -delete;
           
           echo \"[$$DATA] Backup finalizado e salvo no Windows com sucesso!\";
           sleep 60; # Dorme 1 minuto para não correr o risco de rodar duas vezes
@@ -153,4 +158,4 @@ volumes:
     driver_opts:
       type: cifs
       o: "username=elias.neto,password=Gustavo@1027,domain=HOWBE,vers=3.0,iocharset=utf8,file_mode=0777,dir_mode=0777"
-      device: "//192.168.90.53/Publica/Elias_Homolog"
+      device: "//192.168.90.53/Publica"

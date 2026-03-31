@@ -34,7 +34,7 @@ def import_prospects(request):
                             'contato_nome': row.get('Contato', 'A definir'),
                             'email': row.get('Email', 'import@ageis.com'),
                             'telefone': str(row.get('Telefone', '')),
-                            'status': 'prospeccao', # Já entra como prospecto
+                            'status': 'inativo', # Já entra fora da base ativa
                         }
                     )
                     success_count += 1
@@ -67,7 +67,7 @@ def download_template(request):
     # Gerando o arquivo na memória (BytesIO)
     output = BytesIO()
     with pd.ExcelWriter(output, engine='openpyxl') as writer:
-        df.to_excel(writer, index=False, sheet_name='Importar_Prospecção')
+        df.to_excel(writer, index=False, sheet_name='Importar_Cotacao')
     
     response = HttpResponse(
         output.getvalue(),
@@ -106,7 +106,7 @@ def import_prospects(request):
                         'contato_nome': row.get('CONTATO_NOME', 'A definir'),
                         'email': row.get('EMAIL', 'import@ageis.com'),
                         'telefone': str(row.get('TELEFONE', '')),
-                        'status': 'prospeccao' # Garante que entre no funil
+                        'status': 'inativo' # Garante que entre fora da base ativa
                     }
                 )
                 
