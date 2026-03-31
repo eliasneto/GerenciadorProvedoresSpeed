@@ -132,7 +132,7 @@
                 <span class="text-sm font-semibold">Dashboard</span>
             </a>
 
-            {% if request.user|has_group:"LastMile" or request.user|has_group:"Parceiros" or request.user|has_group:"BackOffice" %}
+            {% if request.user|has_group:"LastMile" or request.user|has_group:"Parceiro" or request.user|has_group:"Backoffice" %}
             <p class="text-[10px] uppercase text-gray-600 font-extrabold px-4 py-3 tracking-widest mt-6">Operações</p>
             {% endif %}
 
@@ -164,10 +164,10 @@
             </div>
             {% endif %}
 
-            {% if request.user|has_group:"BackOffice" %}
+            {% if request.user|has_group:"Backoffice" %}
             <div class="mb-1 relative">
                 <button onclick="toggleSubmenu('submenu-backoffice', 'seta-backoffice')" class="w-full flex items-center justify-between px-4 py-3 rounded-xl transition-all duration-200 group {% if 'cotacao' in request.path %} text-ageis-yellow bg-white/5 {% else %} text-gray-400 hover:text-white hover:bg-white/5 {% endif %}">
-                    <div class="flex items-center gap-3"><i data-lucide="briefcase" class="w-5 h-5 group-hover:scale-110 transition-transform"></i><span class="text-sm font-semibold">BackOffice</span></div>
+                    <div class="flex items-center gap-3"><i data-lucide="briefcase" class="w-5 h-5 group-hover:scale-110 transition-transform"></i><span class="text-sm font-semibold">Backoffice</span></div>
                     <i data-lucide="chevron-down" id="seta-backoffice" class="w-4 h-4 transition-transform duration-300 {% if 'cotacao' in request.path %} rotate-180 {% endif %}"></i>
                 </button>
                 <div id="submenu-backoffice" class="{% if 'cotacao' not in request.path %}hidden{% endif %} flex flex-col gap-1 bg-black/20 rounded-xl mt-1 py-2 overflow-hidden">

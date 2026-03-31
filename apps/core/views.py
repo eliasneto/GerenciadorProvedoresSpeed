@@ -14,9 +14,9 @@ def grupo_Administrador_required(user):
         return True
     raise PermissionDenied
 
-# 🚀 NOVA REGRA: Libera para todo mundo da operação (LastMile, Parceiros, BackOffice) e Admins
+# 🚀 NOVA REGRA: Libera para todo mundo da operação (LastMile, Parceiro, Backoffice) e Admins
 def grupo_Operacao_required(user):
-    grupos_permitidos = ['Administrador', 'LastMile', 'Parceiros', 'BackOffice']
+    grupos_permitidos = ['Administrador', 'LastMile', 'Parceiro', 'Backoffice']
     if user.groups.filter(name__in=grupos_permitidos).exists() or user.is_superuser:
         return True
     raise PermissionDenied
