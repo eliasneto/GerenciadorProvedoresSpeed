@@ -21,6 +21,11 @@ class PartnerForm(forms.ModelForm):
             })
 
 class ProposalForm(forms.ModelForm):
+    partner_cnpj_cpf = forms.CharField(
+        label='CNPJ do Parceiro',
+        required=False,
+        max_length=20,
+    )
     """
     Formulário Técnico da OS Normalizado.
     Versão corrigida para Chained Dropdowns e campos técnicos opcionais.
@@ -59,6 +64,10 @@ class ProposalForm(forms.ModelForm):
         self.fields['client_address'].queryset = Endereco.objects.all()
         self.fields['client_address'].required = False
         self.fields['nome_proposta'].required = True
+        self.fields['partner_cnpj_cpf'].initial = (
+            self.instance.partner.cnpj_cpf if self.instance and self.instance.partner_id else ''
+        )
+        self.fields['partner_cnpj_cpf'].required = bool(lock_relationship_fields)
 
         # 2. FLEXIBILIDADE DE CAMPOS (Prazo de Ativação):
         # Conforme seu pedido, deixamos o prazo opcional para esta tela.
@@ -81,3 +90,19 @@ class ProposalForm(forms.ModelForm):
         if 'client_address' in self.fields:
             self.fields['client_address'].label = "Unidade de Instalação"
             self.fields['cliente'].label = "Cliente Final"
+
+    def clean_partner_cnpj_cpf(self):
+        valor = (self.cleaned_data.get('partner_cnpj_cpf') or '').strip()
+        partner = getattr(self.instance, 'partner', None)
+
+        if not valor:
+            return valor
+
+        conflito = Partner.objects.filter(cnpj_cpf=valor)
+        if partner and partner.pk:
+            conflito = conflito.exclude(pk=partner.pk)
+
+        if conflito.exists():
+            raise forms.ValidationError('JÃ¡ existe outro parceiro com este CNPJ/CPF.')
+
+        return valor

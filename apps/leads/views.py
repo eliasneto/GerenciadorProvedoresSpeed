@@ -26,6 +26,8 @@ import pandas as pd
 
 # 1. Cria a regra de verificação
 def grupo_LastMile_required(user):
+    if not user.is_authenticated:
+        return False
     # O Superuser (você) sempre passa. Os outros precisam estar no grupo.
     if user.groups.filter(name='LastMile').exists() or user.is_superuser:
         return True
@@ -33,44 +35,108 @@ def grupo_LastMile_required(user):
     raise PermissionDenied
 
 
+def _nomes_candidatos_lead(lead):
+    nomes = []
+    vistos = set()
+    for valor in [lead.nome_fantasia, lead.razao_social]:
+        valor_limpo = (valor or '').strip()
+        chave = valor_limpo.lower()
+        if valor_limpo and chave not in vistos:
+            nomes.append(valor_limpo)
+            vistos.add(chave)
+    return nomes
+
+
+def _buscar_parceiro_existente_para_lead(lead):
+    if lead.cnpj_cpf:
+        parceiro = Partner.objects.filter(cnpj_cpf=lead.cnpj_cpf).order_by('-id').first()
+        if parceiro:
+            return parceiro
+
+    nomes = _nomes_candidatos_lead(lead)
+    filtro_nomes = Q()
+    for nome in nomes:
+        filtro_nomes |= Q(nome_fantasia__iexact=nome) | Q(razao_social__iexact=nome)
+
+    if filtro_nomes:
+        parceiro = Partner.objects.filter(filtro_nomes).order_by('-id').first()
+        if parceiro:
+            return parceiro
+
+    if lead.email:
+        parceiro = Partner.objects.filter(email__iexact=lead.email).order_by('-id').first()
+        if parceiro:
+            return parceiro
+
+    if lead.telefone:
+        parceiro = Partner.objects.filter(telefone=lead.telefone).order_by('-id').first()
+        if parceiro:
+            return parceiro
+
+    return None
+
+
+def _atualizar_dados_parceiro_com_lead(partner, lead):
+    campos_atualizados = []
+
+    if not partner.nome_fantasia and lead.nome_fantasia:
+        partner.nome_fantasia = lead.nome_fantasia
+        campos_atualizados.append('nome_fantasia')
+    if not partner.razao_social and lead.razao_social:
+        partner.razao_social = lead.razao_social
+        campos_atualizados.append('razao_social')
+    if not partner.telefone and lead.telefone:
+        partner.telefone = lead.telefone
+        campos_atualizados.append('telefone')
+    if not partner.contato_nome and lead.contato_nome:
+        partner.contato_nome = lead.contato_nome
+        campos_atualizados.append('contato_nome')
+    if not partner.email and lead.email:
+        partner.email = lead.email
+        campos_atualizados.append('email')
+    if not partner.cnpj_cpf and lead.cnpj_cpf:
+        partner.cnpj_cpf = lead.cnpj_cpf
+        campos_atualizados.append('cnpj_cpf')
+
+    if campos_atualizados:
+        partner.save(update_fields=campos_atualizados)
+
+    return partner
+
+
+def _obter_ou_criar_parceiro_do_lead(lead):
+    partner_defaults = {
+        'nome_fantasia': lead.nome_fantasia or lead.razao_social,
+        'razao_social': lead.razao_social or lead.nome_fantasia,
+        'telefone': lead.telefone,
+        'contato_nome': lead.contato_nome,
+        'email': lead.email,
+        'status': 'ativo',
+    }
+
+    if lead.cnpj_cpf:
+        partner, created = Partner.objects.get_or_create(
+            cnpj_cpf=lead.cnpj_cpf,
+            defaults=partner_defaults,
+        )
+    else:
+        partner = _buscar_parceiro_existente_para_lead(lead)
+        if partner:
+            created = False
+        else:
+            partner = Partner.objects.create(**partner_defaults)
+            created = True
+
+    if not created:
+        _atualizar_dados_parceiro_com_lead(partner, lead)
+
+    return partner, created
+
+
 def _converter_lead_em_parceiro_rapido(lead, enderecos, user, ticket_cliente=None, ticket_empresa=None, nome_proposta=None):
     """Cria ou reaproveita o parceiro e adiciona propostas sem remover o lead da cotacao."""
     with transaction.atomic():
-        partner, created = Partner.objects.get_or_create(
-            cnpj_cpf=lead.cnpj_cpf,
-            defaults={
-                'nome_fantasia': lead.nome_fantasia or lead.razao_social,
-                'razao_social': lead.razao_social or lead.nome_fantasia,
-                'telefone': lead.telefone,
-                'contato_nome': lead.contato_nome,
-                'email': lead.email,
-                'status': 'ativo',
-            }
-        )
-
-        if not created:
-            campos_atualizados = []
-            if not partner.nome_fantasia and lead.nome_fantasia:
-                partner.nome_fantasia = lead.nome_fantasia
-                campos_atualizados.append('nome_fantasia')
-            if not partner.razao_social and lead.razao_social:
-                partner.razao_social = lead.razao_social
-                campos_atualizados.append('razao_social')
-            if not partner.telefone and lead.telefone:
-                partner.telefone = lead.telefone
-                campos_atualizados.append('telefone')
-            if not partner.contato_nome and lead.contato_nome:
-                partner.contato_nome = lead.contato_nome
-                campos_atualizados.append('contato_nome')
-            if not partner.email and lead.email:
-                partner.email = lead.email
-                campos_atualizados.append('email')
-            if partner.status != 'ativo':
-                partner.status = 'ativo'
-                campos_atualizados.append('status')
-
-            if campos_atualizados:
-                partner.save(update_fields=campos_atualizados)
+        partner, created = _obter_ou_criar_parceiro_do_lead(lead)
 
         proposta_base = Proposal.objects.create(
             partner=partner,
@@ -128,6 +194,7 @@ def _converter_lead_em_parceiro_rapido(lead, enderecos, user, ticket_cliente=Non
             dados_vinculo.append(f"Unidade de Instalacao: {endereco}")
 
         mensagem_base = (
+            f"Numero da proposta: #{proposta_base.codigo_exibicao}\n"
             f"{len(enderecos)} link(s) criado(s).\n\n"
             "VINCULO RELACIONAL:\n"
             + "\n".join(dados_vinculo)
@@ -203,14 +270,8 @@ def lead_list(request):
     page_number = request.GET.get('page')
     page_obj = paginator.get_page(page_number)
 
-    lead_docs = [lead.cnpj_cpf for lead in page_obj.object_list if lead.cnpj_cpf]
-    parceiros_por_documento = {
-        partner.cnpj_cpf: partner
-        for partner in Partner.objects.filter(cnpj_cpf__in=lead_docs).prefetch_related('proposals')
-    }
-
     for lead in page_obj.object_list:
-        partner_relacionado = parceiros_por_documento.get(lead.cnpj_cpf)
+        partner_relacionado = _buscar_parceiro_existente_para_lead(lead)
         lead.partner_relacionado = partner_relacionado
         if partner_relacionado:
             propostas_em_negociacao = partner_relacionado.proposals.filter(status='analise')
@@ -320,18 +381,9 @@ def update_lead_status(request, pk):
         status_antigo = lead.status 
         
         if novo_status == 'andamento':
-            # 1. Validação de campos obrigatórios para virar Parceiro (AGORA SÓ EXIGE CNPJ)
-            campos_faltantes = []
-            if not lead.cnpj_cpf: campos_faltantes.append("CNPJ/CPF")
-
-            if campos_faltantes:
-                msg = ", ".join(campos_faltantes)
-                messages.error(request, f"Não é possível converter: O campo [{msg}] é obrigatório.")
-                return redirect('lead_list')
-
-            # 2. Evita duplicidade (verificando na base de parceiros)
+            # Evita duplicidade somente quando houver documento informado
             from partners.models import Partner
-            if Partner.objects.filter(cnpj_cpf=lead.cnpj_cpf).exists():
+            if lead.cnpj_cpf and Partner.objects.filter(cnpj_cpf=lead.cnpj_cpf).exists():
                 messages.error(request, f"O CNPJ {lead.cnpj_cpf} já é um parceiro ativo.")
                 return redirect('lead_list')
 
@@ -404,20 +456,16 @@ def lead_quick_proposal(request, pk):
     ticket_cliente = _parse_ticket_value(request.POST.get('ticket_cliente'))
     ticket_empresa = _parse_ticket_value(request.POST.get('ticket_empresa'))
 
-    if not lead.cnpj_cpf:
-        messages.error(request, "Não é possível abrir a proposta: o lead precisa ter CNPJ/CPF cadastrado.")
-        return redirect('lead_list')
-
     if not cliente_id:
-        messages.error(request, "Selecione o cliente final para abrir a proposta.")
+        messages.error(request, "Selecione o cliente final para abrir a cotação.")
         return redirect('lead_list')
 
     if not enderecos_ids:
-        messages.error(request, "Selecione pelo menos um login/unidade para abrir a proposta.")
+        messages.error(request, "Selecione pelo menos um login/unidade para abrir a cotação.")
         return redirect('lead_list')
 
     if not nome_proposta:
-        messages.error(request, "Informe o nome da proposta para continuar.")
+        messages.error(request, "Informe o nome da cotação para continuar.")
         return redirect('lead_list')
 
     if request.POST.get('ticket_cliente') and ticket_cliente is None:
@@ -449,7 +497,7 @@ def lead_quick_proposal(request, pk):
     )
     messages.success(
         request,
-        f"Proposta aberta com sucesso! {len(enderecos)} link(s) criado(s) para {partner.nome_fantasia or partner.razao_social}.",
+        f"Cotação aberta com sucesso! {len(enderecos)} link(s) criado(s) para {partner.nome_fantasia or partner.razao_social}.",
     )
     return redirect('partner_detail', pk=partner.pk)
 
@@ -479,7 +527,7 @@ def lead_convert(request, pk):
             lista_ids_historico = list(enderecos_ids)
 
             # SALVAMENTO EM CASCATA
-            partner_draft.save() # Cria Parceiro
+            partner_draft, partner_created = _obter_ou_criar_parceiro_do_lead(lead)
 
             proposta_base = form.save(commit=False)
             primeiro_endereco_id = enderecos_ids.pop(0)
@@ -593,7 +641,10 @@ def lead_convert(request, pk):
 
             lead.delete() 
             
-            messages.success(request, f"Conversão Concluída! {qtd_links} links gerados para {partner_draft.nome_fantasia}.")
+            if partner_created:
+                messages.success(request, f"Conversão Concluída! {qtd_links} links gerados para {partner_draft.nome_fantasia}.")
+            else:
+                messages.success(request, f"Conversão concluída! {qtd_links} links foram vinculados ao parceiro já existente {partner_draft.nome_fantasia or partner_draft.razao_social}.")
             return redirect('partner_detail', pk=partner_draft.pk)
     else:
         form = ProposalForm()

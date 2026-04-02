@@ -176,6 +176,19 @@
             </div>
             {% endif %}
 
+            {% if request.user.is_gestor or request.user.is_superuser or request.user|has_group:"Administrador" %}
+            <p class="text-[10px] uppercase text-gray-600 font-extrabold px-4 py-3 tracking-widest mt-6">Gestão</p>
+            <div class="mb-1 relative">
+                <button onclick="toggleSubmenu('submenu-gestao', 'seta-gestao')" class="w-full flex items-center justify-between px-4 py-3 rounded-xl transition-all duration-200 group {% if 'gestao' in request.path %} text-ageis-yellow bg-white/5 {% else %} text-gray-400 hover:text-white hover:bg-white/5 {% endif %}">
+                    <div class="flex items-center gap-3"><i data-lucide="line-chart" class="w-5 h-5 group-hover:scale-110 transition-transform"></i><span class="text-sm font-semibold">Gestão</span></div>
+                    <i data-lucide="chevron-down" id="seta-gestao" class="w-4 h-4 transition-transform duration-300 {% if 'gestao' in request.path %} rotate-180 {% endif %}"></i>
+                </button>
+                <div id="submenu-gestao" class="{% if 'gestao' not in request.path %}hidden{% endif %} flex flex-col gap-1 bg-black/20 rounded-xl mt-1 py-2 overflow-hidden">
+                    <a href="{% url 'gestao_relatorios' %}" class="pl-[3.25rem] pr-4 py-2 text-sm font-semibold transition-colors flex items-center gap-2 {% if request.resolver_match.url_name == 'gestao_relatorios' %} text-ageis-yellow {% else %} text-gray-500 hover:text-gray-300 {% endif %}"><div class="w-1.5 h-1.5 rounded-full {% if request.resolver_match.url_name == 'gestao_relatorios' %} bg-ageis-yellow {% else %} bg-gray-500 {% endif %}"></div> Relatórios</a>
+                </div>
+            </div>
+            {% endif %}
+
             {% if request.user|has_group:"Administrador" %}
             <p class="text-[10px] uppercase text-gray-600 font-extrabold px-4 py-3 tracking-widest mt-6">Administração</p>
             <a href="{% url 'import_prospects' %}" class="flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 text-gray-400 hover:bg-white/5 hover:text-white group">
@@ -298,6 +311,45 @@
         }
 
         // Pinta de amarelo o link que está ativo
+        function smartGoBack(fallbackUrl) {
+            try {
+                const currentUrl = window.location.pathname + window.location.search;
+                const hasReferrer = Boolean(document.referrer);
+
+                if (hasReferrer) {
+                    const referrerUrl = new URL(document.referrer, window.location.origin);
+                    const sameOrigin = referrerUrl.origin === window.location.origin;
+                    const referrerPath = referrerUrl.pathname + referrerUrl.search;
+
+                    if (sameOrigin && referrerPath !== currentUrl) {
+                        window.history.back();
+                        return;
+                    }
+                } else if (window.history.length > 1) {
+                    window.history.back();
+                    return;
+                }
+
+                if (fallbackUrl) {
+                    window.location.href = fallbackUrl;
+                    return;
+                }
+
+                if (hasReferrer) {
+                    window.location.href = document.referrer;
+                    return;
+                }
+
+                window.location.href = '/';
+            } catch (error) {
+                if (fallbackUrl) {
+                    window.location.href = fallbackUrl;
+                    return;
+                }
+                window.history.back();
+            }
+        }
+
         document.querySelectorAll('nav > a').forEach(link => {
             if (link.href === window.location.href) {
                 link.classList.add('sidebar-link-active');
@@ -320,5 +372,6 @@
             });
         });
     </script>
+    {% block extra_js %}{% endblock %}
 </body>
 </html>

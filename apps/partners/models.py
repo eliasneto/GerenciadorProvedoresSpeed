@@ -11,7 +11,9 @@ class Partner(models.Model):
     """
     STATUS_CHOICES = [
         ('ativo', 'Ativo'),
-        ('aguardando_ativacao', 'Aguardando Ativação'),
+        ('aguardando_contratacao', 'Aguardando Contratação'),
+        ('contratado', 'Contratado'),
+        ('declinado', 'Declinado'),
         ('inativo', 'Inativo / Novo'),
         ('negociacao', 'Em Negociação'),
         ('andamento', 'Em Andamento (Reativar)'),
@@ -26,7 +28,7 @@ class Partner(models.Model):
     telefone = models.CharField('Telefone Comercial', max_length=20, blank=True, null=True)
     
     # Campo status atualizado recebendo as novas escolhas
-    status = models.CharField('Status', max_length=20, choices=STATUS_CHOICES, default='ativo')
+    status = models.CharField('Status', max_length=30, choices=STATUS_CHOICES, default='ativo')
     
     data_cadastro = models.DateTimeField(auto_now_add=True)
 
@@ -50,8 +52,8 @@ class ProposalMotivoInviavel(models.Model):
     data_cadastro = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        verbose_name = 'Motivo de Proposta Inviável'
-        verbose_name_plural = 'Motivos de Proposta Inviável'
+        verbose_name = 'Motivo de Cotação Inviável'
+        verbose_name_plural = 'Motivos de Cotações Inviáveis'
         ordering = ['nome']
 
     def __str__(self):
@@ -61,11 +63,22 @@ class ProposalMotivoInviavel(models.Model):
 class Proposal(models.Model):
     STATUS_CHOICES = [
         ('analise', 'Em Negociação'),
-        ('ativa', 'Convertida'),
+        ('ativa', 'Viavel'),
+        ('aguardando_contratacao', 'Aguardando Contratação'),
+        ('contratado', 'Contratado'),
+        ('declinado', 'Declinado'),
         ('encerrada', 'Inviavel'),
     ]
 
     partner = models.ForeignKey(Partner, on_delete=models.CASCADE, related_name='proposals')
+    responsavel = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name='propostas_responsavel',
+        null=True,
+        blank=True,
+        verbose_name='Responsável'
+    )
     
     # VÍNCULO COM CLIENTE
     cliente = models.ForeignKey(
@@ -86,9 +99,9 @@ class Proposal(models.Model):
     )
     
     # --- DADOS TÉCNICOS ---
-    grupo_proposta_id = models.PositiveIntegerField('Grupo da Proposta', null=True, blank=True, db_index=True)
-    codigo_proposta = models.CharField('Código da Proposta', max_length=30, null=True, blank=True, db_index=True)
-    nome_proposta = models.CharField('Nome da Proposta', max_length=150, blank=True, null=True)
+    grupo_proposta_id = models.PositiveIntegerField('Grupo da Cotação', null=True, blank=True, db_index=True)
+    codigo_proposta = models.CharField('Código da Cotação', max_length=30, null=True, blank=True, db_index=True)
+    nome_proposta = models.CharField('Nome da Cotação', max_length=150, blank=True, null=True)
     os_numero = models.CharField('OS nº', max_length=50, blank=True, null=True)
     data_emissao = models.DateField('Data de Emissão', null=True, blank=True)
     velocidade = models.CharField('Velocidade', max_length=50, default='50 Mbps')
@@ -128,18 +141,18 @@ class Proposal(models.Model):
         null=True,
         blank=True,
         related_name='propostas',
-        verbose_name='Motivo da Proposta Inviável',
+        verbose_name='Motivo da Cotação Inviável',
     )
-    observacao_inviavel = models.CharField('Observação da Proposta Inviável', max_length=150, blank=True, null=True)
+    observacao_inviavel = models.CharField('Observação da Cotação Inviável', max_length=150, blank=True, null=True)
 
     # --- CONTROLE DE DATAS ---
-    status = models.CharField('Status da Proposta', max_length=20, choices=STATUS_CHOICES, default='analise')
+    status = models.CharField('Status da Cotação', max_length=30, choices=STATUS_CHOICES, default='analise')
     data_ativacao = models.DateField('Data de Ativação', null=True, blank=True)
     data_vencimento = models.DateField('Data de Vencimento', null=True, blank=True)
 
     class Meta:
-        verbose_name = 'Proposta'
-        verbose_name_plural = 'Propostas'
+        verbose_name = 'Cotação'
+        verbose_name_plural = 'Cotações'
         ordering = ['-id']
 
     @property

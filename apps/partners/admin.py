@@ -6,7 +6,7 @@ from .models import Partner, Proposal, ProposalMotivoInviavel
 class ProposalInline(admin.TabularInline):
     model = Proposal
     extra = 0
-    fields = ('codigo_proposta', 'nome_proposta', 'cliente', 'client_address', 'status', 'valor_mensal')
+    fields = ('codigo_proposta', 'nome_proposta', 'cliente', 'client_address', 'responsavel', 'status', 'valor_mensal')
     readonly_fields = ('codigo_proposta',)
     show_change_link = True
 
@@ -24,7 +24,7 @@ class PartnerAdmin(admin.ModelAdmin):
 class ProposalAdmin(admin.ModelAdmin):
     list_display = (
         'id', 'codigo_proposta', 'nome_proposta', 'partner', 'cliente',
-        'client_address', 'status', 'motivo_inviavel', 'valor_mensal', 'valor_parceiro'
+        'client_address', 'responsavel', 'status', 'motivo_inviavel', 'valor_mensal', 'valor_parceiro'
     )
     list_filter = ('status', 'tecnologia', 'partner')
     search_fields = (
@@ -33,7 +33,7 @@ class ProposalAdmin(admin.ModelAdmin):
         'cliente__nome_fantasia', 'cliente__razao_social',
         'client_address__login_ixc', 'client_address__agent_circuit_id'
     )
-    autocomplete_fields = ('partner', 'cliente', 'client_address')
+    autocomplete_fields = ('partner', 'cliente', 'client_address', 'responsavel')
     ordering = ('-id',)
 
 

@@ -1,0 +1,98 @@
+{% extends "core/base.html" %}
+
+{% block title %}Speed | Relatorios{% endblock %}
+
+{% block content %}
+<div class="p-6 md:p-10 max-w-7xl mx-auto">
+    <div class="flex flex-col md:flex-row md:items-end justify-between mb-6 gap-4">
+        <div>
+            <h1 class="text-3xl font-black text-gray-900 italic uppercase tracking-tighter">Relatorios</h1>
+            <p class="text-[10px] text-gray-500 font-bold uppercase tracking-widest mt-1">Gestao e acompanhamento</p>
+        </div>
+        <div class="flex items-center gap-4">
+            <span class="bg-ageis-yellow text-black px-4 py-2.5 rounded-full text-[10px] font-black uppercase tracking-widest shadow-sm">
+                {{ page_obj.paginator.count }} Resultados
+            </span>
+        </div>
+    </div>
+
+    <div class="bg-white p-2 md:rounded-full rounded-3xl shadow-sm border border-gray-100 mb-8">
+        <form method="GET" class="flex flex-col xl:flex-row items-center gap-2 w-full">
+            <div class="flex-1 flex items-center gap-3 px-5 py-3.5 bg-gray-50 hover:bg-gray-100 md:rounded-full rounded-2xl transition-colors w-full">
+                <i data-lucide="search" class="w-4 h-4 text-gray-400 shrink-0"></i>
+                <input type="text" name="relatorio" value="{{ busca_relatorio }}" placeholder="Buscar por nome do relatorio..." class="bg-transparent border-none outline-none w-full text-xs font-bold text-gray-700 placeholder-gray-400">
+            </div>
+
+            <div class="flex items-center gap-2 w-full xl:w-auto shrink-0">
+                {% if busca_relatorio %}
+                <a href="{% url 'gestao_relatorios' %}" class="w-12 h-12 flex items-center justify-center rounded-full bg-red-50 text-red-500 hover:bg-red-100 transition" title="Limpar Filtros">
+                    <i data-lucide="x" class="w-4 h-4"></i>
+                </a>
+                {% endif %}
+                <button type="submit" class="w-full xl:w-auto bg-ageis-black text-ageis-yellow font-black italic uppercase tracking-widest px-8 py-3.5 md:rounded-full rounded-2xl hover:bg-gray-900 transition-all">
+                    FILTRAR
+                </button>
+            </div>
+        </form>
+    </div>
+
+    <div class="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
+        <div class="overflow-x-auto">
+            <table class="w-full text-left">
+                <thead class="bg-gray-50 border-b border-gray-100">
+                    <tr>
+                        <th class="px-6 py-4 text-xs font-bold uppercase text-gray-400"><a href="?{{ sort_links.nome }}" class="hover:text-gray-700">Relatorio</a></th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-50">
+                    {% for item in page_obj %}
+                    <tr class="hover:bg-gray-50/50 transition">
+                        <td class="px-6 py-5 font-semibold text-gray-900">
+                            {% if item.url_name %}
+                            <a href="{% url item.url_name %}" class="flex items-center justify-between gap-3 hover:text-ageis-yellow transition-colors">
+                                <span>{{ item.nome }}</span>
+                                <i data-lucide="arrow-right" class="w-4 h-4 text-gray-400"></i>
+                            </a>
+                            {% else %}
+                            {{ item.nome }}
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td class="px-6 py-20 text-center text-gray-400 font-medium">
+                            <div class="flex flex-col items-center gap-2">
+                                <i data-lucide="inbox" class="w-8 h-8 opacity-50"></i>
+                                Nenhum relatorio encontrado com este filtro.
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        {% if page_obj.has_other_pages %}
+        <div class="px-6 py-6 border-t border-gray-100 bg-white flex flex-col sm:flex-row items-center justify-between gap-4">
+            <span class="text-[10px] font-black italic text-gray-400 uppercase tracking-widest">
+                Pagina {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}
+            </span>
+
+            <div class="flex items-center gap-2">
+                {% if page_obj.has_previous %}
+                    <a href="?page={{ page_obj.previous_page_number }}&relatorio={{ busca_relatorio }}&sort={{ sort_by }}&direction={{ direction }}" class="w-10 h-10 flex items-center justify-center rounded-xl border border-gray-200 bg-white text-gray-500 hover:bg-gray-50 hover:text-gray-900 transition shadow-sm" title="Pagina Anterior">
+                        <i data-lucide="chevron-left" class="w-4 h-4"></i>
+                    </a>
+                {% endif %}
+
+                {% if page_obj.has_next %}
+                    <a href="?page={{ page_obj.next_page_number }}&relatorio={{ busca_relatorio }}&sort={{ sort_by }}&direction={{ direction }}" class="w-10 h-10 flex items-center justify-center rounded-xl border border-gray-200 bg-white text-gray-500 hover:bg-gray-50 hover:text-gray-900 transition shadow-sm" title="Proxima Pagina">
+                        <i data-lucide="chevron-right" class="w-4 h-4"></i>
+                    </a>
+                {% endif %}
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

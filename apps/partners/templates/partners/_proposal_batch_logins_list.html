@@ -1,0 +1,12 @@
+<div class="p-4 space-y-3">
+    {% for item in proposals_lote %}
+    <a href="{% url 'proposal_detail' item.pk %}" class="block rounded-2xl border border-gray-100 bg-gray-50/50 px-4 py-4 hover:bg-white hover:border-ageis-yellow transition">
+        <p class="text-sm font-black text-blue-700">{{ item.client_address.login_ixc|default:"[Sem login]" }}</p>
+        <p class="text-[10px] font-bold uppercase text-gray-400 mt-1">{{ item.client_address|default:"Sem unidade vinculada" }}</p>
+    </a>
+    {% empty %}
+    <div class="rounded-2xl border border-dashed border-gray-200 bg-gray-50/60 px-4 py-6 text-sm text-gray-400">
+        Nenhum login encontrado para este lote.
+    </div>
+    {% endfor %}
+</div>

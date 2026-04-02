@@ -12,6 +12,8 @@ from scripts.integracoes.backoffice.cria_atendimento_ixc import executar_abertur
 
 # 1. Cria a regra de verificação
 def grupo_backoffice_required(user):
+    if not user.is_authenticated:
+        return False
     # O Superuser (você) sempre passa. Os outros precisam estar no grupo.
     if user.groups.filter(name='Backoffice').exists() or user.is_superuser:
         return True
@@ -226,5 +228,4 @@ def atendimento_import(request):
             return HttpResponse(status=400)
             
     return redirect('backoffice:cotacao_import')
-
 

@@ -23,7 +23,7 @@
 
     <div class="flex flex-col xl:flex-row xl:items-center justify-between gap-5 mb-8">
         <div class="flex items-center gap-4 min-w-0">
-            <a href="{{ back_url }}" class="p-3 bg-white border border-gray-100 rounded-2xl hover:bg-gray-50 transition shadow-sm shrink-0">
+            <a href="{{ back_url }}" onclick="smartGoBack('{{ back_url|escapejs }}'); return false;" class="p-3 bg-white border border-gray-100 rounded-2xl hover:bg-gray-50 transition shadow-sm shrink-0">
                 <i data-lucide="chevron-left" class="w-6 h-6 text-gray-400"></i>
             </a>
             <div class="min-w-0">
@@ -88,7 +88,7 @@
                             <i data-lucide="layers-3" class="w-5 h-5"></i>
                         </div>
                         <div>
-                            <h2 class="text-xs font-black uppercase tracking-widest text-gray-400">Propostas e Links Ativos</h2>
+                            <h2 class="text-xs font-black uppercase tracking-widest text-gray-400">Cotações e Links Ativos</h2>
                             <p class="text-sm font-bold text-gray-900">Grade operacional das OS vinculadas a este parceiro</p>
                         </div>
                     </div>
@@ -105,13 +105,13 @@
                             <div class="min-w-0">
                                 <p class="text-sm font-black text-gray-900 truncate">{{ group.cliente_nome }}</p>
                                 <div class="flex flex-col md:flex-row md:items-center gap-1 md:gap-3 mt-1">
-                                    <p class="text-[10px] font-black uppercase tracking-widest text-gray-400">{{ group.proposal_batches|length }} proposta(s)</p>
+                                    <p class="text-[10px] font-black uppercase tracking-widest text-gray-400">{{ group.proposal_batches|length }} cotação(ões)</p>
                                     <p class="text-[10px] font-black uppercase tracking-widest text-gray-400">{{ group.total_logins }} login(s) vinculado(s)</p>
                                 </div>
                             </div>
                             <div class="flex items-center gap-3 shrink-0">
                                 <span class="px-3 py-1 bg-white border border-gray-200 rounded-full text-[10px] font-black uppercase tracking-widest text-gray-500">
-                                    Ver proposta(s)
+                                    Ver cotação(ões)
                                 </span>
                                 <i id="proposal-group-icon-{{ group.key }}" data-lucide="chevron-down" class="w-4 h-4 text-gray-400"></i>
                             </div>
@@ -123,9 +123,9 @@
                                 <div class="rounded-[1.5rem] border border-gray-100 overflow-hidden bg-gray-50/60">
                                     <button type="button" onclick="toggleProposalBatch('{{ group.key }}', '{{ batch.key|slugify }}')" class="w-full px-5 py-4 bg-white border-b border-gray-100 flex items-center justify-between gap-4 text-left hover:bg-gray-50 transition">
                                         <div class="min-w-0">
-                                            <p class="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-2">Proposta</p>
+                                            <p class="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-2">Cotação</p>
                                             <div class="flex flex-col md:flex-row md:items-center gap-2 md:gap-3 min-w-0">
-                                                <a href="{% url 'proposal_batch_detail' batch.proposal.pk %}" class="text-lg font-black italic text-gray-900 hover:text-ageis-yellow transition shrink-0">#{{ batch.codigo_exibicao }}</a>
+                                                <a href="{% url 'proposal_batch_detail' batch.proposal.pk %}?next={{ request.get_full_path|urlencode }}" class="text-lg font-black italic text-gray-900 hover:text-ageis-yellow transition shrink-0">#{{ batch.codigo_exibicao }}</a>
                                                 <span class="hidden md:inline text-gray-300 font-black">-</span>
                                                 <p class="text-sm font-black text-gray-900 truncate">{{ batch.nome_proposta }}</p>
                                             </div>
@@ -158,7 +158,7 @@
                                                 {% for proposal in batch.logins %}
                                                 <tr class="hover:bg-gray-50/50 transition-all group">
                                                     <td class="px-5 py-5">
-                                                        <a href="{% url 'proposal_detail' proposal.pk %}" class="text-sm font-bold text-blue-700 hover:text-ageis-yellow transition">{{ proposal.client_address.login_ixc|default:"[Sem login]" }}</a>
+                                                        <a href="{% url 'proposal_detail' proposal.pk %}?next={{ request.get_full_path|urlencode }}" class="text-sm font-bold text-blue-700 hover:text-ageis-yellow transition">{{ proposal.client_address.login_ixc|default:"[Sem login]" }}</a>
                                                         <p class="text-[10px] text-gray-400 font-bold uppercase">{{ proposal.client_address|default:"Sem unidade vinculada" }}</p>
                                                     </td>
                                                     <td class="px-4 py-5">
@@ -182,7 +182,7 @@
                     <div class="px-8 py-32 text-center">
                         <div class="flex flex-col items-center gap-3 opacity-20">
                             <i data-lucide="folder-search" class="w-12 h-12"></i>
-                            <p class="font-black uppercase italic text-sm">Nenhuma proposta encontrada</p>
+                            <p class="font-black uppercase italic text-sm">Nenhuma cotação encontrada</p>
                         </div>
                     </div>
                     {% endfor %}

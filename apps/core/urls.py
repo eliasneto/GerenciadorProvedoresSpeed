@@ -4,6 +4,14 @@ from . import views
 
 urlpatterns = [
     path('', views.home, name='home'),
+    path('gestao/', views.gestao_home, name='gestao_home'),
+    path('gestao/relatorios/', views.gestao_relatorios, name='gestao_relatorios'),
+    path('gestao/relatorios/login-x-usuario/', views.gestao_relatorio_login_usuario, name='gestao_relatorio_login_usuario'),
+    path('gestao/relatorios/login-x-status/', views.gestao_relatorio_login_status, name='gestao_relatorio_login_status'),
+    path('gestao/relatorios/login-x-usuario/<int:pk>/responsavel/', views.gestao_relatorio_login_usuario_responsavel, name='gestao_relatorio_login_usuario_responsavel'),
+    path('gestao/relatorios/proposta-x-status/', views.gestao_relatorio_proposta_status, name='gestao_relatorio_proposta_status'),
+    path('gestao/relatorios/status-cliente/', views.gestao_relatorio_status_cliente, name='gestao_relatorio_status_cliente'),
+    path('gestao/relatorios/cotacao-por-endereco/', views.gestao_relatorio_cotacao_endereco, name='gestao_relatorio_cotacao_endereco'),
     
     # Rota de Login (aponta para o template que você já criou)
     path('login/', auth_views.LoginView.as_view(

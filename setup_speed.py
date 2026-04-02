@@ -43,6 +43,7 @@ def inicializar_sistema():
     # =========================================================
 
     from django.contrib.auth import get_user_model
+    from django.contrib.auth.models import Group
     User = get_user_model()
 
     print("Procurando novas alterações no banco de dados...")
@@ -53,6 +54,21 @@ def inicializar_sistema():
     
     print("Empacotando arquivos visuais (CSS/JS)...")
     call_command('collectstatic', interactive=False)
+
+    print("Garantindo grupos padrão da aplicação...")
+    grupos_padrao = [
+        'Administrador',
+        'LastMile',
+        'Parceiro',
+        'Backoffice',
+        'Gestao',
+    ]
+    for nome_grupo in grupos_padrao:
+        _, criado = Group.objects.get_or_create(name=nome_grupo)
+        if criado:
+            print(f"Grupo criado: {nome_grupo}")
+        else:
+            print(f"Grupo já existe: {nome_grupo}")
     
     print("Verificando acesso administrativo...")
 
@@ -71,7 +87,7 @@ def inicializar_sistema():
     else:
         print(f"O administrador '{admin_username}' já existe no banco. Pulando criação.")
 
-    print("✨ Sistema Speed 100% inicializado e pronto para uso no MySQL!")
+    print(" Sistema Speed 100% inicializado e pronto para uso no MySQL!")
 
 if __name__ == '__main__':
     inicializar_sistema()

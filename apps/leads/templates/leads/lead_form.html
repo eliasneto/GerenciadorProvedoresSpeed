@@ -4,7 +4,7 @@
 <div class="p-6 md:p-10 max-w-5xl mx-auto">
     <div class="mb-8 flex justify-between items-end">
         <div>
-            <a href="{% url 'lead_list' %}" class="text-[10px] font-black uppercase tracking-widest text-gray-400 hover:text-ageis-black flex items-center gap-2 mb-2 w-fit transition">
+            <a href="{% url 'lead_list' %}" onclick="smartGoBack('{% url 'lead_list' %}'); return false;" class="text-[10px] font-black uppercase tracking-widest text-gray-400 hover:text-ageis-black flex items-center gap-2 mb-2 w-fit transition">
                 <i data-lucide="arrow-left" class="w-3 h-3"></i> Voltar para a lista
             </a>
             <h1 class="text-3xl font-black text-gray-900 italic uppercase tracking-tighter">
