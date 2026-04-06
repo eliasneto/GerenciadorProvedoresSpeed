@@ -83,7 +83,25 @@ def resolver_cidade_ixc(valor_cidade, mapa_cidades):
         return '', ''
 
     if cidade_bruta.isdigit():
-        return mapa_cidades.get(cidade_bruta, cidade_bruta), cidade_bruta
+        cidade_nome = mapa_cidades.get(cidade_bruta, '').strip()
+        if cidade_nome:
+            return cidade_nome, cidade_bruta
+
+        cidade_detalhe = consultar_ixc(f"cidade/{cidade_bruta}", {})
+        if cidade_detalhe:
+            cidade_nome = (
+                cidade_detalhe.get('cidade')
+                or cidade_detalhe.get('nome')
+                or cidade_detalhe.get('municipio')
+                or cidade_detalhe.get('descricao')
+                or ''
+            )
+            cidade_nome = str(cidade_nome).strip()
+            if cidade_nome:
+                mapa_cidades[cidade_bruta] = cidade_nome
+                return cidade_nome, cidade_bruta
+
+        return '', cidade_bruta
 
     return cidade_bruta, ''
 
