@@ -34,7 +34,7 @@ class EnderecoForm(forms.ModelForm):
             'logradouro': 'Logradouro/Endereço',
             'numero': 'Número',
             'bairro': 'Bairro',
-            'cidade': 'Cidade',
+            'cidade': 'Cidade (nome)',
             'estado': 'Estado (UF)',
             'principal': 'Definir como Endereço Principal',
         }

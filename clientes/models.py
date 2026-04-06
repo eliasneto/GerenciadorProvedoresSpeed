@@ -46,6 +46,7 @@ class Endereco(models.Model):
     numero = models.CharField('Número', max_length=20, default='S/N')
     bairro = models.CharField('Bairro', max_length=100, default='')
     cidade = models.CharField('Cidade', max_length=100, default='Fortaleza')
+    cidade_id_ixc = models.CharField('Cidade ID IXC', max_length=50, blank=True, null=True)
     estado = models.CharField('UF', max_length=2, choices=ESTADO_CHOICES, default='CE')
 
     login_ixc = models.CharField('Login IXC (PPPoE)', max_length=150, blank=True, null=True)

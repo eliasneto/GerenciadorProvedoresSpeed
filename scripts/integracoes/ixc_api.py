@@ -76,7 +76,18 @@ def extrair_campos_tecnicos_obs(obs_texto):
     return campos
 
 
-def resolver_endereco_login(login_data, contrato_data):
+def resolver_cidade_ixc(valor_cidade, mapa_cidades):
+    cidade_bruta = str(valor_cidade or '').strip()
+    if not cidade_bruta:
+        return '', ''
+
+    if cidade_bruta.isdigit():
+        return mapa_cidades.get(cidade_bruta, cidade_bruta), cidade_bruta
+
+    return cidade_bruta, ''
+
+
+def resolver_endereco_login(login_data, contrato_data, mapa_cidades):
     endereco_login = str(login_data.get('endereco') or '').strip()
     numero_login = str(login_data.get('numero') or '').strip()
     bairro_login = str(login_data.get('bairro') or '').strip()
@@ -89,21 +100,25 @@ def resolver_endereco_login(login_data, contrato_data):
     )
 
     if usa_endereco_login:
+        cidade_nome, cidade_id_ixc = resolver_cidade_ixc(cidade_login, mapa_cidades)
         return {
             'cep': cep_login,
             'logradouro': endereco_login or 'Nao informado',
             'numero': numero_login or 'S/N',
             'bairro': bairro_login,
-            'cidade': cidade_login,
+            'cidade': cidade_nome,
+            'cidade_id_ixc': cidade_id_ixc,
             'estado': (estado_login[:2].upper() if estado_login else 'CE'),
         }
 
+    cidade_nome_contrato, cidade_id_ixc_contrato = resolver_cidade_ixc(contrato_data.get('cidade', ''), mapa_cidades)
     return {
         'cep': str(contrato_data.get('cep') or '').strip(),
         'logradouro': contrato_data.get('endereco') or 'Nao informado',
         'numero': contrato_data.get('numero') or 'S/N',
         'bairro': contrato_data.get('bairro', ''),
-        'cidade': contrato_data.get('cidade', ''),
+        'cidade': cidade_nome_contrato,
+        'cidade_id_ixc': cidade_id_ixc_contrato,
         'estado': str(contrato_data.get('uf', 'CE'))[:2].upper(),
     }
 
@@ -126,6 +141,26 @@ def buscar_mapa_filiais():
     if res and 'registros' in res:
         for f in res['registros']:
             mapa[str(f['id'])] = f.get('razao') or f.get('filial') or f"Filial {f['id']}"
+    return mapa
+
+
+def buscar_mapa_cidades():
+    print("Mapeando nomes das cidades no IXC...")
+    payload = {"qtype": "id", "query": "0", "oper": ">", "page": "1", "rp": "10000"}
+    res = consultar_ixc("cidade", payload)
+    mapa = {}
+    if res and 'registros' in res:
+        for cidade in res['registros']:
+            cidade_id = str(cidade.get('id') or '').strip()
+            cidade_nome = (
+                cidade.get('cidade')
+                or cidade.get('nome')
+                or cidade.get('municipio')
+                or cidade.get('descricao')
+                or ''
+            )
+            if cidade_id:
+                mapa[cidade_id] = str(cidade_nome).strip()
     return mapa
 
 
@@ -208,7 +243,7 @@ def extrair_todos_os_clientes(historico):
     return base_de_dados_local
 
 
-def salvar_clientes_no_django(dados_ixc, mapa_filiais, historico):
+def salvar_clientes_no_django(dados_ixc, mapa_filiais, mapa_cidades, historico):
     print("\nGravando no banco de dados com auditoria...")
     pbar_save = tqdm(total=len(dados_ixc), desc="Gravando no Banco", unit="cli")
 
@@ -240,7 +275,7 @@ def salvar_clientes_no_django(dados_ixc, mapa_filiais, historico):
         for lg in dado.get('logins', []):
             con_pai = next((c for c in dado['contratos'] if str(c['id_contrato']) == str(lg['id_contrato'])), {})
             campos_tecnicos = extrair_campos_tecnicos_obs(lg.get('obs'))
-            endereco_resolvido = resolver_endereco_login(lg, con_pai)
+            endereco_resolvido = resolver_endereco_login(lg, con_pai, mapa_cidades)
 
             status_login_ixc = str(lg.get('ativo', 'S')).strip().upper()
             status_contrato_ixc = str(con_pai.get('status', 'A')).strip().upper()
@@ -271,6 +306,7 @@ def salvar_clientes_no_django(dados_ixc, mapa_filiais, historico):
                     'numero': endereco_resolvido['numero'],
                     'bairro': endereco_resolvido['bairro'],
                     'cidade': endereco_resolvido['cidade'],
+                    'cidade_id_ixc': endereco_resolvido['cidade_id_ixc'],
                     'estado': endereco_resolvido['estado'],
                     'filial_ixc': filial_nova,
                     'agent_circuit_id': circuit_id_novo,
@@ -310,9 +346,10 @@ if __name__ == "__main__":
 
     try:
         mapa_f = buscar_mapa_filiais()
+        mapa_c = buscar_mapa_cidades()
         meus_dados = extrair_todos_os_clientes(historico)
         if meus_dados:
-            salvar_clientes_no_django(meus_dados, mapa_f, historico)
+            salvar_clientes_no_django(meus_dados, mapa_f, mapa_c, historico)
 
         historico.status = 'sucesso'
         historico.registros_processados = len(meus_dados) if meus_dados else 0

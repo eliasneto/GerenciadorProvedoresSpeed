@@ -59,6 +59,12 @@ def _atualizar_endereco_tecnico(linha, observacao):
     logradouro = str(linha.get('End_Logradouro') or '').strip()
     numero = str(linha.get('End_Numero') or '').split('.')[0].strip()
     bairro = str(linha.get('End_Bairro') or '').strip()
+    cidade_id_ixc = str(
+        linha.get('End_Cidade_ID_IXC')
+        or linha.get('End_Cidade_ID')
+        or linha.get('End_Cidade')
+        or ''
+    ).split('.')[0].strip()
 
     endereco = None
 
@@ -84,6 +90,10 @@ def _atualizar_endereco_tecnico(linha, observacao):
     if login and endereco.login_ixc != login:
         endereco.login_ixc = login
         update_fields.append('login_ixc')
+
+    if cidade_id_ixc and getattr(endereco, 'cidade_id_ixc', None) != cidade_id_ixc:
+        endereco.cidade_id_ixc = cidade_id_ixc
+        update_fields.append('cidade_id_ixc')
 
     for campo, valor in campos_tecnicos.items():
         if getattr(endereco, campo) != valor:

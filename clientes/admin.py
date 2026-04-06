@@ -19,7 +19,7 @@ class LogAlteracaoInline(admin.TabularInline):
 class EnderecoInline(admin.TabularInline):
     model = Endereco
     extra = 0
-    fields = ('login_ixc', 'agent_circuit_id', 'status', 'cidade', 'filial_ixc', 'logradouro')
+    fields = ('login_ixc', 'agent_circuit_id', 'status', 'cidade', 'cidade_id_ixc', 'filial_ixc', 'logradouro')
 
 @admin.register(Cliente)
 class ClienteAdmin(admin.ModelAdmin):
@@ -91,9 +91,9 @@ class HistoricoSincronizacaoAdmin(admin.ModelAdmin):
 
 @admin.register(Endereco)
 class EnderecoAdmin(admin.ModelAdmin):
-    list_display = ('id', 'cliente', 'login_ixc', 'agent_circuit_id', 'cidade', 'estado', 'status', 'filial_ixc', 'principal')
+    list_display = ('id', 'cliente', 'login_ixc', 'agent_circuit_id', 'cidade', 'cidade_id_ixc', 'estado', 'status', 'filial_ixc', 'principal')
     list_filter = ('status', 'estado', 'filial_ixc', 'principal')
-    search_fields = ('cliente__razao_social', 'cliente__nome_fantasia', 'login_ixc', 'agent_circuit_id', 'logradouro', 'cidade')
+    search_fields = ('cliente__razao_social', 'cliente__nome_fantasia', 'login_ixc', 'agent_circuit_id', 'logradouro', 'cidade', 'cidade_id_ixc')
     autocomplete_fields = ('cliente',)
     ordering = ('cliente__razao_social', 'logradouro')
 
