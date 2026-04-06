@@ -5,6 +5,7 @@ import time
 
 import django
 from django.core.management import call_command
+from django.core.management.base import CommandError
 from django.db import connections
 from django.db.utils import OperationalError
 
@@ -16,6 +17,28 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings")
 
 
+def validar_repositorio_e_migrations():
+    if os.getenv("SKIP_DEPLOY_VALIDATIONS", "").strip().lower() in {"1", "true", "yes"}:
+        print("Validacoes de deploy ignoradas por SKIP_DEPLOY_VALIDATIONS.")
+        return
+
+    print("Validando integridade do codigo antes do deploy...")
+
+    try:
+        call_command("makemigrations", check=True, dry_run=True, verbosity=0)
+    except (SystemExit, CommandError) as exc:
+        print("Falha de validacao: existem models sem migration versionada.")
+        print("Gere e versione as migrations antes de subir a aplicacao.")
+        print(f"Detalhe tecnico: {exc}")
+        sys.exit(1)
+    except Exception as exc:
+        print("Falha inesperada ao validar migrations do projeto.")
+        print(f"Detalhe tecnico: {exc}")
+        sys.exit(1)
+
+    print("Validacao de migrations concluida com sucesso.")
+
+
 def inicializar_sistema():
     print("Iniciando o Motor da Speed...")
 
@@ -24,6 +47,8 @@ def inicializar_sistema():
     except Exception as e:
         print(f"Erro ao carregar o Django. Erro: {e}")
         return
+
+    validar_repositorio_e_migrations()
 
     # Espera o MySQL responder antes de seguir com migrations e collectstatic.
     print("Aguardando o banco de dados MySQL ficar pronto...")
@@ -49,6 +74,9 @@ def inicializar_sistema():
 
     print("Aplicando migracoes e criando tabelas...")
     call_command("migrate")
+
+    print("Executando checagens finais do Django...")
+    call_command("check", verbosity=0)
 
     print("Empacotando arquivos visuais (CSS/JS)...")
     call_command("collectstatic", interactive=False)
