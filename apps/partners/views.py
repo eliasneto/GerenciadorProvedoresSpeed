@@ -11,8 +11,8 @@ from datetime import datetime, time
 from urllib.parse import urlparse, urlencode
 
 # Importações do próprio App
-from .models import Partner, Proposal, ProposalMotivoInviavel
-from .forms import PartnerForm, ProposalForm
+from .models import Partner, PartnerPlan, Proposal, ProposalMotivoInviavel
+from .forms import PartnerForm, PartnerPlanForm, ProposalForm
 from clientes.models import Endereco 
 
 # --- IMPORTAÇÃO DO HISTÓRICO SPEED ---
@@ -233,6 +233,56 @@ def partner_detail(request, pk):
         'qtd_antigo': qtd_antigo,
         'mostrando_antigos': ver_antigos,
     })
+
+
+@user_passes_test(grupo_Parceiro_required)
+@login_required
+def partner_plan_manage(request, pk):
+    partner = get_object_or_404(Partner, pk=pk)
+    back_url, next_param = _resolver_back_url(request, reverse('lead_list'))
+    form = PartnerPlanForm()
+    planos = partner.planos.all().order_by('-data_cadastro', '-id')
+
+    return render(request, 'partners/partner_plan_manage.html', {
+        'partner': partner,
+        'form': form,
+        'planos': planos,
+        'back_url': back_url,
+        'next_param': next_param,
+    })
+
+
+@user_passes_test(grupo_Parceiro_required)
+@login_required
+def partner_plan_add(request, pk):
+    partner = get_object_or_404(Partner, pk=pk)
+    _, next_param = _resolver_back_url(request, reverse('lead_list'))
+
+    if request.method == 'POST':
+        form = PartnerPlanForm(request.POST)
+        if form.is_valid():
+            plano = form.save(commit=False)
+            plano.partner = partner
+            plano.save()
+            messages.success(request, "Plano cadastrado com sucesso.")
+        else:
+            messages.error(request, "N\xe3o foi poss\xedvel salvar o plano. Revise os campos informados.")
+
+    return redirect(_append_next(reverse('partner_plan_manage', args=[partner.pk]), next_param))
+
+
+@user_passes_test(grupo_Parceiro_required)
+@login_required
+def partner_plan_delete(request, partner_pk, plan_pk):
+    partner = get_object_or_404(Partner, pk=partner_pk)
+    _, next_param = _resolver_back_url(request, reverse('lead_list'))
+
+    if request.method == 'POST':
+        plano = get_object_or_404(PartnerPlan, pk=plan_pk, partner=partner)
+        plano.delete()
+        messages.success(request, "Plano removido com sucesso.")
+
+    return redirect(_append_next(reverse('partner_plan_manage', args=[partner.pk]), next_param))
 @user_passes_test(grupo_Parceiro_required)
 @login_required
 def partner_add_historico(request, pk):
@@ -615,6 +665,15 @@ def proposal_batch_status_update(request, pk):
                 messages.error(request, "A observação da cotação inviável deve ter no máximo 150 caracteres.")
                 return redirect(_append_next(reverse('proposal_batch_detail', args=[proposal.pk]), next_param))
 
+        if novo_status == 'ativa':
+            messages.success(request, "CotaÃ§Ã£o marcada como viÃ¡vel. Complete agora os dados tÃ©cnicos e financeiros.")
+            return redirect(
+                _append_next(
+                    f"{reverse('proposal_update', args=[proposal.pk])}?modo=convertida&status_pendente=ativa",
+                    next_param,
+                )
+            )
+
         if status_antigo != novo_status:
             for item in propostas_lote:
                 item.status = novo_status
@@ -702,6 +761,7 @@ def proposal_update(request, pk):
     partner = proposal.partner
     endereco_atual = proposal.client_address
     is_conversion_completion = request.GET.get('modo') == 'convertida' or request.POST.get('modo') == 'convertida'
+    status_pendente = request.GET.get('status_pendente') or request.POST.get('status_pendente')
     propostas_lote = list(
         Proposal.objects.filter(codigo_proposta=proposal.codigo_proposta).select_related('cliente', 'client_address').order_by('id')
     ) if proposal.codigo_proposta else [proposal]
@@ -718,7 +778,8 @@ def proposal_update(request, pk):
                 proposta_base = form.save(commit=False)
                 campos_compartilhados = [
                     'nome_proposta', 'velocidade', 'tecnologia', 'disponibilidade', 'mttr',
-                    'perda_pacote', 'latencia', 'interfaces', 'ipv4_bloco', 'designador', 'trunk', 'dhcp',
+                    'perda_pacote', 'latencia', 'interfaces', 'tipo_acesso', 'ipv4_bloco',
+                    'dupla_abordagem', 'entrega_rb', 'designador', 'trunk', 'dhcp',
                     'prazo_ativacao', 'contato_suporte', 'telefone_suporte', 'ticket_cliente', 'valor_mensal',
                     'ticket_empresa',
                     'taxa_instalacao', 'valor_parceiro', 'tempo_contrato', 'email_faturamento'
@@ -729,6 +790,45 @@ def proposal_update(request, pk):
                         setattr(item, campo, getattr(proposta_base, campo))
                     item.status = 'aguardando_contratacao'
                     item.save()
+
+                    if item.client_address_id:
+                        endereco = item.client_address
+                        endereco.velocidade = proposta_base.velocidade
+                        endereco.tecnologia = proposta_base.tecnologia
+                        endereco.disponibilidade = proposta_base.disponibilidade
+                        endereco.mttr = proposta_base.mttr
+                        endereco.perda_pacote = proposta_base.perda_pacote
+                        endereco.latencia = proposta_base.latencia
+                        endereco.interfaces = proposta_base.interfaces
+                        endereco.tipo_acesso = proposta_base.tipo_acesso
+                        endereco.ipv4_bloco = proposta_base.ipv4_bloco
+                        endereco.dupla_abordagem = proposta_base.dupla_abordagem
+                        endereco.entrega_rb = proposta_base.entrega_rb
+                        endereco.designador = proposta_base.designador
+                        endereco.trunk = proposta_base.trunk
+                        endereco.dhcp = proposta_base.dhcp
+                        endereco.prazo_ativacao = proposta_base.prazo_ativacao
+                        endereco.contato_suporte = proposta_base.contato_suporte
+                        endereco.telefone_suporte = proposta_base.telefone_suporte
+                        endereco.save(update_fields=[
+                            'velocidade',
+                            'tecnologia',
+                            'disponibilidade',
+                            'mttr',
+                            'perda_pacote',
+                            'latencia',
+                            'interfaces',
+                            'tipo_acesso',
+                            'ipv4_bloco',
+                            'dupla_abordagem',
+                            'entrega_rb',
+                            'designador',
+                            'trunk',
+                            'dhcp',
+                            'prazo_ativacao',
+                            'contato_suporte',
+                            'telefone_suporte',
+                        ])
 
                     _registrar_historico_proposta(
                         item,
@@ -859,6 +959,7 @@ def proposal_update(request, pk):
         'proposal': proposal,
         'partner': partner,
         'is_conversion_completion': is_conversion_completion,
+        'status_exibicao_conversao': dict(Proposal.STATUS_CHOICES).get(status_pendente, proposal.get_status_display()),
         'propostas_lote': propostas_lote,
     })
 
@@ -875,6 +976,10 @@ def proposal_status_update(request, pk):
         if novo_status not in status_validos:
             messages.error(request, "Status de cotação inválido.")
             return redirect('partner_detail', pk=partner.pk)
+
+        if novo_status == 'ativa':
+            messages.success(request, "CotaÃ§Ã£o marcada como viÃ¡vel. Complete agora os dados tÃ©cnicos e financeiros.")
+            return redirect(f"{reverse('proposal_update', args=[proposal.pk])}?modo=convertida&status_pendente=ativa")
 
         status_antigo = proposal.status
         if status_antigo != novo_status:

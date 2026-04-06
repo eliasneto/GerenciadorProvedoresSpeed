@@ -27,6 +27,28 @@
         #sidebar::-webkit-scrollbar { width: 4px; }
         #sidebar::-webkit-scrollbar-thumb { background: #2d2d2d; border-radius: 10px; }
         .hidden { display: none !important; }
+        .page-back-button {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.625rem 1.25rem;
+            background: #fff;
+            border: 1px solid #e5e7eb;
+            border-radius: 0.75rem;
+            color: #6b7280;
+            font-size: 0.75rem;
+            font-weight: 900;
+            text-transform: uppercase;
+            font-style: italic;
+            letter-spacing: 0.04em;
+            transition: all 0.2s ease;
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+        }
+
+        .page-back-button:hover {
+            color: #111827;
+            background: #f9fafb;
+        }
 
         /* =========================================================
            🚀 LÓGICA INFALÍVEL DE COLAPSO DO MENU (CSS PURO)
@@ -131,6 +153,12 @@
                 <i data-lucide="layout-dashboard" class="w-5 h-5 group-hover:scale-110 transition-transform"></i>
                 <span class="text-sm font-semibold">Dashboard</span>
             </a>
+            {% if request.user|has_group:"LastMile" or request.user|has_group:"Parceiro" or request.user|has_group:"Backoffice" or request.user|has_group:"Administrador" or request.user.is_superuser %}
+            <a href="{% url 'minhas_cotacoes' %}" class="flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 {% if request.resolver_match.url_name == 'minhas_cotacoes' %} sidebar-link-active text-ageis-yellow {% else %} text-gray-400 hover:bg-white/5 hover:text-white {% endif %} group">
+                <i data-lucide="clipboard-list" class="w-5 h-5 group-hover:scale-110 transition-transform"></i>
+                <span class="text-sm font-semibold">Minhas Cotações</span>
+            </a>
+            {% endif %}
 
             {% if request.user|has_group:"LastMile" or request.user|has_group:"Parceiro" or request.user|has_group:"Backoffice" %}
             <p class="text-[10px] uppercase text-gray-600 font-extrabold px-4 py-3 tracking-widest mt-6">Operações</p>

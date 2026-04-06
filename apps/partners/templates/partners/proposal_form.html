@@ -88,6 +88,7 @@
             {% csrf_token %}
             {% if is_conversion_completion %}
             <input type="hidden" name="modo" value="convertida">
+            <input type="hidden" name="status_pendente" value="ativa">
             {% endif %}
 
             <div class="bg-white rounded-[2.5rem] shadow-xl border border-gray-200 overflow-hidden">
@@ -121,7 +122,7 @@
                             <label class="text-[10px] font-black uppercase text-gray-500 ml-1 tracking-widest italic">Status da Cotação</label>
                             {% if is_conversion_completion %}
                             <div class="w-full p-4 bg-gray-100 border border-gray-200 text-gray-900 font-bold rounded-2xl">
-                                {{ proposal.get_status_display }}
+                                {{ status_exibicao_conversao }}
                             </div>
                             {% else %}
                             {{ form.status }}
@@ -209,7 +210,7 @@
                 </div>
                 <div class="p-8 grid grid-cols-1 md:grid-cols-4 gap-x-8 gap-y-6">
                     <div class="md:col-span-2 space-y-2">
-                         <label class="text-[10px] font-black uppercase text-gray-500 ml-1 italic tracking-widest">Velocidade Contratada</label>
+                         <label class="text-[10px] font-black uppercase text-gray-500 ml-1 italic tracking-widest">Velocidade (Mbps)</label>
                          {{ form.velocidade }}
                     </div>
                     <div class="md:col-span-2 space-y-2">
@@ -232,7 +233,10 @@
                     <div class="space-y-2"><label class="text-[10px] font-black text-gray-500 uppercase italic tracking-widest">Latência (ms)</label>{{ form.latencia }}</div>
                     
                     <div class="md:col-span-2 space-y-2"><label class="text-[10px] font-black text-gray-500 uppercase italic tracking-widest">Interfaces</label>{{ form.interfaces }}</div>
-                    <div class="md:col-span-2 space-y-2"><label class="text-[10px] font-black text-gray-500 uppercase italic tracking-widest">Bloco IPv4</label>{{ form.ipv4_bloco }}</div>
+                    <div class="md:col-span-2 space-y-2"><label class="text-[10px] font-black text-gray-500 uppercase italic tracking-widest">Tipo de Acesso</label>{{ form.tipo_acesso }}</div>
+                    <div class="md:col-span-2 space-y-2"><label class="text-[10px] font-black text-gray-500 uppercase italic tracking-widest">Bloco IP</label>{{ form.ipv4_bloco }}</div>
+                    <div class="space-y-2"><label class="text-[10px] font-black text-gray-500 uppercase italic tracking-widest">Dupla Abordagem</label>{{ form.dupla_abordagem }}</div>
+                    <div class="space-y-2"><label class="text-[10px] font-black text-gray-500 uppercase italic tracking-widest">Entrega RB</label>{{ form.entrega_rb }}</div>
                     <div class="md:col-span-2 space-y-2"><label class="text-[10px] font-black text-gray-500 uppercase italic tracking-widest">Designador</label>{{ form.designador }}</div>
                     
                     <div class="md:col-span-2 space-y-2">
@@ -271,7 +275,7 @@
                             {{ form.ticket_cliente }}
                         </div>
                         <div class="space-y-2">
-                            <label class="text-[10px] font-black text-blue-600 uppercase italic tracking-widest">Target Empresa</label>
+                            <label class="text-[10px] font-black text-blue-600 uppercase italic tracking-widest">Target Parceiro</label>
                             {{ form.ticket_empresa }}
                         </div>
                     </div>
@@ -579,15 +583,15 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (parceiro > ticketEmpresa) {
                     classes += 'bg-red-50 text-red-700 border-red-200';
                     dotClass = 'bg-red-500';
-                    texto = `Acordo inviável · Mensal ${mensalFormatado} abaixo do Ticket Empresa ${ticketEmpresaFormatado}`;
+                    texto = `Acordo inviável · Mensal ${mensalFormatado} abaixo do Target Parceiro ${ticketEmpresaFormatado}`;
                 } else if (parceiro === ticketEmpresa) {
                     classes += 'bg-orange-50 text-orange-700 border-orange-200';
                     dotClass = 'bg-orange-500';
-                    texto = `Valor inviável · Mensal ${mensalFormatado} igual ao Ticket Empresa ${ticketEmpresaFormatado}`;
+                    texto = `Valor inviável · Mensal ${mensalFormatado} igual ao Target Parceiro ${ticketEmpresaFormatado}`;
                 } else {
                     classes += 'bg-green-50 text-green-700 border-green-200';
                     dotClass = 'bg-green-500';
-                    texto = `Valor viável · Mensal ${mensalFormatado} acima do Ticket Empresa ${ticketEmpresaFormatado}`;
+                    texto = `Valor viável · Mensal ${mensalFormatado} acima do Target Parceiro ${ticketEmpresaFormatado}`;
                 }
             } else {
                 classes += 'bg-gray-100 text-gray-500 border-gray-200';
@@ -597,15 +601,15 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (parceiro > ticketEmpresa) {
                     classes = 'inline-flex items-center gap-2 px-4 py-2 rounded-2xl border text-[10px] font-black uppercase tracking-widest bg-red-50 text-red-700 border-red-200';
                     dotClass = 'bg-red-500';
-                    texto = `Acordo inviavel · Custo Parceiro ${parceiroFormatado} acima do Target Empresa ${ticketEmpresaFormatado}`;
+                    texto = `Acordo inviavel · Custo Parceiro ${parceiroFormatado} acima do Target Parceiro ${ticketEmpresaFormatado}`;
                 } else if (parceiro === ticketEmpresa) {
                     classes = 'inline-flex items-center gap-2 px-4 py-2 rounded-2xl border text-[10px] font-black uppercase tracking-widest bg-orange-50 text-orange-700 border-orange-200';
                     dotClass = 'bg-orange-500';
-                    texto = `Acordo inviavel · Custo Parceiro ${parceiroFormatado} igual ao Target Empresa ${ticketEmpresaFormatado}`;
+                    texto = `Acordo inviavel · Custo Parceiro ${parceiroFormatado} igual ao Target Parceiro ${ticketEmpresaFormatado}`;
                 } else {
                     classes = 'inline-flex items-center gap-2 px-4 py-2 rounded-2xl border text-[10px] font-black uppercase tracking-widest bg-green-50 text-green-700 border-green-200';
                     dotClass = 'bg-green-500';
-                    texto = `Contrato viavel · Target Empresa ${ticketEmpresaFormatado} acima do Custo Parceiro ${parceiroFormatado}`;
+                    texto = `Contrato viavel · Target Parceiro ${ticketEmpresaFormatado} acima do Custo Parceiro ${parceiroFormatado}`;
                 }
             }
 

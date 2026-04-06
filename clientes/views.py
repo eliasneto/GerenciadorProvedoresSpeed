@@ -2,6 +2,7 @@ from django.shortcuts import render, get_object_or_404, redirect
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
 from django.urls import reverse_lazy 
+from urllib.parse import urlencode
 from django.views.generic import UpdateView 
 from django.contrib.auth.mixins import LoginRequiredMixin 
 from .models import Cliente, Endereco 
@@ -181,6 +182,33 @@ class EnderecoUpdateView(LoginRequiredMixin, UpdateView):
 
     def get_success_url(self):
         return reverse_lazy('endereco_list', kwargs={'pk': self.object.cliente.pk})
+
+
+@login_required
+def endereco_tecnico_detail(request, pk):
+    endereco = get_object_or_404(Endereco, pk=pk)
+    filtros_cotacao = {}
+
+    if endereco.estado:
+        filtros_cotacao['estado'] = endereco.estado
+
+    if endereco.cep:
+        filtros_cotacao['cep'] = endereco.cep
+    elif endereco.cidade:
+        filtros_cotacao['cidade'] = endereco.cidade
+
+    if endereco.bairro:
+        filtros_cotacao['bairro'] = endereco.bairro
+
+    busca_cotacao_url = str(reverse_lazy('lead_list'))
+    if filtros_cotacao:
+        busca_cotacao_url = f"{busca_cotacao_url}?{urlencode(filtros_cotacao)}"
+
+    return render(request, 'clientes/endereco_tecnico_detail.html', {
+        'endereco': endereco,
+        'cliente': endereco.cliente,
+        'busca_cotacao_url': busca_cotacao_url,
+    })
 
 # ==========================================
 # APIS DE BUSCA E ATUALIZAÇÃO

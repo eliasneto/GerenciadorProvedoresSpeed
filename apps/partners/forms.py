@@ -1,6 +1,14 @@
 from django import forms
-from .models import Partner, Proposal
+from .models import Partner, PartnerPlan, Proposal
 from clientes.models import Endereco 
+
+
+SIM_NAO_CHOICES = [
+    ('', 'Selecione'),
+    ('Sim', 'Sim'),
+    ('Não', 'Não'),
+]
+
 
 class PartnerForm(forms.ModelForm):
     """Formulário para os Dados Mestre do Parceiro"""
@@ -38,7 +46,8 @@ class ProposalForm(forms.ModelForm):
             
             # DADOS TÉCNICOS
             'velocidade', 'tecnologia', 'disponibilidade', 'mttr', 
-            'perda_pacote', 'latencia', 'interfaces', 'ipv4_bloco', 'designador',
+            'perda_pacote', 'latencia', 'interfaces', 'tipo_acesso', 'ipv4_bloco',
+            'dupla_abordagem', 'entrega_rb', 'designador',
             'trunk', 'dhcp', 'prazo_ativacao',
 
             # --- CONTATO SUPORTE---
@@ -52,6 +61,11 @@ class ProposalForm(forms.ModelForm):
         labels = {
             'contato_suporte': 'Contato para Suporte (NOC)',
             'telefone_suporte': 'Número do Telefone',
+            'velocidade': 'Velocidade (Mbps)',
+            'tipo_acesso': 'Tipo de Acesso',
+            'ipv4_bloco': 'Bloco IP',
+            'dupla_abordagem': 'Dupla Abordagem',
+            'entrega_rb': 'Entrega RB',
         }
 
     def __init__(self, *args, **kwargs):
@@ -85,6 +99,13 @@ class ProposalForm(forms.ModelForm):
             field.widget.attrs.update({
                 'class': 'w-full p-4 bg-gray-100 border border-gray-200 text-gray-900 font-bold rounded-2xl outline-none focus:ring-2 focus:ring-ageis-yellow transition-all',
             })
+
+        for field_name in ['trunk', 'dhcp', 'dupla_abordagem', 'entrega_rb']:
+            if field_name in self.fields:
+                self.fields[field_name].widget = forms.Select(choices=SIM_NAO_CHOICES)
+                self.fields[field_name].widget.attrs.update({
+                    'class': 'w-full p-4 bg-gray-100 border border-gray-200 text-gray-900 font-bold rounded-2xl outline-none focus:ring-2 focus:ring-ageis-yellow transition-all',
+                })
             
         # 4. REFINAMENTO DE LABELS
         if 'client_address' in self.fields:
@@ -106,3 +127,40 @@ class ProposalForm(forms.ModelForm):
             raise forms.ValidationError('JÃ¡ existe outro parceiro com este CNPJ/CPF.')
 
         return valor
+
+
+class PartnerPlanForm(forms.ModelForm):
+    class Meta:
+        model = PartnerPlan
+        fields = [
+            'nome_plano',
+            'velocidade', 'tecnologia', 'disponibilidade', 'mttr',
+            'perda_pacote', 'latencia', 'interfaces', 'tipo_acesso', 'ipv4_bloco',
+            'dupla_abordagem', 'entrega_rb', 'designador',
+            'trunk', 'dhcp', 'valor_plano',
+            'contato_suporte', 'telefone_suporte',
+        ]
+        labels = {
+            'velocidade': 'Velocidade (Mbps)',
+            'tipo_acesso': 'Tipo de Acesso',
+            'ipv4_bloco': 'Bloco IP',
+            'dupla_abordagem': 'Dupla Abordagem',
+            'entrega_rb': 'Entrega RB',
+            'valor_plano': 'Valor do Plano',
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        for field in self.fields.values():
+            field.widget.attrs.update({
+                'class': 'w-full p-4 bg-gray-100 border border-gray-200 text-gray-900 font-bold rounded-2xl outline-none focus:ring-2 focus:ring-ageis-yellow transition-all',
+                'placeholder': field.label,
+            })
+
+        for field_name in ['trunk', 'dhcp', 'dupla_abordagem', 'entrega_rb']:
+            if field_name in self.fields:
+                self.fields[field_name].widget = forms.Select(choices=SIM_NAO_CHOICES)
+                self.fields[field_name].widget.attrs.update({
+                    'class': 'w-full p-4 bg-gray-100 border border-gray-200 text-gray-900 font-bold rounded-2xl outline-none focus:ring-2 focus:ring-ageis-yellow transition-all',
+                })

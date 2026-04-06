@@ -13,6 +13,86 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 IXC_URL = "https://megainfraestrutura.com.br/webservice/v1"
 IXC_TOKEN = "76:54f35af33ea35f3b8a9a8fa14868322662d0465ebbb63fc56c3fb499ac3e1b61"
 
+
+def _parse_campos_tecnicos_obs(obs_texto):
+    campos = {}
+    if not obs_texto:
+        return campos
+
+    mapa = {
+        'VELOCIDADE': 'velocidade',
+        'TIPO DE ACESSO': 'tipo_acesso',
+        'BLOCO IP': 'ipv4_bloco',
+        'DUPLA ABORDAGEM': 'dupla_abordagem',
+        'ENTREGA RB': 'entrega_rb',
+    }
+
+    for linha in str(obs_texto).splitlines():
+        linha_limpa = linha.strip()
+        if not linha_limpa or ':' not in linha_limpa:
+            continue
+
+        chave_bruta, valor_bruto = linha_limpa.split(':', 1)
+        chave = chave_bruta.strip().upper()
+        valor = valor_bruto.strip()
+
+        campo_destino = mapa.get(chave)
+        if campo_destino and valor:
+            campos[campo_destino] = valor
+
+    return campos
+
+
+def _atualizar_endereco_tecnico(linha, observacao):
+    try:
+        from clientes.models import Endereco
+        from django.db.models import Q
+    except Exception:
+        return
+
+    campos_tecnicos = _parse_campos_tecnicos_obs(observacao)
+    if not campos_tecnicos:
+        return
+
+    login = str(linha.get('Login_Login') or '').strip()
+    cliente_id_ixc = str(linha.get('Cliente_ID') or '').split('.')[0].strip()
+    logradouro = str(linha.get('End_Logradouro') or '').strip()
+    numero = str(linha.get('End_Numero') or '').split('.')[0].strip()
+    bairro = str(linha.get('End_Bairro') or '').strip()
+
+    endereco = None
+
+    if login:
+        endereco = Endereco.objects.filter(login_ixc=login).order_by('-id').first()
+
+    if not endereco and cliente_id_ixc:
+        filtros = Q(cliente__id_ixc=cliente_id_ixc)
+        if logradouro:
+            filtros &= Q(logradouro__iexact=logradouro)
+        if numero:
+            filtros &= Q(numero__iexact=numero)
+        if bairro:
+            filtros &= Q(bairro__iexact=bairro)
+
+        endereco = Endereco.objects.filter(filtros).order_by('-id').first()
+
+    if not endereco:
+        return
+
+    update_fields = []
+
+    if login and endereco.login_ixc != login:
+        endereco.login_ixc = login
+        update_fields.append('login_ixc')
+
+    for campo, valor in campos_tecnicos.items():
+        if getattr(endereco, campo) != valor:
+            setattr(endereco, campo, valor)
+            update_fields.append(campo)
+
+    if update_fields:
+        endereco.save(update_fields=update_fields)
+
 def executar_cadastro_ixc(dados):
     endpoint = f"{IXC_URL}/radusuarios"
     token_b64 = base64.b64encode(IXC_TOKEN.encode()).decode()
@@ -79,6 +159,39 @@ def executar_cadastro_ixc(dados):
             return ''
         return str(valor).strip()
 
+    def normalizar_sim_nao(valor):
+        texto = limpar_texto(valor).lower()
+        if texto in {'sim', 's', 'yes', 'y', 'true', '1'}:
+            return 'Sim'
+        if texto in {'nao', 'não', 'n', 'no', 'false', '0'}:
+            return 'Não'
+        return limpar_texto(valor)
+
+    def montar_observacao_cliente():
+        observacao_manual = limpar_texto(linha.get('Obs_Cliente'))
+        linhas = []
+
+        if observacao_manual:
+            linhas.append(observacao_manual)
+
+        mapa_campos_tecnicos = [
+            ('VELOCIDADE', 'VELOCIDADE'),
+            ('TIPO DE ACESSO', 'TIPO DE ACESSO'),
+            ('BLOCO IP', 'BLOCO IP'),
+            ('DUPLA ABORDAGEM', 'DUPLA ABORDAGEM'),
+            ('ENTREGA RB', 'ENTREGA RB'),
+        ]
+
+        for coluna, rotulo in mapa_campos_tecnicos:
+            valor = limpar_texto(linha.get(coluna))
+            if not valor:
+                continue
+            if coluna in {'DUPLA ABORDAGEM', 'ENTREGA RB'}:
+                valor = normalizar_sim_nao(valor)
+            linhas.append(f"{rotulo}: {valor}")
+
+        return "\n".join(linhas) if linhas else "Importado via BackOffice Speed"
+
     # Resgata o ID do plano e já passa pela limpeza
     plano_id = limpar_id(linha.get('Plano_ID'))
 
@@ -88,6 +201,8 @@ def executar_cadastro_ixc(dados):
     endereco_formatado = f"{logradouro}, {numero}" if numero else logradouro
 
     # MONTAGEM DO PACOTE DE DADOS (PAYLOAD):
+    observacao_cliente = montar_observacao_cliente()
+
     payload = {
         "id_cliente": limpar_id(linha.get('Cliente_ID')),
         "id_contrato": limpar_id(linha.get('Login_Contrato_ID')),
@@ -127,7 +242,7 @@ def executar_cadastro_ixc(dados):
         "cidade": limpar_id(linha.get('End_Cidade')),
         "endereco": endereco_formatado,
         "referencia": limpar_texto(linha.get('End_Referencia')),
-        "obs": limpar_texto(linha.get('Obs_Cliente')) or "Importado via BackOffice Speed"
+        "obs": observacao_cliente
     }
 
     # 🚀 RAIO-X NO TERMINAL:
@@ -145,6 +260,7 @@ def executar_cadastro_ixc(dados):
         # Se o servidor respondeu (Status 200 = OK)
         if response.status_code == 200:
             if resposta_json.get('type') == 'success':
+                _atualizar_endereco_tecnico(linha, observacao_cliente)
                 return True, f"Criado com sucesso! ID IXC: {resposta_json.get('id')}"
             
             # Se a requisição chegou, mas o IXC negou

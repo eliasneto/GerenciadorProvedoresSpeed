@@ -1,0 +1,297 @@
+{% extends "core/base.html" %}
+
+{% block content %}
+<div class="min-h-screen bg-gray-50/50 p-6 md:p-10">
+    <div class="max-w-[1600px] mx-auto">
+        {% if messages %}
+        <div class="mb-8 space-y-3">
+            {% for message in messages %}
+            <div class="flex items-center gap-3 p-4 rounded-2xl border animate-in fade-in slide-in-from-top-4 duration-300
+                {% if message.tags == 'error' %} bg-red-50 border-red-100 text-red-700
+                {% else %} bg-green-50 border-green-100 text-green-700 {% endif %}">
+                <i data-lucide="{% if message.tags == 'error' %}alert-circle{% else %}check-circle{% endif %}" class="w-5 h-5"></i>
+                <p class="text-sm font-bold">{{ message }}</p>
+                <button onclick="this.parentElement.remove()" class="ml-auto p-1 hover:bg-black/5 rounded-lg transition">
+                    <i data-lucide="x" class="w-4 h-4"></i>
+                </button>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+
+        <div class="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-10">
+            <div>
+                <nav class="flex mb-3" aria-label="Breadcrumb">
+                    <ol class="flex items-center space-x-2 text-[10px] font-black uppercase tracking-widest text-gray-400">
+                        <li><a href="{% url 'lead_list' %}" class="hover:text-ageis-yellow transition">Cotação</a></li>
+                        <li><i data-lucide="chevron-right" class="w-2.5 h-2.5"></i></li>
+                        <li><span class="text-ageis-yellow">{{ partner.nome_fantasia|default:partner.razao_social }}</span></li>
+                        <li><i data-lucide="chevron-right" class="w-2.5 h-2.5"></i></li>
+                        <li class="text-gray-900">Plano</li>
+                    </ol>
+                </nav>
+                <h1 class="text-3xl font-black text-gray-900 italic uppercase leading-none tracking-tighter">
+                    Cadastro de <span class="text-ageis-yellow">Plano</span>
+                </h1>
+                <p class="text-xs text-gray-500 mt-2 font-bold uppercase tracking-tight italic">Parceiro: {{ partner.nome_fantasia|default:partner.razao_social }}</p>
+            </div>
+
+            <div class="flex items-center gap-4">
+                <span class="bg-ageis-yellow text-black px-4 py-2.5 rounded-full text-[10px] font-black uppercase tracking-widest shadow-sm">
+                    {{ planos|length }} plano(s)
+                </span>
+                <a href="{{ back_url }}" onclick="smartGoBack('{{ back_url|escapejs }}'); return false;" class="page-back-button">
+                    <i data-lucide="arrow-left" class="w-4 h-4"></i> Voltar
+                </a>
+            </div>
+        </div>
+
+        <div class="space-y-8">
+            <form method="POST" action="{% url 'partner_plan_add' partner.pk %}{% if next_param %}?next={{ next_param|urlencode }}{% endif %}" class="space-y-8">
+                {% csrf_token %}
+                <input type="hidden" name="next" value="{{ next_param }}">
+
+                <div class="bg-white rounded-[2.5rem] shadow-xl border border-gray-200 overflow-hidden">
+                    <div class="bg-gray-100/80 px-8 py-5 border-b border-gray-200 flex items-center gap-3">
+                        <div class="p-2.5 bg-ageis-black text-ageis-yellow rounded-xl shadow-lg">
+                            <i data-lucide="waypoints" class="w-5 h-5"></i>
+                        </div>
+                        <h2 class="font-black text-sm uppercase italic text-gray-900 tracking-tight">Identificação do Plano</h2>
+                    </div>
+
+                    <div class="p-8">
+                        <div class="space-y-2">
+                            <label for="{{ form.nome_plano.id_for_label }}" class="text-[10px] font-black uppercase text-gray-500 ml-1 tracking-widest italic">Nome do Plano</label>
+                            {{ form.nome_plano }}
+                            {% if form.nome_plano.errors %}
+                            <p class="mt-2 text-xs font-bold text-red-500">{{ form.nome_plano.errors|join:", " }}</p>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-[2.5rem] shadow-xl border border-gray-200 overflow-hidden">
+                    <div class="bg-gray-100/80 px-8 py-5 border-b border-gray-200 flex items-center gap-3">
+                        <div class="p-2.5 bg-blue-600 text-white rounded-xl shadow-lg shadow-blue-600/20">
+                            <i data-lucide="zap" class="w-5 h-5"></i>
+                        </div>
+                        <h2 class="font-black text-sm uppercase italic text-gray-900 tracking-tight">Parâmetros de Conectividade & Suporte</h2>
+                    </div>
+
+                    <div class="p-8 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-x-8 gap-y-6">
+                        <div class="md:col-span-2 space-y-2">
+                            <label class="text-[10px] font-black uppercase text-gray-500 ml-1 italic tracking-widest">Velocidade (Mbps)</label>
+                            {{ form.velocidade }}
+                        </div>
+                        <div class="md:col-span-2 space-y-2">
+                            <label class="text-[10px] font-black uppercase text-gray-500 ml-1 italic tracking-widest">Tecnologia de Acesso</label>
+                            {{ form.tecnologia }}
+                        </div>
+
+                        <div class="md:col-span-2 space-y-2 pt-4 border-t border-gray-50 mt-2">
+                            <label class="text-[10px] font-black text-blue-600 uppercase italic tracking-widest">Contato para Suporte</label>
+                            {{ form.contato_suporte }}
+                        </div>
+                        <div class="md:col-span-2 space-y-2 pt-4 border-t border-gray-50 mt-2">
+                            <label class="text-[10px] font-black text-blue-600 uppercase italic tracking-widest">Número do Telefone</label>
+                            {{ form.telefone_suporte }}
+                        </div>
+
+                        <div class="space-y-2"><label class="text-[10px] font-black text-gray-500 uppercase italic tracking-widest">Disponibilidade</label>{{ form.disponibilidade }}</div>
+                        <div class="space-y-2"><label class="text-[10px] font-black text-gray-500 uppercase italic tracking-widest">MTTR (h)</label>{{ form.mttr }}</div>
+                        <div class="space-y-2"><label class="text-[10px] font-black text-gray-500 uppercase italic tracking-widest">Perda Pacote</label>{{ form.perda_pacote }}</div>
+                        <div class="space-y-2"><label class="text-[10px] font-black text-gray-500 uppercase italic tracking-widest">Latência (ms)</label>{{ form.latencia }}</div>
+
+                        <div class="md:col-span-2 space-y-2"><label class="text-[10px] font-black text-gray-500 uppercase italic tracking-widest">Interfaces</label>{{ form.interfaces }}</div>
+                        <div class="md:col-span-2 space-y-2"><label class="text-[10px] font-black text-gray-500 uppercase italic tracking-widest">Tipo de Acesso</label>{{ form.tipo_acesso }}</div>
+                        <div class="md:col-span-2 space-y-2"><label class="text-[10px] font-black text-gray-500 uppercase italic tracking-widest">Bloco IP</label>{{ form.ipv4_bloco }}</div>
+                        <div class="space-y-2"><label class="text-[10px] font-black text-gray-500 uppercase italic tracking-widest">Dupla Abordagem</label>{{ form.dupla_abordagem }}</div>
+                        <div class="space-y-2"><label class="text-[10px] font-black text-gray-500 uppercase italic tracking-widest">Entrega RB</label>{{ form.entrega_rb }}</div>
+                        <div class="md:col-span-2 space-y-2"><label class="text-[10px] font-black text-gray-500 uppercase italic tracking-widest">Designador</label>{{ form.designador }}</div>
+
+                        <div class="md:col-span-2 space-y-2">
+                            <label class="text-[10px] font-black text-gray-500 uppercase italic tracking-widest">Configuração de Porta</label>
+                            <div class="flex gap-4 p-4 bg-gray-100 border border-gray-200 rounded-2xl flex-wrap">
+                                <div class="flex items-center gap-2">{{ form.trunk }} <span class="text-[10px] font-bold text-gray-700">TRUNK?</span></div>
+                                <div class="flex items-center gap-2">{{ form.dhcp }} <span class="text-[10px] font-bold text-gray-700">DHCP?</span></div>
+                            </div>
+                        </div>
+
+                        <div class="md:col-span-2 space-y-2">
+                            <label class="text-[10px] font-black text-gray-500 uppercase italic tracking-widest">Valor do Plano</label>
+                            {{ form.valor_plano }}
+                        </div>
+                    </div>
+                </div>
+
+                <div class="flex items-center justify-end gap-4 pb-2">
+                    <button type="submit" class="bg-ageis-black text-ageis-yellow font-black px-16 py-5 rounded-2xl shadow-2xl hover:bg-gray-800 hover:scale-[1.03] active:scale-95 transition-all uppercase italic tracking-tighter">
+                        Salvar Plano
+                    </button>
+                </div>
+            </form>
+
+            <div class="bg-white rounded-[2.5rem] shadow-xl border border-gray-200 overflow-hidden">
+                <div class="bg-gray-100/80 px-8 py-5 border-b border-gray-200 flex items-center gap-3">
+                    <div class="p-2.5 bg-ageis-yellow text-black rounded-xl shadow-lg">
+                        <i data-lucide="layers-3" class="w-5 h-5"></i>
+                    </div>
+                    <h2 class="font-black text-sm uppercase italic text-gray-900 tracking-tight">Planos Cadastrados</h2>
+                </div>
+
+                <div class="p-6">
+                    {% for plano in planos %}
+                    {% if forloop.first %}
+                    <div class="overflow-x-auto">
+                        <div class="min-w-[980px]">
+                            <div class="grid grid-cols-[2fr,1fr,1.2fr,1fr,80px] gap-4 px-4 py-3 border-b border-gray-100 text-[10px] font-black uppercase tracking-widest text-gray-400">
+                                <div>Plano</div>
+                                <div>Velocidade</div>
+                                <div>Tecnologia</div>
+                                <div>Valor</div>
+                                <div class="text-right">Ações</div>
+                            </div>
+                    {% endif %}
+                            <div class="grid grid-cols-[2fr,1fr,1.2fr,1fr,80px] gap-4 px-4 py-4 border-b border-gray-50 items-center hover:bg-gray-50/70 transition">
+                                <div>
+                                    <p class="text-sm font-black text-gray-900">{{ plano.nome_plano }}</p>
+                                    <p class="text-[10px] font-black uppercase tracking-widest text-gray-400 mt-1">{{ plano.tipo_acesso|default:"Tipo não informado" }}</p>
+                                </div>
+                                <div class="text-sm font-bold text-gray-800">{{ plano.velocidade|default:"--" }}</div>
+                                <div class="text-sm font-bold text-gray-800">{{ plano.tecnologia|default:"--" }}</div>
+                                <div class="text-sm font-bold text-gray-800">{{ plano.valor_plano|default:"--" }}</div>
+                                <div class="flex items-center justify-end">
+                                    <button
+                                        type="button"
+                                        class="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 hover:bg-blue-100 transition flex items-center justify-center"
+                                        title="Ver dados técnicos"
+                                        onclick="openPlanDetailsModal(this)"
+                                        data-nome="{{ plano.nome_plano|escape }}"
+                                        data-velocidade="{{ plano.velocidade|default:'--'|escape }}"
+                                        data-tecnologia="{{ plano.tecnologia|default:'--'|escape }}"
+                                        data-disponibilidade="{{ plano.disponibilidade|default:'--'|escape }}"
+                                        data-mttr="{{ plano.mttr|default:'--'|escape }}"
+                                        data-perda-pacote="{{ plano.perda_pacote|default:'--'|escape }}"
+                                        data-latencia="{{ plano.latencia|default:'--'|escape }}"
+                                        data-interfaces="{{ plano.interfaces|default:'--'|escape }}"
+                                        data-tipo-acesso="{{ plano.tipo_acesso|default:'--'|escape }}"
+                                        data-bloco-ip="{{ plano.ipv4_bloco|default:'--'|escape }}"
+                                        data-dupla-abordagem="{{ plano.dupla_abordagem|default:'--'|escape }}"
+                                        data-entrega-rb="{{ plano.entrega_rb|default:'--'|escape }}"
+                                        data-designador="{{ plano.designador|default:'--'|escape }}"
+                                        data-trunk="{{ plano.trunk|default:'--'|escape }}"
+                                        data-dhcp="{{ plano.dhcp|default:'--'|escape }}"
+                                        data-contato-suporte="{{ plano.contato_suporte|default:'--'|escape }}"
+                                        data-telefone-suporte="{{ plano.telefone_suporte|default:'--'|escape }}"
+                                        data-valor-plano="{{ plano.valor_plano|default:'--'|escape }}"
+                                    >
+                                        <i data-lucide="eye" class="w-4 h-4"></i>
+                                    </button>
+                                </div>
+                            </div>
+                    {% if forloop.last %}
+                        </div>
+                    </div>
+                    {% endif %}
+                    {% empty %}
+                    <div class="border border-dashed border-gray-200 rounded-[1.5rem] p-10 text-center text-gray-400">
+                        <i data-lucide="waypoints" class="w-8 h-8 mx-auto mb-3 opacity-50"></i>
+                        <p class="text-sm font-bold">Nenhum plano cadastrado para este parceiro.</p>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="planDetailsModal" class="fixed inset-0 z-[90] hidden items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+    <div class="bg-white rounded-[2rem] w-full max-w-5xl shadow-2xl border border-gray-100 overflow-hidden">
+        <div class="px-6 py-5 border-b border-gray-100 bg-gray-50/80 flex items-center justify-between gap-4">
+            <div class="flex items-center gap-3">
+                <div class="p-2.5 bg-blue-600 text-white rounded-xl shadow-lg shadow-blue-600/20">
+                    <i data-lucide="zap" class="w-5 h-5"></i>
+                </div>
+                <div>
+                    <h2 class="font-black text-sm uppercase italic text-gray-900 tracking-tight">Dados Técnicos do Plano</h2>
+                    <p id="planDetailsTitle" class="text-sm font-bold text-gray-500 mt-1"></p>
+                </div>
+            </div>
+            <button type="button" onclick="closePlanDetailsModal()" class="p-2 text-gray-400 hover:text-gray-800 hover:bg-white rounded-xl transition">
+                <i data-lucide="x" class="w-5 h-5"></i>
+            </button>
+        </div>
+
+        <div class="p-8 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-x-8 gap-y-6 max-h-[75vh] overflow-y-auto">
+            <div class="md:col-span-2 space-y-2"><label class="text-[10px] font-black uppercase text-gray-500 ml-1 italic tracking-widest">Velocidade (Mbps)</label><div id="detailVelocidade" class="w-full p-4 bg-gray-100 border border-gray-200 text-gray-900 font-bold rounded-2xl"></div></div>
+            <div class="md:col-span-2 space-y-2"><label class="text-[10px] font-black uppercase text-gray-500 ml-1 italic tracking-widest">Tecnologia de Acesso</label><div id="detailTecnologia" class="w-full p-4 bg-gray-100 border border-gray-200 text-gray-900 font-bold rounded-2xl"></div></div>
+
+            <div class="md:col-span-2 space-y-2 pt-4 border-t border-gray-50 mt-2"><label class="text-[10px] font-black text-blue-600 uppercase italic tracking-widest">Contato para Suporte</label><div id="detailContatoSuporte" class="w-full p-4 bg-gray-100 border border-gray-200 text-gray-900 font-bold rounded-2xl"></div></div>
+            <div class="md:col-span-2 space-y-2 pt-4 border-t border-gray-50 mt-2"><label class="text-[10px] font-black text-blue-600 uppercase italic tracking-widest">Número do Telefone</label><div id="detailTelefoneSuporte" class="w-full p-4 bg-gray-100 border border-gray-200 text-gray-900 font-bold rounded-2xl"></div></div>
+
+            <div class="space-y-2"><label class="text-[10px] font-black text-gray-500 uppercase italic tracking-widest">Disponibilidade</label><div id="detailDisponibilidade" class="w-full p-4 bg-gray-100 border border-gray-200 text-gray-900 font-bold rounded-2xl"></div></div>
+            <div class="space-y-2"><label class="text-[10px] font-black text-gray-500 uppercase italic tracking-widest">MTTR (h)</label><div id="detailMttr" class="w-full p-4 bg-gray-100 border border-gray-200 text-gray-900 font-bold rounded-2xl"></div></div>
+            <div class="space-y-2"><label class="text-[10px] font-black text-gray-500 uppercase italic tracking-widest">Perda Pacote</label><div id="detailPerdaPacote" class="w-full p-4 bg-gray-100 border border-gray-200 text-gray-900 font-bold rounded-2xl"></div></div>
+            <div class="space-y-2"><label class="text-[10px] font-black text-gray-500 uppercase italic tracking-widest">Latência (ms)</label><div id="detailLatencia" class="w-full p-4 bg-gray-100 border border-gray-200 text-gray-900 font-bold rounded-2xl"></div></div>
+
+            <div class="md:col-span-2 space-y-2"><label class="text-[10px] font-black text-gray-500 uppercase italic tracking-widest">Interfaces</label><div id="detailInterfaces" class="w-full p-4 bg-gray-100 border border-gray-200 text-gray-900 font-bold rounded-2xl"></div></div>
+            <div class="md:col-span-2 space-y-2"><label class="text-[10px] font-black text-gray-500 uppercase italic tracking-widest">Tipo de Acesso</label><div id="detailTipoAcesso" class="w-full p-4 bg-gray-100 border border-gray-200 text-gray-900 font-bold rounded-2xl"></div></div>
+            <div class="md:col-span-2 space-y-2"><label class="text-[10px] font-black text-gray-500 uppercase italic tracking-widest">Bloco IP</label><div id="detailBlocoIp" class="w-full p-4 bg-gray-100 border border-gray-200 text-gray-900 font-bold rounded-2xl"></div></div>
+            <div class="space-y-2"><label class="text-[10px] font-black text-gray-500 uppercase italic tracking-widest">Dupla Abordagem</label><div id="detailDuplaAbordagem" class="w-full p-4 bg-gray-100 border border-gray-200 text-gray-900 font-bold rounded-2xl"></div></div>
+            <div class="space-y-2"><label class="text-[10px] font-black text-gray-500 uppercase italic tracking-widest">Entrega RB</label><div id="detailEntregaRb" class="w-full p-4 bg-gray-100 border border-gray-200 text-gray-900 font-bold rounded-2xl"></div></div>
+            <div class="md:col-span-2 space-y-2"><label class="text-[10px] font-black text-gray-500 uppercase italic tracking-widest">Designador</label><div id="detailDesignador" class="w-full p-4 bg-gray-100 border border-gray-200 text-gray-900 font-bold rounded-2xl"></div></div>
+
+            <div class="md:col-span-2 space-y-2">
+                <label class="text-[10px] font-black text-gray-500 uppercase italic tracking-widest">Configuração de Porta</label>
+                <div class="flex gap-4 p-4 bg-gray-100 border border-gray-200 rounded-2xl flex-wrap">
+                    <div class="flex items-center gap-2"><div id="detailTrunk" class="min-w-[120px] p-4 bg-white border border-gray-200 text-gray-900 font-bold rounded-2xl"></div><span class="text-[10px] font-bold text-gray-700">TRUNK?</span></div>
+                    <div class="flex items-center gap-2"><div id="detailDhcp" class="min-w-[120px] p-4 bg-white border border-gray-200 text-gray-900 font-bold rounded-2xl"></div><span class="text-[10px] font-bold text-gray-700">DHCP?</span></div>
+                </div>
+            </div>
+
+            <div class="md:col-span-2 space-y-2"><label class="text-[10px] font-black text-gray-500 uppercase italic tracking-widest">Valor do Plano</label><div id="detailValorPlano" class="w-full p-4 bg-gray-100 border border-gray-200 text-gray-900 font-bold rounded-2xl"></div></div>
+        </div>
+    </div>
+</div>
+
+<script>
+function openPlanDetailsModal(button) {
+    const dataset = button.dataset;
+    document.getElementById('planDetailsTitle').innerText = dataset.nome || '--';
+    document.getElementById('detailVelocidade').innerText = dataset.velocidade || '--';
+    document.getElementById('detailTecnologia').innerText = dataset.tecnologia || '--';
+    document.getElementById('detailContatoSuporte').innerText = dataset.contatoSuporte || '--';
+    document.getElementById('detailTelefoneSuporte').innerText = dataset.telefoneSuporte || '--';
+    document.getElementById('detailDisponibilidade').innerText = dataset.disponibilidade || '--';
+    document.getElementById('detailMttr').innerText = dataset.mttr || '--';
+    document.getElementById('detailPerdaPacote').innerText = dataset.perdaPacote || '--';
+    document.getElementById('detailLatencia').innerText = dataset.latencia || '--';
+    document.getElementById('detailInterfaces').innerText = dataset.interfaces || '--';
+    document.getElementById('detailTipoAcesso').innerText = dataset.tipoAcesso || '--';
+    document.getElementById('detailBlocoIp').innerText = dataset.blocoIp || '--';
+    document.getElementById('detailDuplaAbordagem').innerText = dataset.duplaAbordagem || '--';
+    document.getElementById('detailEntregaRb').innerText = dataset.entregaRb || '--';
+    document.getElementById('detailDesignador').innerText = dataset.designador || '--';
+    document.getElementById('detailTrunk').innerText = dataset.trunk || '--';
+    document.getElementById('detailDhcp').innerText = dataset.dhcp || '--';
+    document.getElementById('detailValorPlano').innerText = dataset.valorPlano || '--';
+
+    const modal = document.getElementById('planDetailsModal');
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+}
+
+function closePlanDetailsModal() {
+    const modal = document.getElementById('planDetailsModal');
+    modal.classList.add('hidden');
+    modal.classList.remove('flex');
+}
+
+window.addEventListener('click', function(event) {
+    const modal = document.getElementById('planDetailsModal');
+    if (event.target === modal) {
+        closePlanDetailsModal();
+    }
+});
+</script>
+{% endblock %}

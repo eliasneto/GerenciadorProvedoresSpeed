@@ -41,6 +41,45 @@ class Partner(models.Model):
         return self.nome_fantasia or self.razao_social or "Parceiro sem Nome"
 
 
+class PartnerPlan(models.Model):
+    SIM_NAO_CHOICES = [
+        ('', 'Selecione'),
+        ('Sim', 'Sim'),
+        ('Não', 'Não'),
+    ]
+
+    partner = models.ForeignKey(Partner, on_delete=models.CASCADE, related_name='planos')
+    nome_plano = models.CharField('Nome do Plano', max_length=120)
+    velocidade = models.CharField('Velocidade (Mbps)', max_length=50, blank=True, null=True)
+    tecnologia = models.CharField('Tecnologia de Acesso', max_length=50, blank=True, null=True)
+    disponibilidade = models.CharField('Disponibilidade (%)', max_length=10, blank=True, null=True)
+    mttr = models.IntegerField('MTTR (hs)', blank=True, null=True)
+    perda_pacote = models.CharField('Perda de Pacote', max_length=10, blank=True, null=True)
+    latencia = models.IntegerField('Latência (ms)', blank=True, null=True)
+    interfaces = models.CharField('Interfaces', max_length=100, blank=True, null=True)
+    tipo_acesso = models.CharField('Tipo de Acesso', max_length=100, blank=True, null=True)
+    ipv4_bloco = models.CharField('Bloco IP', max_length=50, blank=True, null=True)
+    dupla_abordagem = models.CharField('Dupla Abordagem', max_length=3, blank=True, null=True, choices=SIM_NAO_CHOICES)
+    entrega_rb = models.CharField('Entrega RB', max_length=3, blank=True, null=True, choices=SIM_NAO_CHOICES)
+    designador = models.CharField('Designador', max_length=100, blank=True, null=True)
+    trunk = models.CharField('Interface em Trunk?', max_length=3, blank=True, null=True, choices=SIM_NAO_CHOICES)
+    dhcp = models.CharField('DHCP habilitado?', max_length=3, blank=True, null=True, choices=SIM_NAO_CHOICES)
+    prazo_ativacao = models.IntegerField('Prazo de Ativação (dias)', blank=True, null=True)
+    valor_plano = models.DecimalField('Valor do Plano', max_digits=10, decimal_places=2, blank=True, null=True)
+    contato_suporte = models.CharField('Contato para Suporte', max_length=100, blank=True, null=True)
+    telefone_suporte = models.CharField('Número do Telefone', max_length=25, blank=True, null=True)
+    data_cadastro = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'Plano do Parceiro'
+        verbose_name_plural = 'Planos dos Parceiros'
+        ordering = ['nome_plano', '-id']
+
+    def __str__(self):
+        parceiro = self.partner.nome_fantasia or self.partner.razao_social or f"Parceiro #{self.partner_id}"
+        return f"{self.nome_plano} - {parceiro}"
+
+
 class ProposalMotivoInviavel(models.Model):
     STATUS_CHOICES = [
         ('ativo', 'Ativo'),
@@ -104,13 +143,16 @@ class Proposal(models.Model):
     nome_proposta = models.CharField('Nome da Cotação', max_length=150, blank=True, null=True)
     os_numero = models.CharField('OS nº', max_length=50, blank=True, null=True)
     data_emissao = models.DateField('Data de Emissão', null=True, blank=True)
-    velocidade = models.CharField('Velocidade', max_length=50, default='50 Mbps')
-    tecnologia = models.CharField('Tecnologia', max_length=50, default='Fibra')
+    velocidade = models.CharField('Velocidade (Mbps)', max_length=50, default='50 Mbps')
+    tecnologia = models.CharField('Tecnologia de Acesso', max_length=50, default='Fibra')
     disponibilidade = models.CharField('Disponibilidade (%)', max_length=10, default='99,50%')
     mttr = models.IntegerField('MTTR (hs)', default=4)
     perda_pacote = models.CharField('Perda de Pacote', max_length=10, default='<1%')
     interfaces = models.CharField('Interfaces', max_length=100, default='Gigabit Ethernet (elétrica)')
-    ipv4_bloco = models.CharField('IPs (bloco)', max_length=50, default='IPv4 bloco/30')
+    tipo_acesso = models.CharField('Tipo de Acesso', max_length=100, blank=True, null=True)
+    ipv4_bloco = models.CharField('Bloco IP', max_length=50, default='IPv4 bloco/30')
+    dupla_abordagem = models.CharField('Dupla Abordagem', max_length=3, blank=True, null=True)
+    entrega_rb = models.CharField('Entrega RB', max_length=3, blank=True, null=True)
     designador = models.CharField('Designador', max_length=100, blank=True, null=True)
     trunk = models.CharField('Interface em Trunk?', max_length=3, default='Não')
     dhcp = models.CharField('DHCP habilitado?', max_length=3, default='Sim')

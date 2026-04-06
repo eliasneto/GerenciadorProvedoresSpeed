@@ -15,7 +15,7 @@ from urllib.parse import urlparse, urlencode
 from leads.models import Lead
 from partners.models import Proposal
 
-from .models import RegistroHistorico
+from .models import IntegrationAudit, RegistroHistorico
 
 
 def _resolve_sort(request, allowed_fields, default_field):
@@ -142,6 +142,83 @@ def home(request):
     return render(request, 'core/home.html', context)
 
 
+@user_passes_test(grupo_Operacao_required)
+@login_required
+def minhas_cotacoes(request):
+    busca = (request.GET.get('busca') or '').strip()
+    sort_by, direction = _resolve_sort(
+        request,
+        {'empresa', 'cotacao', 'cliente', 'endereco', 'ultimo_comentario', 'status'},
+        'empresa',
+    )
+    proposal_content_type = ContentType.objects.get_for_model(Proposal)
+    ultima_interacao_subquery = RegistroHistorico.objects.filter(
+        content_type=proposal_content_type,
+        object_id=OuterRef('pk'),
+    ).order_by('-data').values('data')[:1]
+
+    queryset = Proposal.objects.filter(responsavel=request.user).select_related(
+        'partner',
+        'cliente',
+        'client_address',
+        'responsavel',
+    ).annotate(
+        ultima_interacao=Subquery(ultima_interacao_subquery)
+    )
+
+    if busca:
+        queryset = queryset.filter(
+            Q(codigo_proposta__icontains=busca)
+            | Q(nome_proposta__icontains=busca)
+            | Q(partner__nome_fantasia__icontains=busca)
+            | Q(partner__razao_social__icontains=busca)
+            | Q(cliente__nome_fantasia__icontains=busca)
+            | Q(cliente__razao_social__icontains=busca)
+            | Q(client_address__login_ixc__icontains=busca)
+        )
+
+    order_map = {
+        'empresa': ['partner__nome_fantasia', 'partner__razao_social', 'id'],
+        'cotacao': ['codigo_proposta', 'nome_proposta', 'id'],
+        'cliente': ['cliente__nome_fantasia', 'cliente__razao_social', 'id'],
+        'endereco': ['client_address__login_ixc', 'id'],
+        'ultimo_comentario': ['ultima_interacao', 'id'],
+        'status': ['status', 'id'],
+    }
+    ordering = order_map[sort_by]
+    if direction == 'desc':
+        ordering = [f"-{field}" for field in ordering]
+    queryset = queryset.order_by(*ordering)
+
+    totais_por_status = {
+        'analise': queryset.filter(status='analise').count(),
+        'ativa': queryset.filter(status='ativa').count(),
+        'aguardando_contratacao': queryset.filter(status='aguardando_contratacao').count(),
+        'contratado': queryset.filter(status='contratado').count(),
+        'declinado': queryset.filter(status='declinado').count(),
+        'encerrada': queryset.filter(status='encerrada').count(),
+    }
+
+    paginator = Paginator(queryset, 20)
+    page_number = request.GET.get('page')
+    page_obj = paginator.get_page(page_number)
+
+    return render(request, 'core/minhas_cotacoes.html', {
+        'page_obj': page_obj,
+        'busca': busca,
+        'sort_by': sort_by,
+        'direction': direction,
+        'sort_links': _build_sort_links(
+            {'busca': busca},
+            sort_by,
+            direction,
+            ['empresa', 'cotacao', 'cliente', 'endereco', 'ultimo_comentario', 'status'],
+        ),
+        'totais_por_status': totais_por_status,
+        'total_resultados': queryset.count(),
+    })
+
+
 @user_passes_test(grupo_Gestao_required)
 @login_required
 def gestao_home(request):
@@ -153,11 +230,41 @@ def gestao_home(request):
 def gestao_relatorios(request):
     sort_by, direction = _resolve_sort(request, {'nome'}, 'nome')
     relatorios_catalogo = [
-        {'nome': 'Responsáveis por Endereço', 'url_name': 'gestao_relatorio_login_usuario'},
-        {'nome': 'Status por Endereço', 'url_name': 'gestao_relatorio_login_status'},
-        {'nome': 'Status por Cotação', 'url_name': 'gestao_relatorio_proposta_status'},
-        {'nome': 'Cotação por Cliente', 'url_name': 'gestao_relatorio_status_cliente'},
-        {'nome': 'Cotação por Endereço', 'url_name': 'gestao_relatorio_cotacao_endereco'},
+        {
+            'nome': 'Responsáveis por Endereço',
+            'url_name': 'gestao_relatorio_login_usuario',
+            'descricao': 'Acompanhe os endereços em negociação com e sem responsável definido.',
+            'icone': 'users',
+            'tag': 'Operação',
+        },
+        {
+            'nome': 'Status por Endereço',
+            'url_name': 'gestao_relatorio_login_status',
+            'descricao': 'Veja cada endereço distribuído por etapa da cotação.',
+            'icone': 'network',
+            'tag': 'Pipeline',
+        },
+        {
+            'nome': 'Status por Cotação',
+            'url_name': 'gestao_relatorio_proposta_status',
+            'descricao': 'Consolidação das cotações por parceiro, cliente e estágio atual.',
+            'icone': 'file-text',
+            'tag': 'Executivo',
+        },
+        {
+            'nome': 'Cotação por Cliente',
+            'url_name': 'gestao_relatorio_status_cliente',
+            'descricao': 'Quantidade de cotações por cliente, distribuídas por status.',
+            'icone': 'building-2',
+            'tag': 'Carteira',
+        },
+        {
+            'nome': 'Cotação por Endereço',
+            'url_name': 'gestao_relatorio_cotacao_endereco',
+            'descricao': 'Volume de cotações por endereço e visibilidade por etapa.',
+            'icone': 'map-pinned',
+            'tag': 'Base técnica',
+        },
     ]
 
     busca_relatorio = (request.GET.get('relatorio') or '').strip()
@@ -188,6 +295,77 @@ def gestao_relatorios(request):
             direction,
             ['nome'],
         ),
+    })
+
+
+@user_passes_test(grupo_Gestao_required)
+@login_required
+def gestao_logs_integracoes(request):
+    User = get_user_model()
+    busca = (request.GET.get('busca') or '').strip()
+    integracao = (request.GET.get('integracao') or '').strip()
+    acao = (request.GET.get('acao') or '').strip()
+    usuario_id = (request.GET.get('usuario') or '').strip()
+    data_inicio = (request.GET.get('data_inicio') or '').strip()
+    data_fim = (request.GET.get('data_fim') or '').strip()
+
+    queryset = IntegrationAudit.objects.select_related('usuario').all()
+
+    if busca:
+        queryset = queryset.filter(
+            Q(arquivo_nome__icontains=busca)
+            | Q(usuario__username__icontains=busca)
+            | Q(usuario__first_name__icontains=busca)
+            | Q(usuario__last_name__icontains=busca)
+        )
+
+    if integracao:
+        queryset = queryset.filter(integration=integracao)
+
+    if acao:
+        queryset = queryset.filter(action=acao)
+
+    if usuario_id:
+        queryset = queryset.filter(usuario_id=usuario_id)
+
+    try:
+        if data_inicio:
+            queryset = queryset.filter(criado_em__date__gte=datetime.strptime(data_inicio, '%Y-%m-%d').date())
+        if data_fim:
+            queryset = queryset.filter(criado_em__date__lte=datetime.strptime(data_fim, '%Y-%m-%d').date())
+    except ValueError:
+        pass
+
+    paginator = Paginator(queryset, 20)
+    page_number = request.GET.get('page')
+    page_obj = paginator.get_page(page_number)
+
+    return render(request, 'core/gestao_logs_integracoes.html', {
+        'page_obj': page_obj,
+        'busca': busca,
+        'integracao': integracao,
+        'acao': acao,
+        'usuario_id': usuario_id,
+        'data_inicio': data_inicio,
+        'data_fim': data_fim,
+        'usuarios': User.objects.filter(is_active=True).order_by('first_name', 'last_name', 'username'),
+        'integration_choices': IntegrationAudit.INTEGRATION_CHOICES,
+        'action_choices': IntegrationAudit.ACTION_CHOICES,
+    })
+
+
+@user_passes_test(grupo_Gestao_required)
+@login_required
+def gestao_log_integracao_detail(request, pk):
+    audit = get_object_or_404(IntegrationAudit.objects.select_related('usuario'), pk=pk)
+    itens_list = audit.items.all()
+    paginator = Paginator(itens_list, 30)
+    page_number = request.GET.get('page')
+    page_obj = paginator.get_page(page_number)
+
+    return render(request, 'core/gestao_log_integracao_detail.html', {
+        'audit': audit,
+        'page_obj': page_obj,
     })
 
 

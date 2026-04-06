@@ -1,4 +1,5 @@
 {% extends "core/base.html" %}
+{% load auth_extras %}
 
 {% block content %}
 <div class="p-6 md:p-10 max-w-7xl mx-auto">
@@ -50,7 +51,7 @@
             </div>
 
             <div class="flex items-center gap-2 w-full xl:w-auto shrink-0">
-                {% if busca_empresa or busca_cidade or busca_estado %}
+                {% if busca_empresa or busca_cidade or busca_estado or busca_bairro or busca_cep %}
                 <a href="{% url 'lead_list' %}" class="w-12 h-12 flex items-center justify-center rounded-full bg-red-50 text-red-500 hover:bg-red-100 transition" title="Limpar Filtros">
                     <i data-lucide="x" class="w-4 h-4"></i>
                 </a>
@@ -67,7 +68,7 @@
             <table class="w-full text-left">
                 <thead class="bg-gray-50 border-b border-gray-100">
                     <tr>
-                        <th class="px-6 py-4 text-xs font-bold uppercase text-gray-400">Empresa</th>
+                        <th class="px-6 py-4 text-xs font-bold uppercase text-gray-400">Parceiro</th>
                         <th class="px-6 py-4 text-xs font-bold uppercase text-gray-400">Município / UF</th>
                         <th class="px-6 py-4 text-xs font-bold uppercase text-gray-400">Contato</th>
                                                 <th class="px-6 py-4 text-xs font-bold uppercase text-gray-400 text-right">Ações</th>
@@ -156,13 +157,13 @@
 
             <div class="flex items-center gap-2">
                 {% if page_obj.has_previous %}
-                    <a href="?page={{ page_obj.previous_page_number }}&empresa={{ busca_empresa }}&cidade={{ busca_cidade }}&estado={{ busca_estado }}" class="w-10 h-10 flex items-center justify-center rounded-xl border border-gray-200 bg-white text-gray-500 hover:bg-gray-50 hover:text-gray-900 transition shadow-sm" title="Página Anterior">
+                    <a href="?page={{ page_obj.previous_page_number }}&empresa={{ busca_empresa }}&cidade={{ busca_cidade }}&estado={{ busca_estado }}&bairro={{ busca_bairro }}&cep={{ busca_cep }}" class="w-10 h-10 flex items-center justify-center rounded-xl border border-gray-200 bg-white text-gray-500 hover:bg-gray-50 hover:text-gray-900 transition shadow-sm" title="Página Anterior">
                         <i data-lucide="chevron-left" class="w-4 h-4"></i>
                     </a>
                 {% endif %}
 
                 {% if page_obj.has_next %}
-                    <a href="?page={{ page_obj.next_page_number }}&empresa={{ busca_empresa }}&cidade={{ busca_cidade }}&estado={{ busca_estado }}" class="w-10 h-10 flex items-center justify-center rounded-xl border border-gray-200 bg-white text-gray-500 hover:bg-gray-50 hover:text-gray-900 transition shadow-sm" title="Próxima Página">
+                    <a href="?page={{ page_obj.next_page_number }}&empresa={{ busca_empresa }}&cidade={{ busca_cidade }}&estado={{ busca_estado }}&bairro={{ busca_bairro }}&cep={{ busca_cep }}" class="w-10 h-10 flex items-center justify-center rounded-xl border border-gray-200 bg-white text-gray-500 hover:bg-gray-50 hover:text-gray-900 transition shadow-sm" title="Próxima Página">
                         <i data-lucide="chevron-right" class="w-4 h-4"></i>
                     </a>
                 {% endif %}
@@ -490,5 +491,43 @@ window.onclick = function(event) {
         closeQuickProposalModal();
     }
 }
+
+{% if request.user|has_group:"Administrador" %}
+document.addEventListener('DOMContentLoaded', function() {
+    document.querySelectorAll('a[href*="/parceiros/"]').forEach(link => {
+        if (!link.querySelector('[data-lucide="folder-open"]')) {
+            return;
+        }
+
+        const actions = link.parentElement;
+        if (!actions || actions.dataset.planIconInjected === 'true') {
+            return;
+        }
+
+        const match = link.getAttribute('href').match(/\/parceiros\/(\d+)\//);
+        if (!match) {
+            return;
+        }
+
+        const partnerId = match[1];
+        const planLink = document.createElement('a');
+        planLink.href = `/parceiros/${partnerId}/planos/?next=${encodeURIComponent(window.location.pathname + window.location.search)}`;
+        planLink.className = 'p-2 text-gray-400 hover:text-violet-600 hover:bg-violet-50 rounded-lg transition';
+        planLink.title = 'Cadastrar plano do parceiro';
+        planLink.innerHTML = '<i data-lucide="waypoints" class="w-5 h-5"></i>';
+
+        const historyLink = actions.querySelector('a[href*="/historico/"]');
+        if (historyLink) {
+            actions.insertBefore(planLink, historyLink);
+        } else {
+            actions.appendChild(planLink);
+        }
+
+        actions.dataset.planIconInjected = 'true';
+    });
+
+    lucide.createIcons();
+});
+{% endif %}
 </script>
 {% endblock %}

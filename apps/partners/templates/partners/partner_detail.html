@@ -23,8 +23,8 @@
 
     <div class="flex flex-col xl:flex-row xl:items-center justify-between gap-5 mb-8">
         <div class="flex items-center gap-4 min-w-0">
-            <a href="{{ back_url }}" onclick="smartGoBack('{{ back_url|escapejs }}'); return false;" class="p-3 bg-white border border-gray-100 rounded-2xl hover:bg-gray-50 transition shadow-sm shrink-0">
-                <i data-lucide="chevron-left" class="w-6 h-6 text-gray-400"></i>
+            <a href="{{ back_url }}" onclick="smartGoBack('{{ back_url|escapejs }}'); return false;" class="page-back-button shrink-0">
+                <i data-lucide="arrow-left" class="w-4 h-4"></i> Voltar
             </a>
             <div class="min-w-0">
                 <h1 class="text-3xl font-black text-gray-900 uppercase italic leading-none truncate">
@@ -151,7 +151,7 @@
                                                     <th class="px-5 py-4">Login / Unidade</th>
                                                     <th class="px-4 py-4">Status</th>
                                                     <th class="px-4 py-4">Valor Cliente</th>
-                                                    <th class="px-4 py-4">Valor Empresa</th>
+                                                    <th class="px-4 py-4">Valor Parceiro</th>
                                                 </tr>
                                             </thead>
                                             <tbody class="divide-y divide-gray-50">

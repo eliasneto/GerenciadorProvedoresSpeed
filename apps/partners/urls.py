@@ -12,6 +12,9 @@ urlpatterns = [
     # ... Suas outras rotas que já existem continuam aqui para baixo ...
     path('gestao-os/', views.proposal_global_list, name='proposal_global_list'),
     path('<int:pk>/', views.partner_detail, name='partner_detail'),
+    path('<int:pk>/planos/', views.partner_plan_manage, name='partner_plan_manage'),
+    path('<int:pk>/planos/add/', views.partner_plan_add, name='partner_plan_add'),
+    path('<int:partner_pk>/planos/<int:plan_pk>/delete/', views.partner_plan_delete, name='partner_plan_delete'),
     path('<int:pk>/clientes/', views.partner_clients_list, name='partner_clients_list'),
     path('<int:pk>/historico/add/', views.partner_add_historico, name='partner_add_historico'),
     path('status/<int:pk>/', views.update_partner_status, name='update_partner_status'),

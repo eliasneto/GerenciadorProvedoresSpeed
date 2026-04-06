@@ -1,0 +1,176 @@
+{% extends "core/base.html" %}
+
+{% block title %}Speed | Dados do Endereço{% endblock %}
+
+{% block content %}
+<div class="max-w-6xl mx-auto p-6 md:p-10">
+    <div class="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-10">
+        <div>
+            <nav class="flex mb-3" aria-label="Breadcrumb">
+                <ol class="flex items-center space-x-2 text-[10px] font-black uppercase tracking-widest text-gray-400">
+                    <li><a href="{% url 'cliente_list' %}" class="hover:text-ageis-yellow transition">Clientes</a></li>
+                    <li><i data-lucide="chevron-right" class="w-3 h-3"></i></li>
+                    <li><a href="{% url 'endereco_list' cliente.pk %}" class="hover:text-ageis-yellow transition">Endereços</a></li>
+                    <li><i data-lucide="chevron-right" class="w-3 h-3"></i></li>
+                    <li class="text-gray-900">Dados do Endereço</li>
+                </ol>
+            </nav>
+            <h1 class="text-3xl font-black text-gray-900 italic uppercase tracking-tighter leading-none">
+                Dados do Endereço <span class="text-ageis-yellow">/</span> {{ endereco.login_ixc|default:"Sem Login" }}
+            </h1>
+            <p class="text-xs text-gray-500 mt-2 font-bold uppercase tracking-widest italic">
+                Cliente: {{ cliente.nome_fantasia|default:cliente.razao_social }}
+            </p>
+        </div>
+
+        <div class="flex flex-wrap items-center gap-3">
+            <a href="{{ busca_cotacao_url }}"
+               class="flex items-center gap-2 px-5 py-2.5 bg-ageis-black rounded-xl text-xs font-black uppercase italic text-ageis-yellow hover:bg-gray-900 transition shadow-sm">
+                <i data-lucide="scan-search" class="w-4 h-4"></i> Buscar Cotações da Região
+            </a>
+            <a href="{% url 'endereco_list' cliente.pk %}" onclick="smartGoBack('{% url 'endereco_list' cliente.pk %}'); return false;"
+               class="flex items-center gap-2 px-5 py-2.5 bg-white border border-gray-200 rounded-xl text-xs font-black uppercase italic text-gray-500 hover:text-gray-900 transition shadow-sm">
+                <i data-lucide="arrow-left" class="w-4 h-4"></i> Voltar
+            </a>
+        </div>
+    </div>
+
+    <div class="bg-white rounded-[2.5rem] shadow-xl border border-gray-200 overflow-hidden mb-8">
+        <div class="bg-gray-100/80 px-8 py-5 border-b border-gray-200 flex items-center gap-3">
+            <div class="p-2.5 bg-ageis-yellow text-ageis-black rounded-xl shadow-lg shadow-ageis-yellow/20">
+                <i data-lucide="map-pinned" class="w-5 h-5"></i>
+            </div>
+            <h2 class="font-black text-sm uppercase italic text-gray-900 tracking-tight">Endereço do Login</h2>
+        </div>
+
+        <div class="p-8 grid grid-cols-1 md:grid-cols-4 gap-x-8 gap-y-6">
+            <div class="md:col-span-2 space-y-2">
+                <label class="text-[10px] font-black uppercase text-gray-500 ml-1 italic tracking-widest">Logradouro</label>
+                <div class="w-full p-4 bg-gray-100 border border-gray-200 text-gray-900 font-bold rounded-2xl">{{ endereco.logradouro|default:"--" }}</div>
+            </div>
+            <div class="space-y-2">
+                <label class="text-[10px] font-black uppercase text-gray-500 ml-1 italic tracking-widest">Número</label>
+                <div class="w-full p-4 bg-gray-100 border border-gray-200 text-gray-900 font-bold rounded-2xl">{{ endereco.numero|default:"--" }}</div>
+            </div>
+            <div class="space-y-2">
+                <label class="text-[10px] font-black uppercase text-gray-500 ml-1 italic tracking-widest">CEP</label>
+                <div class="w-full p-4 bg-gray-100 border border-gray-200 text-gray-900 font-bold rounded-2xl">{{ endereco.cep|default:"--" }}</div>
+            </div>
+
+            <div class="md:col-span-2 space-y-2 pt-4 border-t border-gray-50 mt-2">
+                <label class="text-[10px] font-black uppercase text-gray-500 ml-1 italic tracking-widest">Bairro</label>
+                <div class="w-full p-4 bg-gray-100 border border-gray-200 text-gray-900 font-bold rounded-2xl">{{ endereco.bairro|default:"--" }}</div>
+            </div>
+            <div class="space-y-2 pt-4 border-t border-gray-50 mt-2">
+                <label class="text-[10px] font-black uppercase text-gray-500 ml-1 italic tracking-widest">Cidade</label>
+                <div class="w-full p-4 bg-gray-100 border border-gray-200 text-gray-900 font-bold rounded-2xl">{{ endereco.cidade|default:"--" }}</div>
+            </div>
+            <div class="space-y-2 pt-4 border-t border-gray-50 mt-2">
+                <label class="text-[10px] font-black uppercase text-gray-500 ml-1 italic tracking-widest">UF</label>
+                <div class="w-full p-4 bg-gray-100 border border-gray-200 text-gray-900 font-bold rounded-2xl">{{ endereco.estado|default:"--" }}</div>
+            </div>
+
+            <div class="md:col-span-2 space-y-2">
+                <label class="text-[10px] font-black uppercase text-gray-500 ml-1 italic tracking-widest">Tipo</label>
+                <div class="w-full p-4 bg-gray-100 border border-gray-200 text-gray-900 font-bold rounded-2xl">{{ endereco.tipo|default:"--" }}</div>
+            </div>
+            <div class="md:col-span-2 space-y-2">
+                <label class="text-[10px] font-black uppercase text-gray-500 ml-1 italic tracking-widest">Filial</label>
+                <div class="w-full p-4 bg-gray-100 border border-gray-200 text-gray-900 font-bold rounded-2xl">{{ endereco.filial_ixc|default:"--" }}</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="bg-white rounded-[2.5rem] shadow-xl border border-gray-200 overflow-hidden">
+        <div class="bg-gray-100/80 px-8 py-5 border-b border-gray-200 flex items-center gap-3">
+            <div class="p-2.5 bg-blue-600 text-white rounded-xl shadow-lg shadow-blue-600/20">
+                <i data-lucide="zap" class="w-5 h-5"></i>
+            </div>
+            <h2 class="font-black text-sm uppercase italic text-gray-900 tracking-tight">Parâmetros de Conectividade & Suporte</h2>
+        </div>
+
+        <div class="p-8 grid grid-cols-1 md:grid-cols-4 gap-x-8 gap-y-6">
+            <div class="md:col-span-2 space-y-2">
+                <label class="text-[10px] font-black uppercase text-gray-500 ml-1 italic tracking-widest">Velocidade (Mbps)</label>
+                <div class="w-full p-4 bg-gray-100 border border-gray-200 text-gray-900 font-bold rounded-2xl">{{ endereco.velocidade|default:"--" }}</div>
+            </div>
+            <div class="md:col-span-2 space-y-2">
+                <label class="text-[10px] font-black uppercase text-gray-500 ml-1 italic tracking-widest">Tecnologia de Acesso</label>
+                <div class="w-full p-4 bg-gray-100 border border-gray-200 text-gray-900 font-bold rounded-2xl">{{ endereco.tecnologia|default:"--" }}</div>
+            </div>
+
+            <div class="md:col-span-2 space-y-2 pt-4 border-t border-gray-50 mt-2">
+                <label class="text-[10px] font-black text-blue-600 uppercase italic tracking-widest">Contato para Suporte</label>
+                <div class="w-full p-4 bg-gray-100 border border-gray-200 text-gray-900 font-bold rounded-2xl">{{ endereco.contato_suporte|default:"--" }}</div>
+            </div>
+            <div class="md:col-span-2 space-y-2 pt-4 border-t border-gray-50 mt-2">
+                <label class="text-[10px] font-black text-blue-600 uppercase italic tracking-widest">Número do Telefone</label>
+                <div class="w-full p-4 bg-gray-100 border border-gray-200 text-gray-900 font-bold rounded-2xl">{{ endereco.telefone_suporte|default:"--" }}</div>
+            </div>
+
+            <div class="space-y-2">
+                <label class="text-[10px] font-black text-gray-500 uppercase italic tracking-widest">Disponibilidade</label>
+                <div class="w-full p-4 bg-gray-100 border border-gray-200 text-gray-900 font-bold rounded-2xl">{{ endereco.disponibilidade|default:"--" }}</div>
+            </div>
+            <div class="space-y-2">
+                <label class="text-[10px] font-black text-gray-500 uppercase italic tracking-widest">MTTR (h)</label>
+                <div class="w-full p-4 bg-gray-100 border border-gray-200 text-gray-900 font-bold rounded-2xl">{{ endereco.mttr|default:"--" }}</div>
+            </div>
+            <div class="space-y-2">
+                <label class="text-[10px] font-black text-gray-500 uppercase italic tracking-widest">Perda Pacote</label>
+                <div class="w-full p-4 bg-gray-100 border border-gray-200 text-gray-900 font-bold rounded-2xl">{{ endereco.perda_pacote|default:"--" }}</div>
+            </div>
+            <div class="space-y-2">
+                <label class="text-[10px] font-black text-gray-500 uppercase italic tracking-widest">Latência (ms)</label>
+                <div class="w-full p-4 bg-gray-100 border border-gray-200 text-gray-900 font-bold rounded-2xl">{{ endereco.latencia|default:"--" }}</div>
+            </div>
+
+            <div class="md:col-span-2 space-y-2">
+                <label class="text-[10px] font-black text-gray-500 uppercase italic tracking-widest">Interfaces</label>
+                <div class="w-full p-4 bg-gray-100 border border-gray-200 text-gray-900 font-bold rounded-2xl">{{ endereco.interfaces|default:"--" }}</div>
+            </div>
+            <div class="md:col-span-2 space-y-2">
+                <label class="text-[10px] font-black text-gray-500 uppercase italic tracking-widest">Tipo de Acesso</label>
+                <div class="w-full p-4 bg-gray-100 border border-gray-200 text-gray-900 font-bold rounded-2xl">{{ endereco.tipo_acesso|default:"--" }}</div>
+            </div>
+
+            <div class="md:col-span-2 space-y-2">
+                <label class="text-[10px] font-black text-gray-500 uppercase italic tracking-widest">Bloco IP</label>
+                <div class="w-full p-4 bg-gray-100 border border-gray-200 text-gray-900 font-bold rounded-2xl">{{ endereco.ipv4_bloco|default:"--" }}</div>
+            </div>
+            <div class="space-y-2">
+                <label class="text-[10px] font-black text-gray-500 uppercase italic tracking-widest">Dupla Abordagem</label>
+                <div class="w-full p-4 bg-gray-100 border border-gray-200 text-gray-900 font-bold rounded-2xl">{{ endereco.dupla_abordagem|default:"--" }}</div>
+            </div>
+            <div class="space-y-2">
+                <label class="text-[10px] font-black text-gray-500 uppercase italic tracking-widest">Entrega RB</label>
+                <div class="w-full p-4 bg-gray-100 border border-gray-200 text-gray-900 font-bold rounded-2xl">{{ endereco.entrega_rb|default:"--" }}</div>
+            </div>
+
+            <div class="md:col-span-2 space-y-2">
+                <label class="text-[10px] font-black text-gray-500 uppercase italic tracking-widest">Designador</label>
+                <div class="w-full p-4 bg-gray-100 border border-gray-200 text-gray-900 font-bold rounded-2xl">{{ endereco.designador|default:"--" }}</div>
+            </div>
+
+            <div class="md:col-span-2 space-y-2">
+                <label class="text-[10px] font-black text-gray-500 uppercase italic tracking-widest">Configuração de Porta</label>
+                <div class="grid grid-cols-2 gap-4 p-4 bg-gray-100 border border-gray-200 rounded-2xl">
+                    <div>
+                        <p class="text-[10px] font-black uppercase tracking-widest text-gray-500 mb-2">Trunk?</p>
+                        <div class="w-full p-4 bg-white border border-gray-200 text-gray-900 font-bold rounded-2xl">{{ endereco.trunk|default:"--" }}</div>
+                    </div>
+                    <div>
+                        <p class="text-[10px] font-black uppercase tracking-widest text-gray-500 mb-2">DHCP?</p>
+                        <div class="w-full p-4 bg-white border border-gray-200 text-gray-900 font-bold rounded-2xl">{{ endereco.dhcp|default:"--" }}</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="md:col-span-2 space-y-2">
+                <label class="text-[10px] font-black text-gray-500 uppercase italic tracking-widest">Prazo de Ativação</label>
+                <div class="w-full p-4 bg-gray-100 border border-gray-200 text-gray-900 font-bold rounded-2xl">{{ endereco.prazo_ativacao|default:"--" }}</div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

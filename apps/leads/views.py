@@ -18,7 +18,8 @@ from partners.forms import ProposalForm
 from clientes.models import Endereco
 
 # IMPORTAÇÃO DA TIMELINE (HISTÓRICO)
-from core.models import RegistroHistorico
+from core.models import IntegrationAudit, RegistroHistorico
+from apps.core.integration_audit import dataframe_to_records, registrar_auditoria_integracao
 
 from django.db.models import Q
 from decimal import Decimal, InvalidOperation
@@ -250,6 +251,8 @@ def lead_list(request):
     busca_empresa = request.GET.get('empresa', '')
     busca_cidade = request.GET.get('cidade', '')
     busca_estado = request.GET.get('estado', '')
+    busca_bairro = request.GET.get('bairro', '')
+    busca_cep = request.GET.get('cep', '')
 
     # 3. Aplica os filtros na lista
     if busca_empresa:
@@ -259,11 +262,16 @@ def lead_list(request):
             Q(razao_social__icontains=busca_empresa)
         )
     
-    if busca_cidade:
-        leads_list = leads_list.filter(cidade__icontains=busca_cidade)
-        
     if busca_estado:
         leads_list = leads_list.filter(estado__iexact=busca_estado)
+
+    if busca_cep:
+        leads_list = leads_list.filter(Q(cep__icontains=busca_cep) | Q(endereco__icontains=busca_cep))
+    elif busca_cidade:
+        leads_list = leads_list.filter(cidade__icontains=busca_cidade)
+
+    if busca_bairro:
+        leads_list = leads_list.filter(Q(bairro__icontains=busca_bairro) | Q(endereco__icontains=busca_bairro))
 
     # 4. Paginação (10 por página)
     paginator = Paginator(leads_list, 10)
@@ -289,6 +297,8 @@ def lead_list(request):
         'busca_empresa': busca_empresa,
         'busca_cidade': busca_cidade,
         'busca_estado': busca_estado,
+        'busca_bairro': busca_bairro,
+        'busca_cep': busca_cep,
     }
     
     return render(request, 'leads/lead_list.html', context)
@@ -675,11 +685,28 @@ def integracoes_view(request):
         caminho_saida = os.path.join(temp_dir, f"resultado_{filename}")
 
         try:
+            try:
+                df_entrada = pd.read_excel(caminho_entrada)
+            except Exception:
+                df_entrada = pd.DataFrame()
+
+            itens_importados = dataframe_to_records(df_entrada) if not df_entrada.empty else []
+            registrar_auditoria_integracao(
+                integration='buscar_fornecedores',
+                action='importacao_planilha',
+                usuario=request.user,
+                arquivo_nome=planilha.name,
+                total_registros=len(itens_importados),
+                detalhes={'colunas': list(df_entrada.columns)},
+                itens=itens_importados,
+            )
+
             dados_encontrados = processar_planilha(caminho_entrada, caminho_saida)
+            itens_execucao = []
             
             # 5. SALVANDO NO BANCO DE DADOS
             if dados_encontrados:
-                for item in dados_encontrados:
+                for index, item in enumerate(dados_encontrados, start=2):
                     # 1. Tratamento e Normalização Básica
                     nome_fantasia_str = str(item.get('Nome Fantasia') or item.get('Razão Social') or 'Lead Sem Nome').strip()[:200]
                     razao_social_str = str(item.get('Razão Social') or nome_fantasia_str).strip()[:200]
@@ -726,6 +753,29 @@ def integracoes_view(request):
                             'observacao_ia': obs
                         }
                     )
+                    itens_execucao.append(
+                        {
+                            'linha_numero': index,
+                            'status': 'sucesso',
+                            'mensagem': 'Fornecedor processado com sucesso.',
+                            'dados_json': item,
+                        }
+                    )
+
+            registrar_auditoria_integracao(
+                integration='buscar_fornecedores',
+                action='execucao_integracao',
+                usuario=request.user,
+                arquivo_nome=planilha.name,
+                total_registros=len(dados_encontrados or []),
+                total_sucessos=len(dados_encontrados or []),
+                total_erros=0,
+                detalhes={
+                    'arquivo_saida': os.path.basename(caminho_saida),
+                    'colunas_entrada': list(df_entrada.columns),
+                },
+                itens=itens_execucao,
+            )
 
             if os.path.exists(caminho_saida):
                 with open(caminho_saida, 'rb') as f:
@@ -750,10 +800,18 @@ def integracoes_view(request):
     return render(request, 'leads/integracoes.html')
 
 def download_modelo_google_view(request):
-    df = pd.DataFrame(columns=['Serviço', 'Cidade', 'Estado'])
+    df = pd.DataFrame(columns=['Serviço', 'Cidade', 'Estado', 'Bairro', 'CEP'])
     
-    df.loc[0] = ['Provedor de Internet', 'Fortaleza', 'CE']
-    df.loc[1] = ['Link Dedicado', 'Eusébio', 'CE']
+    df.loc[0] = ['Provedor de Internet', 'Fortaleza', 'CE', 'Centro', '60000-000']
+    df.loc[1] = ['Link Dedicado', 'Eusébio', 'CE', 'Guaribas', '61760-000']
+
+    registrar_auditoria_integracao(
+        integration='buscar_fornecedores',
+        action='download_modelo',
+        usuario=request.user if request.user.is_authenticated else None,
+        arquivo_nome='Modelo_Busca_Google.xlsx',
+        detalhes={'colunas': list(df.columns)},
+    )
     
     response = HttpResponse(
         content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'

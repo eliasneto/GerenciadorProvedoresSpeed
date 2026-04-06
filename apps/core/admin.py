@@ -1,46 +1,83 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
-from .models import User, RegistroHistorico
+
+from .models import IntegrationAudit, IntegrationAuditItem, RegistroHistorico, User
+
 
 @admin.register(User)
 class UserAdmin(BaseUserAdmin):
-    # 1. Removemos o formulário de alteração de senha do topo da página
     change_password_form = None
-
-    # 2. Reorganiza os campos de EDIÇÃO (Removendo o campo de Password/Estrelinhas)
     fieldsets = (
-        (None, {'fields': ('username',)}),
-        ('Informações Pessoais', {'fields': ('first_name', 'last_name', 'email')}),
-        ('Speed: Permissões Especiais', {'fields': ('is_gestor', 'is_active', 'is_staff', 'is_superuser')}),
-        ('Grupos e Acessos', {'fields': ('groups', 'user_permissions')}),
-        ('Datas', {'fields': ('last_login', 'date_joined')}),
+        (None, {"fields": ("username",)}),
+        ("Informacoes Pessoais", {"fields": ("first_name", "last_name", "email")}),
+        ("Speed: Permissoes Especiais", {"fields": ("is_gestor", "is_active", "is_staff", "is_superuser")}),
+        ("Grupos e Acessos", {"fields": ("groups", "user_permissions")}),
+        ("Datas", {"fields": ("last_login", "date_joined")}),
     )
-    
-    # 3. Organiza o formulário de CRIAÇÃO (Puxando apenas o essencial para o AD)
     add_fieldsets = BaseUserAdmin.add_fieldsets + (
-            ('Configurações Speed', {
-                'classes': ('wide',),
-                'fields': ('is_gestor',),
-            }),
-        )
+        (
+            "Configuracoes Speed",
+            {
+                "classes": ("wide",),
+                "fields": ("is_gestor",),
+            },
+        ),
+    )
+    list_display = ("username", "email", "is_gestor", "is_staff", "is_active")
+    search_fields = ("username", "email")
+    ordering = ("username",)
+    readonly_fields = ("last_login", "date_joined")
 
-    # Colunas na listagem
-    list_display = ('username', 'email', 'is_gestor', 'is_staff', 'is_active')
-    search_fields = ('username', 'email')
-    ordering = ('username',)
-    readonly_fields = ('last_login', 'date_joined')
-
-    # 4. Bloqueio de Segurança: Remove o acesso à view de senha
-    # Esta é a forma correta e segura para Django 4.0+
-    # 4. Bloqueio de Segurança: Remove o acesso à view de senha
     def get_urls(self):
         urls = super().get_urls()
-        # Filtramos as URLs garantindo que u.name não seja None
-        return [u for u in urls if u.name and 'password' not in u.name]
+        return [u for u in urls if u.name and "password" not in u.name]
 
-# Registro do Histórico
+
 @admin.register(RegistroHistorico)
 class RegistroHistoricoAdmin(admin.ModelAdmin):
-    list_display = ('usuario', 'acao', 'data')
-    list_filter = ('acao', 'data')
-    search_fields = ('usuario__username', 'descricao')
+    list_display = ("usuario", "tipo", "data")
+    list_filter = ("tipo", "data")
+    search_fields = ("usuario__username", "acao")
+
+
+class IntegrationAuditItemInline(admin.TabularInline):
+    model = IntegrationAuditItem
+    extra = 0
+    can_delete = False
+    readonly_fields = ("linha_numero", "status", "mensagem", "dados_json", "criado_em")
+
+
+@admin.register(IntegrationAudit)
+class IntegrationAuditAdmin(admin.ModelAdmin):
+    list_display = (
+        "integration",
+        "action",
+        "usuario",
+        "arquivo_nome",
+        "total_registros",
+        "total_sucessos",
+        "total_erros",
+        "criado_em",
+    )
+    list_filter = ("integration", "action", "criado_em")
+    search_fields = ("usuario__username", "arquivo_nome")
+    readonly_fields = (
+        "integration",
+        "action",
+        "usuario",
+        "arquivo_nome",
+        "total_registros",
+        "total_sucessos",
+        "total_erros",
+        "detalhes_json",
+        "criado_em",
+    )
+    inlines = [IntegrationAuditItemInline]
+
+
+@admin.register(IntegrationAuditItem)
+class IntegrationAuditItemAdmin(admin.ModelAdmin):
+    list_display = ("audit", "linha_numero", "status", "criado_em")
+    list_filter = ("status", "criado_em", "audit__integration")
+    search_fields = ("audit__arquivo_nome", "mensagem")
+    readonly_fields = ("audit", "linha_numero", "status", "mensagem", "dados_json", "criado_em")

@@ -4,8 +4,8 @@
 <div class="p-6 md:p-10 max-w-5xl mx-auto">
     <div class="mb-8 flex justify-between items-end">
         <div>
-            <a href="{% url 'lead_list' %}" onclick="smartGoBack('{% url 'lead_list' %}'); return false;" class="text-[10px] font-black uppercase tracking-widest text-gray-400 hover:text-ageis-black flex items-center gap-2 mb-2 w-fit transition">
-                <i data-lucide="arrow-left" class="w-3 h-3"></i> Voltar para a lista
+            <a href="{% url 'lead_list' %}" onclick="smartGoBack('{% url 'lead_list' %}'); return false;" class="page-back-button mb-3">
+                <i data-lucide="arrow-left" class="w-4 h-4"></i> Voltar
             </a>
             <h1 class="text-3xl font-black text-gray-900 italic uppercase tracking-tighter">
                 {% if lead %}Editar <span class="text-ageis-yellow">Lead</span>{% else %}Novo <span class="text-ageis-yellow">Cadastro</span>{% endif %}
@@ -14,7 +14,7 @@
             <p class="text-xs font-bold text-gray-400 mt-1 uppercase">{{ lead.nome_fantasia|default:lead.razao_social }}</p>
             {% endif %}
         </div>
-        
+
         {% if lead %}
         <a href="{% url 'timeline_global' 'leads' 'lead' lead.pk %}" class="flex items-center gap-2 bg-blue-50 text-blue-600 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-blue-100 transition">
             <i data-lucide="history" class="w-4 h-4"></i> Ver Histórico Completo
@@ -25,24 +25,24 @@
     <div class="bg-white p-8 md:p-12 rounded-[2.5rem] shadow-sm border border-gray-100">
         <form method="post" class="space-y-8">
             {% csrf_token %}
-            
+
             <div>
                 <div class="flex items-center gap-2 mb-6 border-b border-gray-50 pb-4">
                     <i data-lucide="building-2" class="w-5 h-5 text-ageis-yellow"></i>
-                    <h3 class="font-black text-sm uppercase tracking-widest text-gray-800">Identificação da Empresa</h3>
+                    <h3 class="font-black text-sm uppercase tracking-widest text-gray-800">Identificação do Parceiro</h3>
                 </div>
-                
+
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div class="md:col-span-2">
                         <label class="text-[10px] font-black uppercase text-gray-400 mb-2 block tracking-widest">Razão Social</label>
                         {{ form.razao_social }}
                     </div>
-                    
+
                     <div class="md:col-span-2">
                         <label class="text-[10px] font-black uppercase text-gray-400 mb-2 block tracking-widest">Nome Fantasia</label>
                         {{ form.nome_fantasia }}
                     </div>
-                    
+
                     <div>
                         <label class="text-[10px] font-black uppercase text-gray-400 mb-2 block tracking-widest">CNPJ/CPF</label>
                         {{ form.cnpj_cpf }}
@@ -68,21 +68,35 @@
                     <h3 class="font-black text-sm uppercase tracking-widest text-gray-800">Endereço e Localização</h3>
                 </div>
 
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div class="grid grid-cols-1 md:grid-cols-6 gap-6">
                     <div class="md:col-span-2">
-                        <label class="text-[10px] font-black uppercase text-gray-400 mb-2 block tracking-widest">Endereço Completo</label>
+                        <label class="text-[10px] font-black uppercase text-gray-400 mb-2 block tracking-widest">CEP</label>
+                        {{ form.cep }}
+                    </div>
+
+                    <div class="md:col-span-3">
+                        <label class="text-[10px] font-black uppercase text-gray-400 mb-2 block tracking-widest">Logradouro / Endereço</label>
                         {{ form.endereco }}
                     </div>
 
-                    <div class="grid grid-cols-3 gap-4 md:col-span-2">
-                        <div class="col-span-2">
-                            <label class="text-[10px] font-black uppercase text-gray-400 mb-2 block tracking-widest">Cidade</label>
-                            {{ form.cidade }}
-                        </div>
-                        <div>
-                            <label class="text-[10px] font-black uppercase text-gray-400 mb-2 block tracking-widest">UF</label>
-                            {{ form.estado }}
-                        </div>
+                    <div class="md:col-span-1">
+                        <label class="text-[10px] font-black uppercase text-gray-400 mb-2 block tracking-widest">Número</label>
+                        {{ form.numero }}
+                    </div>
+
+                    <div class="md:col-span-2">
+                        <label class="text-[10px] font-black uppercase text-gray-400 mb-2 block tracking-widest">Bairro</label>
+                        {{ form.bairro }}
+                    </div>
+
+                    <div class="md:col-span-3">
+                        <label class="text-[10px] font-black uppercase text-gray-400 mb-2 block tracking-widest">Cidade</label>
+                        {{ form.cidade }}
+                    </div>
+
+                    <div class="md:col-span-1">
+                        <label class="text-[10px] font-black uppercase text-gray-400 mb-2 block tracking-widest">UF</label>
+                        {{ form.estado }}
                     </div>
                 </div>
             </div>
@@ -147,9 +161,8 @@
 <script>
     lucide.createIcons();
 
-    // Máscaras de entrada (mantidas do seu código original)
     const phoneElement = document.querySelector('input[name="telefone"]');
-    if(phoneElement) {
+    if (phoneElement) {
         IMask(phoneElement, {
             mask: [
                 { mask: '(00) 0000-0000' },
@@ -159,7 +172,7 @@
     }
 
     const docElement = document.querySelector('input[name="cnpj_cpf"]');
-    if(docElement) {
+    if (docElement) {
         IMask(docElement, {
             mask: [
                 { mask: '000.000.000-00' },
@@ -168,7 +181,11 @@
         });
     }
 
-    // Aplica classes de estilo nos inputs do Django automaticamente
+    const cepElement = document.querySelector('input[name="cep"]');
+    if (cepElement) {
+        IMask(cepElement, { mask: '00000-000' });
+    }
+
     document.querySelectorAll('input, select, textarea').forEach(el => {
         el.classList.add('w-full', 'p-4', 'bg-gray-50', 'border', 'border-gray-100', 'rounded-2xl', 'outline-none', 'focus:ring-2', 'focus:ring-ageis-yellow', 'font-bold', 'text-sm', 'transition-all');
     });

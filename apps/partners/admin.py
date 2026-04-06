@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import Partner, Proposal, ProposalMotivoInviavel
+from .models import Partner, PartnerPlan, Proposal, ProposalMotivoInviavel
 
 
 class ProposalInline(admin.TabularInline):
@@ -11,13 +11,30 @@ class ProposalInline(admin.TabularInline):
     show_change_link = True
 
 
+class PartnerPlanInline(admin.TabularInline):
+    model = PartnerPlan
+    extra = 0
+    fields = ('nome_plano', 'velocidade', 'tecnologia', 'tipo_acesso', 'ipv4_bloco', 'data_cadastro')
+    readonly_fields = ('data_cadastro',)
+    show_change_link = True
+
+
 @admin.register(Partner)
 class PartnerAdmin(admin.ModelAdmin):
     list_display = ('id', 'nome_fantasia', 'cnpj_cpf', 'status', 'contato_nome', 'telefone', 'data_cadastro')
     list_filter = ('status', 'data_cadastro')
     search_fields = ('nome_fantasia', 'razao_social', 'cnpj_cpf', 'contato_nome', 'email', 'telefone')
     ordering = ('-data_cadastro',)
-    inlines = [ProposalInline]
+    inlines = [PartnerPlanInline, ProposalInline]
+
+
+@admin.register(PartnerPlan)
+class PartnerPlanAdmin(admin.ModelAdmin):
+    list_display = ('id', 'nome_plano', 'partner', 'velocidade', 'tecnologia', 'tipo_acesso', 'data_cadastro')
+    list_filter = ('tecnologia', 'tipo_acesso', 'dupla_abordagem', 'entrega_rb', 'trunk', 'dhcp')
+    search_fields = ('nome_plano', 'partner__nome_fantasia', 'partner__razao_social', 'velocidade', 'tipo_acesso')
+    autocomplete_fields = ('partner',)
+    ordering = ('partner__nome_fantasia', 'nome_plano')
 
 
 @admin.register(Proposal)
