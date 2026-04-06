@@ -1060,6 +1060,19 @@ def gestao_relatorio_login_usuario(request):
     paginator = Paginator(queryset, 20)
     page_number = request.GET.get('page')
     page_obj = paginator.get_page(page_number)
+    rows = []
+    for item in page_obj:
+        rows.append({
+            'pk': item.pk,
+            'partner_nome': _proposal_partner_nome(item),
+            'codigo_exibicao': item.codigo_exibicao,
+            'nome_proposta': item.nome_proposta or 'Cotacao sem nome',
+            'cliente_nome': _proposal_cliente_nome(item),
+            'login_nome': _proposal_endereco_nome(item),
+            'responsavel_nome': _proposal_responsavel_nome(item),
+            'responsavel_id': item.responsavel_id or '',
+            'ultima_interacao': item.ultima_interacao,
+        })
 
     usuarios_disponiveis = User.objects.filter(
         is_active=True,
