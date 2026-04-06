@@ -83,13 +83,13 @@
                             <div class="font-bold text-gray-900">{{ item.partner_nome }}</div>
                         </td>
                         <td class="px-6 py-5">
-                            <a href="{% url 'proposal_batch_detail' item.proposal.pk %}?next={{ request.get_full_path|urlencode }}" class="font-bold text-ageis-yellow hover:text-black transition-colors">
+                            <a href="{% url 'proposal_batch_detail' item.proposal_pk %}?next={{ request.get_full_path|urlencode }}" class="font-bold text-ageis-yellow hover:text-black transition-colors">
                                 #{{ item.codigo_exibicao }}
                             </a>
                             <div class="text-sm text-gray-700 mt-1">{{ item.nome_proposta }}</div>
                         </td>
                         <td class="px-6 py-5">
-                            <div class="font-semibold text-gray-900">{{ item.cliente|default:"--" }}</div>
+                            <div class="font-semibold text-gray-900">{{ item.cliente_nome }}</div>
                         </td>
                         <td class="px-6 py-5">
                             <div class="font-semibold text-gray-900">{{ item.total_logins }}</div>

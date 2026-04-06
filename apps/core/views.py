@@ -52,6 +52,88 @@ def _sortable_value(value):
     return value
 
 
+def _proposal_cliente_nome(proposal):
+    try:
+        cliente = getattr(proposal, 'cliente', None)
+    except Exception:
+        cliente = None
+
+    if cliente is None:
+        return '--'
+
+    try:
+        return cliente.nome_fantasia or cliente.razao_social or '--'
+    except Exception:
+        return str(cliente or '--')
+
+
+def _proposal_partner_nome(proposal):
+    try:
+        partner = getattr(proposal, 'partner', None)
+    except Exception:
+        partner = None
+
+    if partner is None:
+        return '--'
+
+    try:
+        return partner.nome_fantasia or partner.razao_social or '--'
+    except Exception:
+        return str(partner or '--')
+
+
+def _proposal_endereco_nome(proposal):
+    try:
+        client_address = getattr(proposal, 'client_address', None)
+    except Exception:
+        client_address = None
+
+    if client_address is None:
+        return '--'
+
+    try:
+        return client_address.login_ixc or '--'
+    except Exception:
+        return '--'
+
+
+def _proposal_endereco_complemento(proposal):
+    try:
+        client_address = getattr(proposal, 'client_address', None)
+    except Exception:
+        client_address = None
+
+    if client_address is None:
+        return '--'
+
+    try:
+        return str(client_address)
+    except Exception:
+        return '--'
+
+
+def _proposal_responsavel_nome(proposal):
+    try:
+        responsavel = getattr(proposal, 'responsavel', None)
+    except Exception:
+        responsavel = None
+
+    if responsavel is None:
+        return '-'
+
+    try:
+        return responsavel.get_full_name() or responsavel.username or '-'
+    except Exception:
+        return '-'
+
+
+def _proposal_status_display(proposal):
+    try:
+        return proposal.get_status_display()
+    except Exception:
+        return proposal.status or '--'
+
+
 def grupo_Administrador_required(user):
     if not user.is_authenticated:
         return False
@@ -202,6 +284,19 @@ def minhas_cotacoes(request):
     paginator = Paginator(queryset, 20)
     page_number = request.GET.get('page')
     page_obj = paginator.get_page(page_number)
+    rows = []
+    for item in page_obj:
+        rows.append({
+            'pk': item.pk,
+            'partner_nome': _proposal_partner_nome(item),
+            'codigo_exibicao': item.codigo_exibicao,
+            'nome_proposta': item.nome_proposta or 'Cotacao sem nome',
+            'cliente_nome': _proposal_cliente_nome(item),
+            'login_nome': _proposal_endereco_nome(item),
+            'responsavel_nome': _proposal_responsavel_nome(item),
+            'responsavel_id': item.responsavel_id or '',
+            'ultima_interacao': item.ultima_interacao,
+        })
 
     return render(request, 'core/minhas_cotacoes.html', {
         'page_obj': page_obj,
@@ -447,9 +542,24 @@ def gestao_relatorio_login_status(request):
     paginator = Paginator(queryset, 20)
     page_number = request.GET.get('page')
     page_obj = paginator.get_page(page_number)
+    rows = []
+    for item in page_obj:
+        rows.append({
+            'pk': item.pk,
+            'partner_nome': _proposal_partner_nome(item),
+            'codigo_exibicao': item.codigo_exibicao,
+            'nome_proposta': item.nome_proposta or 'Cotacao sem nome',
+            'cliente_nome': _proposal_cliente_nome(item),
+            'login_nome': _proposal_endereco_nome(item),
+            'status': item.status,
+            'status_display': _proposal_status_display(item),
+            'responsavel_nome': _proposal_responsavel_nome(item),
+            'ultima_interacao': item.ultima_interacao,
+        })
 
     return render(request, 'core/gestao_relatorio_proposta_status.html', {
         'page_obj': page_obj,
+        'rows': rows,
         'busca': busca,
         'cliente_param': cliente_param,
         'endereco_param': endereco_param,
@@ -532,13 +642,14 @@ def gestao_relatorio_proposta_status(request):
         if group_key not in grouped_rows:
             grouped_rows[group_key] = {
                 'proposal': item,
+                'proposal_pk': item.pk,
                 'codigo_exibicao': item.codigo_exibicao,
                 'nome_proposta': item.nome_proposta or 'Cotação sem nome',
-                'partner_nome': item.partner.nome_fantasia or item.partner.razao_social,
-                'cliente': item.cliente,
+                'partner_nome': _proposal_partner_nome(item),
+                'cliente_nome': _proposal_cliente_nome(item),
                 'status': item.status,
-                'status_display': item.get_status_display(),
-                'responsavel': item.responsavel,
+                'status_display': _proposal_status_display(item),
+                'responsavel_nome': _proposal_responsavel_nome(item),
                 'total_logins': 0,
                 'ultima_interacao': item.ultima_interacao,
             }
@@ -559,7 +670,7 @@ def gestao_relatorio_proposta_status(request):
         key=lambda item: _sortable_value({
             'empresa': item['partner_nome'],
             'cotacao': item['codigo_exibicao'],
-            'cliente': str(item['cliente'] or '--'),
+            'cliente': item['cliente_nome'],
             'qtd_logins': item['total_logins'],
             'status': item['status_display'],
         }[sort_by]),
@@ -636,9 +747,9 @@ def gestao_relatorio_status_cliente(request):
         cliente_key = None
         if item.cliente_id:
             cliente_key = f"cliente-{item.cliente_id}"
-            cliente_nome = item.cliente.nome_fantasia or item.cliente.razao_social or '--'
+            cliente_nome = _proposal_cliente_nome(item)
         else:
-            cliente_nome = item.cliente or '--'
+            cliente_nome = _proposal_cliente_nome(item)
             cliente_key = f"sem-cliente-{cliente_nome}-{item.partner_id}"
 
         if cliente_key not in grouped_rows:
@@ -781,8 +892,8 @@ def gestao_relatorio_cotacao_endereco(request):
     rows = []
 
     for item in queryset:
-        endereco_nome = item.client_address.login_ixc if item.client_address and item.client_address.login_ixc else '--'
-        endereco_complemento = str(item.client_address) if item.client_address else '--'
+        endereco_nome = _proposal_endereco_nome(item)
+        endereco_complemento = _proposal_endereco_complemento(item)
         endereco_key = item.client_address_id or f"sem-endereco-{item.pk}"
         cotacao_key = item.codigo_proposta or f"proposal-{item.pk}"
 
@@ -790,7 +901,7 @@ def gestao_relatorio_cotacao_endereco(request):
             grouped_rows[endereco_key] = {
                 'endereco_nome': endereco_nome,
                 'endereco_complemento': endereco_complemento,
-                'cliente_nome': (item.cliente.nome_fantasia or item.cliente.razao_social) if item.cliente_id else '--',
+                'cliente_nome': _proposal_cliente_nome(item),
                 'total_cotacoes': 0,
                 'em_negociacao': 0,
                 'viavel': 0,
@@ -962,6 +1073,7 @@ def gestao_relatorio_login_usuario(request):
 
     return render(request, 'core/gestao_relatorio_login_usuario.html', {
         'page_obj': page_obj,
+        'rows': rows,
         'busca': busca,
         'usuario_filtro': usuario_filtro,
         'sort_by': sort_by,

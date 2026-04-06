@@ -86,11 +86,11 @@
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-gray-50">
-                    {% for item in page_obj %}
+                    {% for item in rows %}
                     <tr class="hover:bg-gray-50/50 transition align-top">
                         <td class="px-6 py-5">
                             <div class="font-bold text-gray-900">
-                                {{ item.partner.nome_fantasia|default:item.partner.razao_social }}
+                                {{ item.partner_nome }}
                             </div>
                         </td>
                         <td class="px-6 py-5">
@@ -103,12 +103,12 @@
                         </td>
                         <td class="px-6 py-5">
                             <div class="font-semibold text-gray-900">
-                                {{ item.cliente|default:"--" }}
+                                {{ item.cliente_nome }}
                             </div>
                         </td>
                         <td class="px-6 py-5">
                             <a href="{% url 'proposal_detail' item.pk %}?next={{ request.get_full_path|urlencode }}" class="font-semibold text-blue-600 hover:text-ageis-yellow transition-colors">
-                                {{ item.client_address.login_ixc|default:"--" }}
+                                {{ item.login_nome }}
                             </a>
                         </td>
                         <td class="px-6 py-5">
@@ -119,16 +119,12 @@
                                 {% elif item.status == 'contratado' %}bg-emerald-100 text-emerald-700
                                 {% elif item.status == 'declinado' %}bg-orange-100 text-orange-700
                                 {% else %}bg-red-100 text-red-700{% endif %}">
-                                {{ item.get_status_display }}
+                                {{ item.status_display }}
                             </span>
                         </td>
                         <td class="px-6 py-5">
                             <div class="font-semibold text-gray-900">
-                                {% if item.responsavel %}
-                                    {{ item.responsavel.get_full_name|default:item.responsavel.username }}
-                                {% else %}
-                                    -
-                                {% endif %}
+                                {{ item.responsavel_nome }}
                             </div>
                         </td>
                         <td class="px-6 py-5">
