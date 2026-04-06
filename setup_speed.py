@@ -98,9 +98,9 @@ def inicializar_sistema():
 
     print("Verificando acesso administrativo...")
 
-    admin_username = "admin"
-    admin_email = "admin@speed.com.br"
-    admin_pass = "speed@admin2026"
+    admin_username = os.getenv("ADMIN_USERNAME", "admin")
+    admin_email = os.getenv("ADMIN_EMAIL", "admin@speed.com.br")
+    admin_pass = os.getenv("ADMIN_PASSWORD", "SpeedAdmin!2026#Prod")
 
     if not User.objects.filter(username=admin_username).exists():
         print(f"Criando superusuario '{admin_username}'...")

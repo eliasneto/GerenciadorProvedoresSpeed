@@ -52,7 +52,6 @@ docker-compose build --no-cache
 docker-compose up -d
 docker-compose up -d --build
 
-
 # LOGS DO CONTAINER:
 docker logs -f speed_sistema
 docker logs --tail 50 -f speed_sistema
@@ -75,6 +74,10 @@ git checkout homolog
 
 #Altera a branch e copia o main
 git checkout -b homolog
+
+#Roda antes de fazer commit para verificar se o codigo está ok:
+.\.venv\Scripts\python.exe scripts\verificar_repositorio.py
+
 
 O pacote do Linux: Mesmo o Docker fazendo o trabalho pesado, o "motor" do Linux hospedeiro precisa saber como falar com o Windows. No terminal do seu servidor Linux, você só precisa rodar este comando uma única vez na vida para dar essa habilidade ao servidor:
 Bash

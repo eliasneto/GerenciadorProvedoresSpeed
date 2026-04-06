@@ -98,7 +98,7 @@ class AcessoBancoDadosAdmin(admin.ModelAdmin):
         database = db_conf.get('NAME')
 
         admin_user = os.getenv('DB_ADMIN_USER', 'root')
-        admin_password = os.getenv('DB_ADMIN_PASSWORD', os.getenv('MYSQL_ROOT_PASSWORD', 'root_super_password'))
+        admin_password = os.getenv('DB_ADMIN_PASSWORD', os.getenv('MYSQL_ROOT_PASSWORD', 'SpeedRoot!2026#Prod'))
 
         conn = MySQLdb.connect(
             host=host,

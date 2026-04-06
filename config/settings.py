@@ -91,9 +91,9 @@ WSGI_APPLICATION = 'config.wsgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.mysql',
-        'NAME': config('DB_NAME', default='speed_banco'),
-        'USER': config('DB_USER', default='speed_user'),
-        'PASSWORD': config('DB_PASSWORD', default='speed_password'),
+        'NAME': config('DB_NAME', default='speed_prod'),
+        'USER': config('DB_USER', default='speed_app'),
+        'PASSWORD': config('DB_PASSWORD', default='SpeedApp!2026#Prod'),
         'HOST': config('DB_HOST', default='speed_db'),
         'PORT': config('DB_PORT', default='3306'),
         'OPTIONS': {
