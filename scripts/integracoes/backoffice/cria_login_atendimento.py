@@ -115,6 +115,21 @@ def executar_cadastro_ixc(dados):
             return ''
         return str(valor).split('.')[0].strip()
 
+    def obter_cidade_id_ixc():
+        cidade_id = limpar_id(
+            linha.get('End_Cidade_ID_IXC')
+            or linha.get('End_Cidade_ID')
+            or linha.get('End_Cidade')
+        )
+
+        if not cidade_id:
+            return ''
+
+        if not cidade_id.isdigit():
+            return None
+
+        return cidade_id
+
     def limpar_login(texto):
         if pd.isna(texto) or texto is None:
             return ''
@@ -195,13 +210,15 @@ def executar_cadastro_ixc(dados):
     # Resgata o ID do plano e já passa pela limpeza
     plano_id = limpar_id(linha.get('Plano_ID'))
 
-    # Junta o logradouro e número para não mandar 'nan'
     logradouro = limpar_texto(linha.get('End_Logradouro'))
     numero = limpar_id(linha.get('End_Numero'))
-    endereco_formatado = f"{logradouro}, {numero}" if numero else logradouro
 
     # MONTAGEM DO PACOTE DE DADOS (PAYLOAD):
     observacao_cliente = montar_observacao_cliente()
+    cidade_id_ixc = obter_cidade_id_ixc()
+
+    if cidade_id_ixc is None:
+        return False, "Campo End_Cidade_ID_IXC invalido. Informe o ID numerico da cidade no IXC."
 
     payload = {
         "id_cliente": limpar_id(linha.get('Cliente_ID')),
@@ -239,8 +256,9 @@ def executar_cadastro_ixc(dados):
         # --- DADOS DE ENDEREÇO ---
         "cep": somente_numeros(linha.get('End_CEP')),
         "bairro": limpar_texto(linha.get('End_Bairro')),
-        "cidade": limpar_id(linha.get('End_Cidade')),
-        "endereco": endereco_formatado,
+        "cidade": cidade_id_ixc,
+        "endereco": logradouro,
+        "numero": numero,
         "referencia": limpar_texto(linha.get('End_Referencia')),
         "obs": observacao_cliente
     }
