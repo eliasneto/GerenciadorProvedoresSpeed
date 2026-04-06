@@ -16,6 +16,7 @@ from .forms import LeadForm
 from partners.models import Partner, Proposal
 from partners.forms import ProposalForm
 from clientes.models import Endereco
+import re
 
 # IMPORTAÇÃO DA TIMELINE (HISTÓRICO)
 from core.models import IntegrationAudit, RegistroHistorico
@@ -239,6 +240,83 @@ def _parse_ticket_value(raw_value):
         return Decimal(valor_limpo)
     except (InvalidOperation, AttributeError):
         return None
+
+
+def _formatar_cep(valor):
+    numeros = ''.join(ch for ch in str(valor or '') if ch.isdigit())
+    if len(numeros) == 8:
+        return f"{numeros[:5]}-{numeros[5:]}"
+    return ''
+
+
+def _parse_google_maps_address(endereco_completo, cidade_padrao='', estado_padrao='', bairro_padrao='', cep_padrao=''):
+    texto = str(endereco_completo or '').strip()
+    if not texto:
+        return {
+            'cep': _formatar_cep(cep_padrao),
+            'endereco': '',
+            'numero': '',
+            'bairro': str(bairro_padrao or '').strip()[:100],
+            'cidade': str(cidade_padrao or '').strip()[:100],
+            'estado': str(estado_padrao or '').strip()[:2].upper(),
+        }
+
+    cep = _formatar_cep(cep_padrao)
+    cep_match = pd.Series([texto]).str.extract(r'(\d{5}-?\d{3})', expand=False).iloc[0]
+    if isinstance(cep_match, str) and cep_match:
+        cep = _formatar_cep(cep_match)
+        texto = texto.replace(cep_match, '').strip(' ,')
+
+    estado = str(estado_padrao or '').strip()[:2].upper()
+    estado_match = re.search(r'(?:^|,|\s-\s)([A-Z]{2})$', texto)
+    if estado_match:
+        estado = estado_match.group(1).upper()
+        texto = re.sub(r'(?:^|,|\s-\s)[A-Z]{2}$', '', texto).strip(' ,-_')
+
+    partes_hifen = [parte.strip(' ,') for parte in texto.split(' - ') if parte.strip(' ,')]
+    trecho_logradouro = partes_hifen[0] if partes_hifen else texto
+    trecho_localizacao = ' - '.join(partes_hifen[1:]).strip(' ,') if len(partes_hifen) > 1 else ''
+
+    endereco = trecho_logradouro
+    numero = ''
+    match_numero = re.match(r'^(?P<endereco>.*?)(?:,\s*(?P<numero>\d+[A-Za-z0-9./-]*))?$', trecho_logradouro)
+    if match_numero:
+        endereco = (match_numero.group('endereco') or '').strip(' ,')
+        numero = (match_numero.group('numero') or '').strip(' ,')
+
+    bairro = str(bairro_padrao or '').strip()
+    cidade = str(cidade_padrao or '').strip()
+
+    if trecho_localizacao:
+        tokens_localizacao = [token.strip(' ,') for token in trecho_localizacao.split(',') if token.strip(' ,')]
+        if len(tokens_localizacao) >= 2:
+            cidade = tokens_localizacao[-1]
+            bairro = ', '.join(tokens_localizacao[:-1])
+        elif tokens_localizacao:
+            cidade = tokens_localizacao[0]
+    else:
+        tokens = [token.strip(' ,') for token in texto.split(',') if token.strip(' ,')]
+        if len(tokens) >= 4 and not numero:
+            endereco = tokens[0]
+            if re.fullmatch(r'\d+[A-Za-z0-9./-]*', tokens[1]):
+                numero = tokens[1]
+            bairro = tokens[-2]
+            cidade = tokens[-1]
+        elif len(tokens) >= 3:
+            bairro = tokens[-2]
+            cidade = tokens[-1]
+        elif len(tokens) == 2 and not cidade:
+            endereco = endereco or tokens[0]
+            cidade = tokens[1]
+
+    return {
+        'cep': cep[:20],
+        'endereco': endereco[:255],
+        'numero': numero[:20],
+        'bairro': bairro[:100],
+        'cidade': cidade[:100],
+        'estado': estado[:2],
+    }
 
 @user_passes_test(grupo_LastMile_required)
 @login_required
@@ -724,6 +802,13 @@ def integracoes_view(request):
                     if end_str == 'Não informado' or pd.isna(item.get('Endereço Completo')): end_str = ''
 
                     # 2. Captura dos Novos Dados da IA
+                    endereco_parseado = _parse_google_maps_address(
+                        end_str,
+                        cidade_padrao=str(item.get('Cidade', '')).strip(),
+                        estado_padrao=str(item.get('Estado', '')).strip(),
+                        bairro_padrao=str(item.get('Bairro', '')).strip(),
+                        cep_padrao=str(item.get('CEP', '')).strip(),
+                    )
                     fonte_str = str(item.get('Fonte', '')).strip()[:100]
                     confianca_str = str(item.get('Confiança', '')).strip()[:50]
                     insta_user = str(item.get('Instagram Username', '')).strip()[:100]
@@ -734,13 +819,16 @@ def integracoes_view(request):
                     # 3. O get_or_create com as colunas novas
                     Lead.objects.get_or_create(
                         nome_fantasia=nome_fantasia_str, 
-                        cidade=str(item.get('Cidade', '')).strip()[:100],
-                        estado=str(item.get('Estado', '')).strip()[:2].upper(),
+                        cidade=endereco_parseado['cidade'],
+                        estado=endereco_parseado['estado'],
                         defaults={
                             'razao_social': razao_social_str,
                             'telefone': tel_str[:20],
                             'site': site_url[:200],
-                            'endereco': end_str[:255],
+                            'cep': endereco_parseado['cep'],
+                            'endereco': endereco_parseado['endereco'],
+                            'numero': endereco_parseado['numero'],
+                            'bairro': endereco_parseado['bairro'],
                             'cnpj_cpf': str(item.get('CNPJ', '')).strip()[:20], 
                             'email': email_str[:254],
                             'status': 'novo',
