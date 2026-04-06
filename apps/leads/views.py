@@ -343,13 +343,21 @@ def lead_list(request):
     if busca_estado:
         leads_list = leads_list.filter(estado__iexact=busca_estado)
 
-    if busca_cep:
-        leads_list = leads_list.filter(Q(cep__icontains=busca_cep) | Q(endereco__icontains=busca_cep))
-    elif busca_cidade:
-        leads_list = leads_list.filter(cidade__icontains=busca_cidade)
+    leads_por_regiao = leads_list
+
+    if busca_cidade:
+        leads_por_regiao = leads_por_regiao.filter(cidade__icontains=busca_cidade)
 
     if busca_bairro:
-        leads_list = leads_list.filter(Q(bairro__icontains=busca_bairro) | Q(endereco__icontains=busca_bairro))
+        leads_com_bairro = leads_por_regiao.filter(
+            Q(bairro__icontains=busca_bairro) | Q(endereco__icontains=busca_bairro)
+        )
+        leads_list = leads_com_bairro if leads_com_bairro.exists() else leads_por_regiao
+    else:
+        leads_list = leads_por_regiao
+
+    if busca_cep and not busca_bairro and not busca_cidade:
+        leads_list = leads_list.filter(Q(cep__icontains=busca_cep) | Q(endereco__icontains=busca_cep))
 
     # 4. Paginação (10 por página)
     paginator = Paginator(leads_list, 10)

@@ -192,9 +192,7 @@ def endereco_tecnico_detail(request, pk):
     if endereco.estado:
         filtros_cotacao['estado'] = endereco.estado
 
-    if endereco.cep:
-        filtros_cotacao['cep'] = endereco.cep
-    elif endereco.cidade:
+    if endereco.cidade:
         filtros_cotacao['cidade'] = endereco.cidade
 
     if endereco.bairro:
