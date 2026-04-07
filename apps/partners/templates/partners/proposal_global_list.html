@@ -52,7 +52,7 @@
                         <th class="px-8 py-5">Identificação</th>
                         <th class="px-4 py-5">Parceiro (Provedor)</th>
                         <th class="px-4 py-5">Cliente Final</th>
-                        <th class="px-4 py-5 text-center">Técnico</th>
+                                                <th class="px-4 py-5 text-center">Técnico</th>
                         <th class="px-4 py-5">Financeiro</th>
                         <th class="px-8 py-5 text-right">Ação</th>
                     </tr>
@@ -61,7 +61,7 @@
                     {% for proposal in proposals %}
                     <tr class="hover:bg-gray-50/50 transition-all group">
                         <td class="px-8 py-6">
-                            <span class="block font-black text-gray-900 italic">#{{ proposal.os_numero|default:"S/OS" }}</span>
+                            <span class="block font-black text-gray-900 italic">#{{ proposal.codigo_exibicao }}</span>
                             <span class="text-[10px] font-bold text-gray-400 uppercase">Emissão: {{ proposal.data_emissao|date:"d/m/y"|default:"--" }}</span>
                         </td>
 
@@ -87,6 +87,12 @@
                             {% else %}
                                 <span class="text-xs italic text-red-400 font-black uppercase italic">Pendente de Vínculo</span>
                             {% endif %}
+                        </td>
+
+                        <td class="px-4 py-6">
+                            <span class="inline-flex px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest {% if proposal.status == 'ativa' %}bg-green-100 text-green-700{% elif proposal.status == 'encerrada' %}bg-red-100 text-red-700{% else %}bg-yellow-100 text-yellow-700{% endif %}">
+                                {{ proposal.get_status_display }}
+                            </span>
                         </td>
 
                         <td class="px-4 py-6 text-center">

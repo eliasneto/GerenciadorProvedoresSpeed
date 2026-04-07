@@ -18,4 +18,5 @@ urlpatterns = [
     path('api/unidade/<int:pk>/status/', views.api_update_unit_status, name='api_unit_status_update'),
     path('<int:pk>/editar/', views.ClienteUpdateView.as_view(), name='cliente_edit'),
     path('unidade/<int:pk>/editar/', views.EnderecoUpdateView.as_view(), name='endereco_edit'),
+    path('unidade/<int:pk>/tecnico/', views.endereco_tecnico_detail, name='endereco_tecnico_detail'),
 ]

@@ -2,18 +2,23 @@
 
 {% block content %}
 <div class="max-w-4xl mx-auto p-6 md:p-10">
-    <div class="mb-10 flex items-center gap-4">
-        <div class="w-14 h-14 bg-ageis-yellow rounded-2xl flex items-center justify-center shadow-2xl shadow-ageis-yellow/20">
-            <i data-lucide="{% if object %}edit-3{% else %}map-pin{% endif %}" class="text-black w-7 h-7"></i>
+    <div class="mb-10 flex items-start justify-between gap-4">
+        <div class="flex items-center gap-4">
+            <div class="w-14 h-14 bg-ageis-yellow rounded-2xl flex items-center justify-center shadow-2xl shadow-ageis-yellow/20">
+                <i data-lucide="{% if object %}edit-3{% else %}map-pin{% endif %}" class="text-black w-7 h-7"></i>
+            </div>
+            <div>
+                <h1 class="text-3xl font-black text-gray-900 uppercase italic leading-none tracking-tighter">
+                    {% if object %}Editar{% else %}Cadastrar{% endif %} <span class="text-ageis-yellow">Unidade</span>
+                </h1>
+                <p class="text-xs text-gray-500 mt-2 font-bold uppercase tracking-widest italic">
+                    Cliente: {{ cliente.nome_fantasia|default:cliente.razao_social|default:"Carregando..." }}
+                </p>
+            </div>
         </div>
-        <div>
-            <h1 class="text-3xl font-black text-gray-900 uppercase italic leading-none tracking-tighter">
-                {% if object %}Editar{% else %}Cadastrar{% endif %} <span class="text-ageis-yellow">Unidade</span>
-            </h1>
-            <p class="text-xs text-gray-500 mt-2 font-bold uppercase tracking-widest italic">
-                Cliente: {{ cliente.nome_fantasia|default:cliente.razao_social|default:"Carregando..." }}
-            </p>
-        </div>
+        <a href="{% url 'endereco_list' cliente.pk %}" onclick="smartGoBack('{% url 'endereco_list' cliente.pk %}'); return false;" class="page-back-button">
+            <i data-lucide="arrow-left" class="w-4 h-4"></i> Voltar
+        </a>
     </div>
 
     {% if form.errors %}
@@ -67,7 +72,7 @@
                 </div>
 
                 <div class="md:col-span-3 space-y-1">
-                    <label class="text-[10px] font-black uppercase text-gray-400 ml-1 tracking-widest italic">Cidade</label>
+                    <label class="text-[10px] font-black uppercase text-gray-400 ml-1 tracking-widest italic">Cidade (nome)</label>
                     {{ form.cidade }}
                 </div>
 

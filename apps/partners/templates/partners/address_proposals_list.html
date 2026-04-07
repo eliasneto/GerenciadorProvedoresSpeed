@@ -6,8 +6,8 @@
 <div class="max-w-7xl mx-auto p-6">
     <div class="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-10">
         <div class="flex items-center gap-4">
-            <a href="javascript:history.back()" class="p-3 bg-white border border-gray-100 rounded-2xl hover:bg-gray-50 transition shadow-sm text-gray-400">
-                <i data-lucide="chevron-left" class="w-6 h-6"></i>
+            <a href="{% url 'partner_list' %}" onclick="smartGoBack('{% url 'partner_list' %}'); return false;" class="page-back-button">
+                <i data-lucide="arrow-left" class="w-4 h-4"></i> Voltar
             </a>
             <div>
                 <nav class="flex mb-1" aria-label="Breadcrumb">
@@ -31,7 +31,7 @@
         <div class="flex items-center gap-4">
             <div class="hidden md:flex items-center gap-3 bg-white px-6 py-3 rounded-2xl border border-gray-100 shadow-sm">
                 <div class="text-right">
-                    <p class="text-[10px] font-black text-gray-400 uppercase leading-none mb-1">Total de Propostas</p>
+                    <p class="text-[10px] font-black text-gray-400 uppercase leading-none mb-1">Total de Cotações</p>
                     <p class="text-xl font-black italic text-gray-900">{{ proposals.count }} OS</p>
                 </div>
                 <div class="p-2 bg-ageis-yellow/10 rounded-xl text-ageis-yellow">
@@ -52,7 +52,7 @@
                     <tr class="text-[10px] font-black uppercase text-gray-400 border-b border-gray-50 bg-gray-50/30">
                         <th class="px-8 py-5">Identificação</th>
                         <th class="px-4 py-5">Provedor (Parceiro)</th>
-                        <th class="px-4 py-5 text-center">Configuração Técnica</th>
+                                                <th class="px-4 py-5 text-center">Configuração Técnica</th>
                         <th class="px-4 py-5">Financeiro</th>
                         <th class="px-8 py-5 text-right">Ação</th>
                     </tr>
@@ -61,7 +61,7 @@
                     {% for proposal in proposals %}
                     <tr class="hover:bg-gray-50/50 transition-all group">
                         <td class="px-8 py-6">
-                            <span class="block font-black text-gray-900 italic text-lg">#{{ proposal.os_numero|default:"PENDENTE" }}</span>
+                            <span class="block font-black text-gray-900 italic text-lg">#{{ proposal.codigo_exibicao }}</span>
                             <span class="text-[10px] font-bold text-gray-400 uppercase">Emissão: {{ proposal.data_emissao|date:"d/m/y" }}</span>
                         </td>
 
@@ -79,6 +79,12 @@
                             {% else %}
                             <span class="text-xs italic text-gray-400">Parceiro não identificado</span>
                             {% endif %}
+                        </td>
+
+                        <td class="px-4 py-6">
+                            <span class="inline-flex px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest {% if proposal.status == 'ativa' %}bg-green-100 text-green-700{% elif proposal.status == 'encerrada' %}bg-red-100 text-red-700{% else %}bg-yellow-100 text-yellow-700{% endif %}">
+                                {{ proposal.get_status_display }}
+                            </span>
                         </td>
 
                         <td class="px-4 py-6 text-center">

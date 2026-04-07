@@ -8,7 +8,8 @@ from django.conf.urls.static import static
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('', include('core.urls')),             # Raiz vai para a Home
-    path('prospeccao/', include('leads.urls')),   # /prospeccao/ vai para o Grid
+    path('cotacao/', include('leads.urls')),   # /cotacao/ vai para o Grid
+    path('prospeccao/', include('leads.urls')),   # Rota legada mantida por compatibilidade
     path('parceiros/', include('partners.urls')), 
     path('clientes/', include('clientes.urls')),
     path('ferramentas/', include('apps.core_admin.urls')),

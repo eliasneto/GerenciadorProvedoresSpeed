@@ -19,7 +19,7 @@ class LogAlteracaoInline(admin.TabularInline):
 class EnderecoInline(admin.TabularInline):
     model = Endereco
     extra = 0
-    fields = ('login_ixc', 'agent_circuit_id', 'status', 'cidade', 'filial_ixc', 'logradouro')
+    fields = ('login_ixc', 'agent_circuit_id', 'status', 'cidade', 'cidade_id_ixc', 'filial_ixc', 'logradouro')
 
 @admin.register(Cliente)
 class ClienteAdmin(admin.ModelAdmin):
@@ -87,3 +87,45 @@ class HistoricoSincronizacaoAdmin(admin.ModelAdmin):
             diff = obj.data_fim - obj.data_inicio
             return f"{diff.seconds} segundos"
         return "Em execução..."
+
+
+@admin.register(Endereco)
+class EnderecoAdmin(admin.ModelAdmin):
+    list_display = ('id', 'cliente', 'login_ixc', 'agent_circuit_id', 'cidade', 'cidade_id_ixc', 'estado', 'status', 'filial_ixc', 'principal')
+    list_filter = ('status', 'estado', 'filial_ixc', 'principal')
+    search_fields = ('cliente__razao_social', 'cliente__nome_fantasia', 'login_ixc', 'agent_circuit_id', 'logradouro', 'cidade', 'cidade_id_ixc')
+    autocomplete_fields = ('cliente',)
+    ordering = ('cliente__razao_social', 'logradouro')
+
+
+@admin.register(LogAlteracaoIXC)
+class LogAlteracaoIXCAdmin(admin.ModelAdmin):
+    list_display = ('id', 'cliente', 'login_ixc', 'campo_alterado', 'data_registro')
+    list_filter = ('campo_alterado', 'data_registro')
+    search_fields = ('cliente__razao_social', 'cliente__nome_fantasia', 'login_ixc', 'campo_alterado', 'valor_antigo', 'valor_novo')
+    autocomplete_fields = ('cliente',)
+    ordering = ('-data_registro',)
+
+
+class EnderecoExcluidoInline(admin.TabularInline):
+    model = EnderecoExcluido
+    extra = 0
+    can_delete = False
+    readonly_fields = ('login_ixc', 'agent_circuit_id', 'detalhes_json')
+
+
+@admin.register(ClienteExcluido)
+class ClienteExcluidoAdmin(admin.ModelAdmin):
+    list_display = ('id', 'id_ixc', 'razao_social', 'cnpj_cpf', 'data_exclusao')
+    search_fields = ('id_ixc', 'razao_social', 'cnpj_cpf')
+    readonly_fields = ('id_ixc', 'razao_social', 'cnpj_cpf', 'dados_completos_json', 'data_exclusao')
+    inlines = [EnderecoExcluidoInline]
+    ordering = ('-data_exclusao',)
+
+
+@admin.register(EnderecoExcluido)
+class EnderecoExcluidoAdmin(admin.ModelAdmin):
+    list_display = ('id', 'cliente_excluido', 'login_ixc', 'agent_circuit_id')
+    search_fields = ('cliente_excluido__razao_social', 'login_ixc', 'agent_circuit_id')
+    readonly_fields = ('cliente_excluido', 'login_ixc', 'agent_circuit_id', 'detalhes_json')
+    ordering = ('-id',)

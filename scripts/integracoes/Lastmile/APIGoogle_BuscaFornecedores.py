@@ -41,6 +41,30 @@ COLUNAS_SAIDA = [
 ]
 
 
+
+
+def montar_localizacao_busca(cidade="", estado="", bairro="", cep=""):
+    partes = []
+
+    if bairro:
+        partes.append(str(bairro).strip())
+    if cidade:
+        partes.append(str(cidade).strip())
+    if estado:
+        partes.append(str(estado).strip())
+    if cep:
+        partes.append(f"CEP {str(cep).strip()}")
+
+    return " - ".join([p for p in partes if p])
+
+
+def obter_valor_coluna(linha, *nomes):
+    for nome in nomes:
+        if nome in linha:
+            return linha.get(nome, "")
+    return ""
+
+
 def normalizar_texto(texto):
     if texto is None:
         return ""
@@ -447,9 +471,10 @@ def criar_registro_base(query, cidade, estado, fonte=""):
     }
 
 
-def buscar_no_google_maps(servico, cidade, estado):
+def buscar_no_google_maps(servico, cidade, estado, bairro="", cep=""):
     url = "https://google.serper.dev/places"
-    query = f"{servico} em {cidade} - {estado}"
+    localizacao = montar_localizacao_busca(cidade=cidade, estado=estado, bairro=bairro, cep=cep)
+    query = f"{servico} em {localizacao}" if localizacao else str(servico).strip()
 
     payload = {
         "q": query,
@@ -478,11 +503,12 @@ def buscar_no_google_maps(servico, cidade, estado):
         return []
 
 
-def buscar_instagram_por_empresa(nome_empresa, cidade, estado, site="", servico=""):
+def buscar_instagram_por_empresa(nome_empresa, cidade, estado, site="", servico="", bairro="", cep=""):
     url = "https://google.serper.dev/search"
+    localizacao = montar_localizacao_busca(cidade=cidade, estado=estado, bairro=bairro, cep=cep)
 
     query_busca = (
-        f'site:instagram.com "{nome_empresa}" "{cidade}" "{estado}" '
+        f'site:instagram.com "{nome_empresa}" "{localizacao}" '
         f'"{servico}" '
         f'-inurl:/p/ -inurl:/reel/ -inurl:/reels/ -inurl:/stories/ -inurl:/explore/'
     )
@@ -549,11 +575,12 @@ def buscar_instagram_por_empresa(nome_empresa, cidade, estado, site="", servico=
         return []
 
 
-def buscar_instagram_via_google_fallback(servico, cidade, estado):
+def buscar_instagram_via_google_fallback(servico, cidade, estado, bairro="", cep=""):
     url = "https://google.serper.dev/search"
+    localizacao = montar_localizacao_busca(cidade=cidade, estado=estado, bairro=bairro, cep=cep)
 
     query_busca = (
-        f'site:instagram.com "{servico}" "{cidade}" "{estado}" '
+        f'site:instagram.com "{servico}" "{localizacao}" '
         f'-inurl:/p/ -inurl:/reel/ -inurl:/reels/ -inurl:/stories/ -inurl:/explore/'
     )
 
@@ -750,13 +777,17 @@ def processar_planilha(caminho_entrada, caminho_saida, salvar_no_banco_fn=None):
 
     df = pd.read_excel(caminho_entrada)
 
-    colunas_obrigatorias = {"Serviço", "Cidade", "Estado"}
+    colunas_obrigatorias = {"Cidade", "Estado"}
     faltando = colunas_obrigatorias - set(df.columns)
+    possui_coluna_servico = "Serviço" in df.columns or "Servi?o" in df.columns
 
-    if faltando:
+    if faltando or not possui_coluna_servico:
+        colunas_faltando = sorted(faltando)
+        if not possui_coluna_servico:
+            colunas_faltando.insert(0, "Serviço")
         raise ValueError(
-            f"A planilha precisa conter as colunas: {', '.join(colunas_obrigatorias)}. "
-            f"Faltando: {', '.join(faltando)}"
+            "A planilha precisa conter as colunas: Serviço, Cidade e Estado. "
+            f"Faltando: {', '.join(colunas_faltando)}"
         )
 
     resultados = []
@@ -764,22 +795,25 @@ def processar_planilha(caminho_entrada, caminho_saida, salvar_no_banco_fn=None):
     print(f"Iniciando processamento de {len(df)} linha(s)...")
 
     for index, linha in df.iterrows():
-        servico = str(linha.get("Serviço", "")).strip()
+        servico = str(obter_valor_coluna(linha, "Serviço", "Servi?o")).strip()
         cidade = str(linha.get("Cidade", "")).strip()
         estado = str(linha.get("Estado", "")).strip()
+        bairro = str(linha.get("Bairro", "")).strip()
+        cep = str(linha.get("CEP", "")).strip()
 
         if not servico or not cidade or not estado:
             print(f"[{index + 1}/{len(df)}] Linha ignorada por falta de dados.")
             continue
 
-        query = f"{servico} em {cidade} - {estado}"
+        localizacao = montar_localizacao_busca(cidade=cidade, estado=estado, bairro=bairro, cep=cep)
+        query = f"{servico} em {localizacao}" if localizacao else str(servico).strip()
         print(f"\n[{index + 1}/{len(df)}] Processando: {query}")
 
         registros_linha = []
         total_instagrams_enriquecidos = 0
         total_fallback_instagram = 0
 
-        resultados_maps = buscar_no_google_maps(servico, cidade, estado)
+        resultados_maps = buscar_no_google_maps(servico, cidade, estado, bairro=bairro, cep=cep)
         print(f"   Maps retornou: {len(resultados_maps)} registro(s)")
 
         time.sleep(PAUSA_ENTRE_REQUISICOES)
@@ -805,6 +839,8 @@ def processar_planilha(caminho_entrada, caminho_saida, salvar_no_banco_fn=None):
                     estado=estado,
                     site=site_maps,
                     servico=servico,
+                    bairro=bairro,
+                    cep=cep,
                 )
 
                 print(f"   Instagram para '{nome_empresa}': {len(perfis_insta)} perfil(is)")
@@ -857,7 +893,7 @@ def processar_planilha(caminho_entrada, caminho_saida, salvar_no_banco_fn=None):
                 time.sleep(PAUSA_ENTRE_REQUISICOES)
 
         else:
-            perfis_fallback = buscar_instagram_via_google_fallback(servico, cidade, estado)
+            perfis_fallback = buscar_instagram_via_google_fallback(servico, cidade, estado, bairro=bairro, cep=cep)
             print(f"   Fallback Instagram retornou: {len(perfis_fallback)} perfil(is)")
 
             for perfil in perfis_fallback:
@@ -956,6 +992,8 @@ if __name__ == "__main__":
             "Serviço": ["Provedor de Internet", "Link Dedicado"],
             "Cidade": ["Fortaleza", "Eusébio"],
             "Estado": ["CE", "CE"],
+            "Bairro": ["Centro", "Guaribas"],
+            "CEP": ["60000-000", "61760-000"],
         })
         df_teste.to_excel(caminho_entrada, index=False)
 

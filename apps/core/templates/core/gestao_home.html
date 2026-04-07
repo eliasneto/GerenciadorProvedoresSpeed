@@ -1,0 +1,130 @@
+{% extends "core/base.html" %}
+
+{% block title %}Speed | Relatorios{% endblock %}
+
+{% block content %}
+<div class="p-6 md:p-10 max-w-7xl mx-auto">
+    <div class="relative overflow-hidden rounded-[2rem] bg-[linear-gradient(135deg,#0f172a_0%,#111827_55%,#1f2937_100%)] p-8 md:p-10 shadow-2xl mb-8">
+        <div class="absolute -top-12 -right-10 w-52 h-52 rounded-full bg-ageis-yellow/20 blur-3xl"></div>
+        <div class="absolute bottom-0 right-32 w-40 h-40 rounded-full bg-blue-500/10 blur-3xl"></div>
+        <div class="relative flex flex-col lg:flex-row lg:items-end justify-between gap-6">
+            <div class="max-w-2xl">
+                <p class="text-[10px] font-black uppercase tracking-[0.35em] text-ageis-yellow/90 mb-3">Gestão</p>
+                <h1 class="text-4xl md:text-5xl font-black text-white italic uppercase tracking-tighter leading-none">Relatórios</h1>
+                <p class="text-sm md:text-base text-slate-300 font-bold mt-4 max-w-xl">
+                    Central de leitura gerencial para acompanhar carteira, status, responsáveis e distribuição das cotações.
+                </p>
+            </div>
+            <div class="flex flex-wrap items-center gap-3">
+                <span class="bg-ageis-yellow text-black px-5 py-3 rounded-full text-[10px] font-black uppercase tracking-[0.25em] shadow-sm">
+                    {{ page_obj.paginator.count }} resultados
+                </span>
+                <span class="bg-white/10 text-white px-5 py-3 rounded-full text-[10px] font-black uppercase tracking-[0.25em] border border-white/10 backdrop-blur-sm">
+                    Catálogo ativo
+                </span>
+            </div>
+        </div>
+    </div>
+
+    <div class="bg-white/90 backdrop-blur rounded-[2rem] border border-gray-100 shadow-sm p-3 md:p-4 mb-8">
+        <form method="GET" class="flex flex-col xl:flex-row items-stretch xl:items-center gap-3">
+            <div class="flex-1 flex items-center gap-3 px-5 py-4 bg-gray-50 rounded-[1.5rem] border border-gray-100 focus-within:ring-2 focus-within:ring-ageis-yellow/30 transition-all">
+                <i data-lucide="search" class="w-4 h-4 text-gray-400 shrink-0"></i>
+                <input type="text" name="relatorio" value="{{ busca_relatorio }}" placeholder="Buscar por nome do relatório..." class="bg-transparent border-none outline-none w-full text-sm font-bold text-gray-700 placeholder-gray-400">
+            </div>
+
+            <div class="flex items-center gap-2 shrink-0">
+                {% if busca_relatorio %}
+                <a href="{% url 'gestao_relatorios' %}" class="w-12 h-12 flex items-center justify-center rounded-2xl bg-red-50 text-red-500 hover:bg-red-100 transition" title="Limpar Filtros">
+                    <i data-lucide="x" class="w-4 h-4"></i>
+                </a>
+                {% endif %}
+                <button type="submit" class="w-full xl:w-auto bg-ageis-black text-ageis-yellow font-black italic uppercase tracking-widest px-8 py-4 rounded-[1.5rem] hover:bg-gray-900 transition-all shadow-lg">
+                    Filtrar
+                </button>
+            </div>
+        </form>
+    </div>
+
+    {% if page_obj %}
+    <div class="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-5">
+        {% for item in page_obj %}
+        <div class="group relative overflow-hidden rounded-[2rem] border border-gray-100 bg-white shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300">
+            <div class="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-ageis-yellow via-amber-400 to-orange-400 opacity-0 group-hover:opacity-100 transition"></div>
+            {% if item.url_name %}
+            <a href="{% url item.url_name %}" class="block p-6 h-full">
+            {% else %}
+            <div class="p-6 h-full">
+            {% endif %}
+                <div class="flex items-start justify-between gap-4 mb-5">
+                    <div class="w-14 h-14 rounded-2xl bg-gradient-to-br from-ageis-yellow/20 to-amber-50 text-ageis-black flex items-center justify-center border border-ageis-yellow/20 shadow-sm">
+                        <i data-lucide="{{ item.icone|default:'layout-grid' }}" class="w-6 h-6"></i>
+                    </div>
+                    <span class="px-3 py-1.5 rounded-full bg-gray-100 text-gray-500 text-[10px] font-black uppercase tracking-[0.2em]">
+                        {{ item.tag|default:"Relatório" }}
+                    </span>
+                </div>
+
+                <div class="space-y-3">
+                    <div class="flex items-start justify-between gap-3">
+                        <h2 class="text-xl font-black text-gray-900 tracking-tight leading-snug group-hover:text-ageis-yellow transition-colors">
+                            {{ item.nome }}
+                        </h2>
+                        {% if item.url_name %}
+                        <div class="w-10 h-10 rounded-xl bg-gray-50 group-hover:bg-ageis-black group-hover:text-ageis-yellow flex items-center justify-center text-gray-400 transition-all shrink-0">
+                            <i data-lucide="arrow-up-right" class="w-4 h-4"></i>
+                        </div>
+                        {% endif %}
+                    </div>
+
+                    <p class="text-sm font-medium text-gray-500 leading-relaxed">
+                        {{ item.descricao|default:"Acesse o relatório para visualizar os dados consolidados." }}
+                    </p>
+                </div>
+
+                <div class="mt-6 pt-5 border-t border-gray-100 flex items-center justify-between">
+                    <span class="text-[10px] font-black uppercase tracking-[0.25em] text-gray-400">Visão Analítica</span>
+                    {% if item.url_name %}
+                    <span class="text-xs font-black text-ageis-black group-hover:text-ageis-yellow transition-colors">Abrir</span>
+                    {% else %}
+                    <span class="text-xs font-black text-gray-300">Indisponível</span>
+                    {% endif %}
+                </div>
+            {% if item.url_name %}
+            </a>
+            {% else %}
+            </div>
+            {% endif %}
+        </div>
+        {% empty %}
+        <div class="lg:col-span-2 xl:col-span-3 border border-dashed border-gray-200 rounded-[2rem] bg-white p-14 text-center text-gray-400">
+            <i data-lucide="inbox" class="w-10 h-10 mx-auto mb-4 opacity-50"></i>
+            <p class="text-base font-bold">Nenhum relatório encontrado com este filtro.</p>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    {% if page_obj.has_other_pages %}
+    <div class="mt-8 px-2 py-2 flex flex-col sm:flex-row items-center justify-between gap-4">
+        <span class="text-[10px] font-black italic text-gray-400 uppercase tracking-widest">
+            Página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}
+        </span>
+
+        <div class="flex items-center gap-2">
+            {% if page_obj.has_previous %}
+                <a href="?page={{ page_obj.previous_page_number }}&relatorio={{ busca_relatorio }}&sort={{ sort_by }}&direction={{ direction }}" class="w-11 h-11 flex items-center justify-center rounded-2xl border border-gray-200 bg-white text-gray-500 hover:bg-gray-50 hover:text-gray-900 transition shadow-sm" title="Página Anterior">
+                    <i data-lucide="chevron-left" class="w-4 h-4"></i>
+                </a>
+            {% endif %}
+
+            {% if page_obj.has_next %}
+                <a href="?page={{ page_obj.next_page_number }}&relatorio={{ busca_relatorio }}&sort={{ sort_by }}&direction={{ direction }}" class="w-11 h-11 flex items-center justify-center rounded-2xl border border-gray-200 bg-white text-gray-500 hover:bg-gray-50 hover:text-gray-900 transition shadow-sm" title="Próxima Página">
+                    <i data-lucide="chevron-right" class="w-4 h-4"></i>
+                </a>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

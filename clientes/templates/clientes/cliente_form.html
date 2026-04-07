@@ -2,22 +2,27 @@
 
 {% block content %}
 <div class="max-w-3xl mx-auto p-6 md:p-10">
-    <div class="mb-10 flex items-center gap-4">
-        <div class="w-12 h-12 bg-ageis-black rounded-2xl flex items-center justify-center shadow-lg">
-            <i data-lucide="{% if object %}edit-3{% else %}user-plus{% endif %}" class="text-ageis-yellow w-6 h-6"></i>
+    <div class="mb-10 flex items-start justify-between gap-4">
+        <div class="flex items-center gap-4">
+            <div class="w-12 h-12 bg-ageis-black rounded-2xl flex items-center justify-center shadow-lg">
+                <i data-lucide="{% if object %}edit-3{% else %}user-plus{% endif %}" class="text-ageis-yellow w-6 h-6"></i>
+            </div>
+            <div>
+                <h1 class="text-2xl font-black text-gray-900 uppercase italic leading-none">
+                    {% if object %}Editar{% else %}Novo{% endif %} Cliente
+                </h1>
+                <p class="text-sm text-gray-500 mt-1">
+                    {% if object %}
+                        Atualize os dados cadastrais desta conta.
+                    {% else %}
+                        Cadastre as informações básicas da nova conta.
+                    {% endif %}
+                </p>
+            </div>
         </div>
-        <div>
-            <h1 class="text-2xl font-black text-gray-900 uppercase italic leading-none">
-                {% if object %}Editar{% else %}Novo{% endif %} Cliente
-            </h1>
-            <p class="text-sm text-gray-500 mt-1">
-                {% if object %}
-                    Atualize os dados cadastrais desta conta.
-                {% else %}
-                    Cadastre as informações básicas da nova conta.
-                {% endif %}
-            </p>
-        </div>
+        <a href="{% url 'cliente_list' %}" onclick="smartGoBack('{% url 'cliente_list' %}'); return false;" class="page-back-button">
+            <i data-lucide="arrow-left" class="w-4 h-4"></i> Voltar
+        </a>
     </div>
 
     <form method="POST" class="space-y-6">

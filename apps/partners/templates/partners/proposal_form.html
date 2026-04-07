@@ -1,6 +1,6 @@
 {% extends "core/base.html" %}
 
-{% block title %}Speed | Proposta OS{% endblock %}
+{% block title %}Speed | Cotação OS{% endblock %}
 
 {% block content %}
 <link href="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/css/tom-select.css" rel="stylesheet">
@@ -40,22 +40,22 @@
                         </li>
                         
                         <li><i data-lucide="chevron-right" class="w-2.5 h-2.5"></i></li>
-                        <li class="text-gray-900">Proposta</li>
+                        <li class="text-gray-900">Cotação</li>
                     </ol>
                 </nav>
                 <h1 class="text-3xl font-black text-gray-900 italic uppercase leading-none tracking-tighter">
-                    Proposta <span class="text-ageis-yellow">Técnico</span>
+                    Cotação <span class="text-ageis-yellow">Técnico</span>
                 </h1>
                 <p class="text-xs text-gray-500 mt-2 font-bold uppercase tracking-tight italic">Provedor: {{ partner.nome_fantasia }}</p>
             </div>
             
             <div>
                 {% if is_lead_conversion %}
-                    <a href="{% url 'lead_list' %}" class="flex items-center gap-2 px-5 py-2.5 bg-white border border-red-200 rounded-xl text-xs font-black uppercase italic text-red-500 hover:bg-red-50 hover:text-red-700 transition shadow-sm">
+                    <a href="{% url 'lead_list' %}" onclick="smartGoBack('{% url 'lead_list' %}'); return false;" class="flex items-center gap-2 px-5 py-2.5 bg-white border border-red-200 rounded-xl text-xs font-black uppercase italic text-red-500 hover:bg-red-50 hover:text-red-700 transition shadow-sm">
                         <i data-lucide="x" class="w-4 h-4"></i> Cancelar Conversão
                     </a>
                 {% else %}
-                    <a href="{% url 'partner_detail' partner.pk %}" class="flex items-center gap-2 px-5 py-2.5 bg-white border border-gray-200 rounded-xl text-xs font-black uppercase italic text-gray-500 hover:text-gray-900 transition shadow-sm">
+                    <a href="{% url 'partner_detail' partner.pk %}" onclick="smartGoBack('{% url 'partner_detail' partner.pk %}'); return false;" class="flex items-center gap-2 px-5 py-2.5 bg-white border border-gray-200 rounded-xl text-xs font-black uppercase italic text-gray-500 hover:text-gray-900 transition shadow-sm">
                         <i data-lucide="arrow-left" class="w-4 h-4"></i> Voltar ao Perfil
                     </a>
                 {% endif %}
@@ -86,6 +86,10 @@
 
         <form method="POST" id="proposalForm" class="space-y-8">
             {% csrf_token %}
+            {% if is_conversion_completion %}
+            <input type="hidden" name="modo" value="convertida">
+            <input type="hidden" name="status_pendente" value="ativa">
+            {% endif %}
 
             <div class="bg-white rounded-[2.5rem] shadow-xl border border-gray-200 overflow-hidden">
                 <div class="bg-gray-100/80 px-8 py-5 border-b border-gray-200 flex items-center justify-between">
@@ -95,15 +99,46 @@
                         </div>
                         <h2 class="font-black text-sm uppercase italic text-gray-900 tracking-tight">Vínculo Relacional: {{ partner.nome_fantasia }}</h2>
                     </div>
+                    {% if not is_conversion_completion %}
                     <button type="button" onclick="openClientSearchModal()" class="flex items-center gap-2 px-5 py-2.5 bg-ageis-black text-ageis-yellow rounded-xl text-[10px] font-black uppercase italic hover:bg-gray-800 transition shadow-xl hover:scale-[1.02]">
                         <i data-lucide="search" class="w-4 h-4"></i> Busca Rápida
                     </button>
+                    {% endif %}
                 </div>
                 
                 <div class="p-8 flex flex-col gap-8">
-                    <div class="space-y-2">
-                        <label class="text-[10px] font-black uppercase text-gray-500 ml-1 tracking-widest italic">1. Cliente Final</label>
-                        {{ form.cliente }}
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div class="space-y-2">
+                            <label class="text-[10px] font-black uppercase text-gray-500 ml-1 tracking-widest italic">1. Cliente Final</label>
+                            {% if is_conversion_completion %}
+                            <div class="w-full p-4 bg-gray-100 border border-gray-200 text-gray-900 font-bold rounded-2xl">
+                                {{ proposal.cliente|default:"--" }}
+                            </div>
+                            {% else %}
+                            {{ form.cliente }}
+                            {% endif %}
+                        </div>
+                        <div class="space-y-2">
+                            <label class="text-[10px] font-black uppercase text-gray-500 ml-1 tracking-widest italic">Status da Cotação</label>
+                            {% if is_conversion_completion %}
+                            <div class="w-full p-4 bg-gray-100 border border-gray-200 text-gray-900 font-bold rounded-2xl">
+                                {{ status_exibicao_conversao }}
+                            </div>
+                            {% else %}
+                            {{ form.status }}
+                            {% endif %}
+                        </div>
+                        <div class="md:col-span-2 space-y-2">
+                            <label class="text-[10px] font-black uppercase text-gray-500 ml-1 tracking-widest italic">Nome da Cotação</label>
+                            {{ form.nome_proposta }}
+                        </div>
+                        {% if is_conversion_completion %}
+                        <div class="md:col-span-2 space-y-2">
+                            <label class="text-[10px] font-black uppercase text-gray-500 ml-1 tracking-widest italic">CNPJ do Parceiro</label>
+                            {{ form.partner_cnpj_cpf }}
+                            <p class="text-[9px] font-bold text-red-400 ml-1 uppercase tracking-wide">Obrigatório para concluir a cotação viável.</p>
+                        </div>
+                        {% endif %}
                     </div>
                     
                     <hr class="border-gray-100">
@@ -112,9 +147,14 @@
                         <div class="flex flex-col md:flex-row md:items-end justify-between gap-4">
                             <div>
                                 <label class="text-[10px] font-black uppercase text-gray-500 ml-1 tracking-widest italic">2. Unidades de Instalação</label>
+                                {% if is_conversion_completion %}
+                                <span class="block text-[9px] font-bold text-gray-400 ml-1 mt-1">Os logins do lote já foram definidos na abertura da cotação</span>
+                                {% else %}
                                 <span class="block text-[9px] font-bold text-gray-400 ml-1 mt-1">Um link será criado para cada unidade selecionada</span>
+                                {% endif %}
                             </div>
                             
+                            {% if not is_conversion_completion %}
                             <div class="flex items-center gap-3 w-full md:w-auto">
                                 <div class="relative flex-grow md:w-64">
                                     <i data-lucide="search" class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400"></i>
@@ -125,11 +165,38 @@
                                     Selecionar Todos
                                 </button>
                             </div>
+                            {% endif %}
                         </div>
 
+                        {% if is_conversion_completion %}
+                        <div class="bg-gray-50 border border-gray-300 rounded-2xl overflow-hidden">
+                            <button type="button" id="toggleProposalUnitsBtn" class="w-full flex items-center justify-between gap-4 px-5 py-4 text-left hover:bg-gray-100 transition">
+                                <div>
+                                    <p class="text-[10px] font-black uppercase tracking-widest text-gray-500">Logins do Lote</p>
+                                    <p class="text-xs font-bold text-gray-800 mt-1">{{ propostas_lote|length }} unidade(s) definida(s)</p>
+                                </div>
+                                <div class="flex items-center gap-3">
+                                    <span class="text-[10px] font-black uppercase tracking-widest text-gray-400">Ver logins</span>
+                                    <i id="toggleProposalUnitsIcon" data-lucide="chevron-down" class="w-4 h-4 text-gray-400 transition-transform duration-200"></i>
+                                </div>
+                            </button>
+                            <div id="proposalUnitsPanel" class="hidden border-t border-gray-200 p-4 space-y-2">
+                                {% for item in propostas_lote %}
+                                <div class="flex items-start justify-between gap-3 p-3 bg-white border border-gray-200 rounded-xl">
+                                    <div>
+                                        <p class="text-xs font-black text-blue-700 uppercase">{{ item.client_address.login_ixc|default:"[Sem login]" }}</p>
+                                        <p class="text-[10px] text-gray-400 font-bold uppercase">{{ item.client_address|default:"Sem unidade vinculada" }}</p>
+                                    </div>
+                                    <span class="text-[10px] font-black uppercase tracking-widest text-gray-400">Definido</span>
+                                </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                        {% else %}
                         <div id="address_checkbox_container" class="w-full h-64 overflow-y-auto p-4 bg-gray-50 border border-gray-300 rounded-2xl space-y-2 custom-scrollbar">
                             <p class="text-xs text-gray-400 italic text-center mt-20 font-bold">Selecione o Cliente primeiro para carregar as unidades...</p>
                         </div>
+                        {% endif %}
                     </div>
                 </div>
             </div>
@@ -143,7 +210,7 @@
                 </div>
                 <div class="p-8 grid grid-cols-1 md:grid-cols-4 gap-x-8 gap-y-6">
                     <div class="md:col-span-2 space-y-2">
-                         <label class="text-[10px] font-black uppercase text-gray-500 ml-1 italic tracking-widest">Velocidade Contratada</label>
+                         <label class="text-[10px] font-black uppercase text-gray-500 ml-1 italic tracking-widest">Velocidade (Mbps)</label>
                          {{ form.velocidade }}
                     </div>
                     <div class="md:col-span-2 space-y-2">
@@ -166,7 +233,11 @@
                     <div class="space-y-2"><label class="text-[10px] font-black text-gray-500 uppercase italic tracking-widest">Latência (ms)</label>{{ form.latencia }}</div>
                     
                     <div class="md:col-span-2 space-y-2"><label class="text-[10px] font-black text-gray-500 uppercase italic tracking-widest">Interfaces</label>{{ form.interfaces }}</div>
-                    <div class="md:col-span-2 space-y-2"><label class="text-[10px] font-black text-gray-500 uppercase italic tracking-widest">Bloco IPv4</label>{{ form.ipv4_bloco }}</div>
+                    <div class="md:col-span-2 space-y-2"><label class="text-[10px] font-black text-gray-500 uppercase italic tracking-widest">Tipo de Acesso</label>{{ form.tipo_acesso }}</div>
+                    <div class="md:col-span-2 space-y-2"><label class="text-[10px] font-black text-gray-500 uppercase italic tracking-widest">Bloco IP</label>{{ form.ipv4_bloco }}</div>
+                    <div class="space-y-2"><label class="text-[10px] font-black text-gray-500 uppercase italic tracking-widest">Dupla Abordagem</label>{{ form.dupla_abordagem }}</div>
+                    <div class="space-y-2"><label class="text-[10px] font-black text-gray-500 uppercase italic tracking-widest">Entrega RB</label>{{ form.entrega_rb }}</div>
+                    <div class="md:col-span-2 space-y-2"><label class="text-[10px] font-black text-gray-500 uppercase italic tracking-widest">Designador</label>{{ form.designador }}</div>
                     
                     <div class="md:col-span-2 space-y-2">
                         <label class="text-[10px] font-black text-gray-500 uppercase italic tracking-widest">Configuração de Porta</label>
@@ -192,53 +263,90 @@
                     </div>
                     <div class="px-4 py-2 bg-green-50 rounded-lg border border-green-100">
                         <p class="text-[9px] font-black text-green-700 uppercase italic tracking-widest">
-                            Fórmula Speed: (Mensal + Instalação) - Custo Parceiro = Resultado
+                            Fórmula Speed: (Mensal + Taxa de Instalação Parceiro) - Custo Parceiro = Resultado
                         </p>
                     </div>
                 </div>
 
-                <div class="p-8 grid grid-cols-1 md:grid-cols-5 gap-6">
-                    <div class="space-y-2">
+                <div class="p-8 space-y-8">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div class="space-y-2">
+                            <label class="text-[10px] font-black text-gray-500 uppercase italic tracking-widest">Valor Mensal Cliente</label>
+                            {{ form.ticket_cliente }}
+                        </div>
+                        <div class="space-y-2">
+                            <label class="text-[10px] font-black text-blue-600 uppercase italic tracking-widest">Target Parceiro</label>
+                            {{ form.ticket_empresa }}
+                        </div>
+                    </div>
+
+                    <div class="flex items-center">
+                        <div id="indicador_viabilidade_proposta" class="inline-flex items-center gap-2 px-4 py-2 rounded-2xl border text-[10px] font-black uppercase tracking-widest bg-gray-100 text-gray-500 border-gray-200">
+                            <span class="w-2.5 h-2.5 rounded-full bg-gray-400"></span>
+                            Aguardando preenchimento financeiro
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6 pt-2 border-t border-gray-50">
+                    <div class="hidden space-y-2 order-1">
                         <label class="text-[10px] font-black text-gray-500 uppercase italic tracking-widest">Valor Mensal (R$)</label>
                         {{ form.valor_mensal }}
                     </div>
-                    <div class="space-y-2">
-                        <label class="text-[10px] font-black text-gray-500 uppercase italic tracking-widest">Taxa Instalação</label>
+                    <div class="space-y-2 order-3 md:col-span-2 xl:col-span-2">
+                        <label class="text-[10px] font-black text-gray-500 uppercase italic tracking-widest">Taxa de Instalação Parceiro</label>
                         {{ form.taxa_instalacao }}
                     </div>
-                    <div class="space-y-2">
-                        <label class="text-[10px] font-black text-blue-600 uppercase italic tracking-widest">Pago ao Parceiro</label>
+                    <div class="space-y-2 order-2">
+                        <label class="text-[10px] font-black text-blue-600 uppercase italic tracking-widest">Custo Parceiro</label>
                         {{ form.valor_parceiro }}
                     </div>
 
-                    <div class="space-y-2">
-                        <label class="text-[10px] font-black text-gray-500 uppercase italic tracking-widest">Resultado Previsto</label>
-                        <input type="text" id="id_resultado_calculado" readonly
+                    <div class="hidden space-y-2 order-4">
+                        <label class="text-[10px] font-black text-gray-500 uppercase italic tracking-widest">Resultado Mês 1</label>
+                        <input type="text" id="id_resultado_mes_1_calculado" readonly
                             class="w-full p-4 bg-gray-200 border border-gray-300 text-gray-900 font-black rounded-2xl outline-none cursor-not-allowed italic"
                             placeholder="R$ 0,00">
                     </div>
 
-                    <div class="space-y-2">
+                    <div class="space-y-2 order-5">
                         <label class="text-[10px] font-black text-gray-500 uppercase italic tracking-widest">Vigência (meses)</label>
                         {{ form.tempo_contrato }}
                     </div>
 
-                    <div class="md:col-span-5 space-y-2 pt-4 border-t border-gray-50 mt-2">
+                    <div class="space-y-2 order-6">
+                        <label class="text-[10px] font-black text-gray-500 uppercase italic tracking-widest">Resultado Mensal</label>
+                        <input type="text" id="id_resultado_mensal_calculado" readonly
+                            class="w-full p-4 bg-gray-200 border border-gray-300 text-gray-900 font-black rounded-2xl outline-none cursor-not-allowed italic"
+                            placeholder="R$ 0,00">
+                    </div>
+
+                    <div class="hidden space-y-2 order-7">
+                        <label class="text-[10px] font-black text-gray-500 uppercase italic tracking-widest">Valor Total da Proposta</label>
+                        <input type="text" id="id_valor_total_proposta_calculado" readonly
+                            class="w-full p-4 bg-gray-200 border border-gray-300 text-gray-900 font-black rounded-2xl outline-none cursor-not-allowed italic"
+                            placeholder="R$ 0,00">
+                    </div>
+
+                    <div class="order-8 md:col-span-2 xl:col-span-4 space-y-2 pt-4 border-t border-gray-50 mt-2">
                         <label class="text-[10px] font-black text-gray-500 uppercase italic tracking-widest">E-mail para Faturamento</label>
                         {{ form.email_faturamento }}
                     </div>
+                </div>
                 </div>
             </div>
 
             <div class="flex items-center justify-end gap-4 pb-12">
                 <button type="submit" class="bg-ageis-black text-ageis-yellow font-black px-16 py-5 rounded-2xl shadow-2xl hover:bg-gray-800 hover:scale-[1.03] active:scale-95 transition-all uppercase italic tracking-tighter">
-                    Gerar Propostas em Lote
+                    {% if is_conversion_completion %}Salvar Dados da Conversão{% else %}
+                    Gerar Cotações em Lote
+                    {% endif %}
                 </button>
             </div>
         </form>
     </div>
 </div>
 
+{% if not is_conversion_completion %}
 <div id="addressSearchModal" class="fixed inset-0 z-[100] hidden flex items-center justify-center p-4">
     <div class="absolute inset-0 bg-black/70 backdrop-blur-md" onclick="closeClientSearchModal()"></div>
     <div class="relative bg-white w-full max-w-xl rounded-[3rem] shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-300">
@@ -260,21 +368,32 @@
         </div>
     </div>
 </div>
+{% endif %}
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+    const toggleProposalUnitsBtn = document.getElementById('toggleProposalUnitsBtn');
+    const proposalUnitsPanel = document.getElementById('proposalUnitsPanel');
+    const toggleProposalUnitsIcon = document.getElementById('toggleProposalUnitsIcon');
     const clientSelect = document.querySelector('select[name="cliente"]');
+
+    if (toggleProposalUnitsBtn && proposalUnitsPanel && toggleProposalUnitsIcon) {
+        toggleProposalUnitsBtn.addEventListener('click', function() {
+            proposalUnitsPanel.classList.toggle('hidden');
+            toggleProposalUnitsIcon.classList.toggle('rotate-180');
+        });
+    }
     
     // VARIÁVEIS DAS NOVAS FERRAMENTAS
     const searchUnidadesInput = document.getElementById('searchUnidades');
     const selectAllBtn = document.getElementById('selectAllBtn');
     let isAllSelected = false; // Controle de estado do botão Selecionar Todos
     
-    const tomSelectInstance = new TomSelect(clientSelect, {
+    const tomSelectInstance = clientSelect ? new TomSelect(clientSelect, {
         create: false,
         maxOptions: 50,
         placeholder: "Selecione ou busque o cliente...",
-    });
+    }) : null;
 
     const initialAddressId = "{{ proposal.client_address.id|default:'' }}";
     
@@ -354,46 +473,52 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     // 🚀 FUNÇÃO DE PESQUISA (Filtra os checkboxes em tempo real)
-    searchUnidadesInput.addEventListener('input', function(e) {
-        const termo = e.target.value.toLowerCase();
-        const items = document.querySelectorAll('.address-item');
-        
-        items.forEach(item => {
-            const textoItem = item.innerText.toLowerCase();
-            if (textoItem.includes(termo)) {
-                item.style.display = 'flex';
-            } else {
-                item.style.display = 'none';
-            }
+    if (searchUnidadesInput) {
+        searchUnidadesInput.addEventListener('input', function(e) {
+            const termo = e.target.value.toLowerCase();
+            const items = document.querySelectorAll('.address-item');
+            
+            items.forEach(item => {
+                const textoItem = item.innerText.toLowerCase();
+                if (textoItem.includes(termo)) {
+                    item.style.display = 'flex';
+                } else {
+                    item.style.display = 'none';
+                }
+            });
         });
-    });
+    }
 
     // 🚀 FUNÇÃO DE SELECIONAR TODOS (Respeitando a pesquisa)
-    selectAllBtn.addEventListener('click', function() {
-        const items = document.querySelectorAll('.address-item');
-        isAllSelected = !isAllSelected;
-        
-        items.forEach(item => {
-            // Só marca/desmarca os que estão visíveis na pesquisa
-            if (item.style.display !== 'none') {
-                const checkbox = item.querySelector('input[type="checkbox"]');
-                if (checkbox) {
-                    checkbox.checked = isAllSelected;
-                    // Dispara o evento 'change' manualmente para ativar a cor amarela do fundo
-                    checkbox.dispatchEvent(new Event('change'));
+    if (selectAllBtn) {
+        selectAllBtn.addEventListener('click', function() {
+            const items = document.querySelectorAll('.address-item');
+            isAllSelected = !isAllSelected;
+            
+            items.forEach(item => {
+                if (item.style.display !== 'none') {
+                    const checkbox = item.querySelector('input[type="checkbox"]');
+                    if (checkbox) {
+                        checkbox.checked = isAllSelected;
+                        checkbox.dispatchEvent(new Event('change'));
+                    }
                 }
-            }
+            });
+            
+            this.innerText = isAllSelected ? 'Desmarcar Todos' : 'Selecionar Todos';
         });
-        
-        this.innerText = isAllSelected ? 'Desmarcar Todos' : 'Selecionar Todos';
-    });
+    }
 
-    tomSelectInstance.on('change', function(val) {
-        if(val) updateAddresses(val);
-    });
+    if (tomSelectInstance) {
+        tomSelectInstance.on('change', function(val) {
+            if(val) updateAddresses(val);
+        });
+    }
     
     window.autoFillAddress = async function(clientId, addressId) {
-        tomSelectInstance.setValue(clientId); 
+        if (tomSelectInstance) {
+            tomSelectInstance.setValue(clientId); 
+        }
         await updateAddresses(clientId);
         
         setTimeout(() => {
@@ -407,41 +532,116 @@ document.addEventListener('DOMContentLoaded', function() {
         closeClientSearchModal();
     };
 
-    if (clientSelect.value) { 
+    if (clientSelect && clientSelect.value) { 
         updateAddresses(clientSelect.value); 
     }
 
     const vMensal = document.querySelector('input[name="valor_mensal"]');
+    const vTicketCliente = document.querySelector('input[name="ticket_cliente"]');
+    const vTicketEmpresa = document.querySelector('input[name="ticket_empresa"]');
     const vInstalacao = document.querySelector('input[name="taxa_instalacao"]');
     const vParceiro = document.querySelector('input[name="valor_parceiro"]');
-    const displayResultado = document.getElementById('id_resultado_calculado');
+    const displayResultadoMes1 = document.getElementById('id_resultado_mes_1_calculado');
+    const displayResultadoMensal = document.getElementById('id_resultado_mensal_calculado');
+    const displayValorTotal = document.getElementById('id_valor_total_proposta_calculado');
+    const vTempoContrato = document.querySelector('input[name="tempo_contrato"]');
+    const indicadorViabilidade = document.getElementById('indicador_viabilidade_proposta');
 
     function calcularMargem() {
-        const parseMoney = (val) => parseFloat(val.replace(',', '.')) || 0;
-        const mensal = parseFloat(vMensal.value) || 0;
+        const mensal = parseFloat((vTicketCliente && vTicketCliente.value) || (vMensal && vMensal.value) || 0) || 0;
+        const ticketEmpresa = parseFloat(vTicketEmpresa.value) || 0;
         const inst = parseFloat(vInstalacao.value) || 0;
         const parceiro = parseFloat(vParceiro.value) || 0;
+        const vigencia = parseFloat(vTempoContrato.value) || 0;
 
-        const resultado = (mensal + inst) - parceiro;
+        const resultadoMensal = mensal - parceiro;
+        const resultadoMes1 = resultadoMensal + inst;
+        const valorTotal = vigencia <= 0 ? 0 : (vigencia === 1 ? resultadoMes1 : resultadoMes1 + (resultadoMensal * (vigencia - 1)));
 
-        displayResultado.value = resultado.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-        displayResultado.style.color = resultado < 0 ? '#ef4444' : '#16a34a';
+        if (displayResultadoMes1) {
+            displayResultadoMes1.value = resultadoMes1.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+            displayResultadoMes1.style.color = resultadoMes1 < 0 ? '#ef4444' : '#16a34a';
+        }
+        if (displayResultadoMensal) {
+            displayResultadoMensal.value = resultadoMensal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+            displayResultadoMensal.style.color = resultadoMensal < 0 ? '#ef4444' : '#16a34a';
+        }
+        if (displayValorTotal) {
+            displayValorTotal.value = valorTotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+            displayValorTotal.style.color = valorTotal < 0 ? '#ef4444' : '#16a34a';
+        }
+
+        if (indicadorViabilidade) {
+            let classes = 'inline-flex items-center gap-2 px-4 py-2 rounded-2xl border text-[10px] font-black uppercase tracking-widest ';
+            let dotClass = 'bg-gray-400';
+            let texto = 'Aguardando preenchimento financeiro';
+            const parceiroFormatado = parceiro.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+            const mensalFormatado = parceiroFormatado;
+            const ticketEmpresaFormatado = ticketEmpresa.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
+            if (parceiro > 0 || ticketEmpresa > 0) {
+                if (parceiro > ticketEmpresa) {
+                    classes += 'bg-red-50 text-red-700 border-red-200';
+                    dotClass = 'bg-red-500';
+                    texto = `Acordo inviável · Mensal ${mensalFormatado} abaixo do Target Parceiro ${ticketEmpresaFormatado}`;
+                } else if (parceiro === ticketEmpresa) {
+                    classes += 'bg-orange-50 text-orange-700 border-orange-200';
+                    dotClass = 'bg-orange-500';
+                    texto = `Valor inviável · Mensal ${mensalFormatado} igual ao Target Parceiro ${ticketEmpresaFormatado}`;
+                } else {
+                    classes += 'bg-green-50 text-green-700 border-green-200';
+                    dotClass = 'bg-green-500';
+                    texto = `Valor viável · Mensal ${mensalFormatado} acima do Target Parceiro ${ticketEmpresaFormatado}`;
+                }
+            } else {
+                classes += 'bg-gray-100 text-gray-500 border-gray-200';
+            }
+
+            if (parceiro > 0 || ticketEmpresa > 0) {
+                if (parceiro > ticketEmpresa) {
+                    classes = 'inline-flex items-center gap-2 px-4 py-2 rounded-2xl border text-[10px] font-black uppercase tracking-widest bg-red-50 text-red-700 border-red-200';
+                    dotClass = 'bg-red-500';
+                    texto = `Acordo inviavel · Custo Parceiro ${parceiroFormatado} acima do Target Parceiro ${ticketEmpresaFormatado}`;
+                } else if (parceiro === ticketEmpresa) {
+                    classes = 'inline-flex items-center gap-2 px-4 py-2 rounded-2xl border text-[10px] font-black uppercase tracking-widest bg-orange-50 text-orange-700 border-orange-200';
+                    dotClass = 'bg-orange-500';
+                    texto = `Acordo inviavel · Custo Parceiro ${parceiroFormatado} igual ao Target Parceiro ${ticketEmpresaFormatado}`;
+                } else {
+                    classes = 'inline-flex items-center gap-2 px-4 py-2 rounded-2xl border text-[10px] font-black uppercase tracking-widest bg-green-50 text-green-700 border-green-200';
+                    dotClass = 'bg-green-500';
+                    texto = `Contrato viavel · Target Parceiro ${ticketEmpresaFormatado} acima do Custo Parceiro ${parceiroFormatado}`;
+                }
+            }
+
+            indicadorViabilidade.className = classes;
+            indicadorViabilidade.innerHTML = `<span class="w-2.5 h-2.5 rounded-full ${dotClass}"></span>${texto}`;
+        }
     }
 
-    [vMensal, vInstalacao, vParceiro].forEach(input => {
+    [vMensal, vTicketCliente, vTicketEmpresa, vInstalacao, vParceiro, vTempoContrato].forEach(input => {
         if(input) input.addEventListener('input', calcularMargem);
     });
     calcularMargem();
 });
 
-function openClientSearchModal() { document.getElementById('addressSearchModal').classList.remove('hidden'); showModalStep(1); }
-function closeClientSearchModal() { document.getElementById('addressSearchModal').classList.add('hidden'); }
+function openClientSearchModal() {
+    const modal = document.getElementById('addressSearchModal');
+    if (!modal) return;
+    modal.classList.remove('hidden');
+    showModalStep(1);
+}
+function closeClientSearchModal() {
+    const modal = document.getElementById('addressSearchModal');
+    if (!modal) return;
+    modal.classList.add('hidden');
+}
 function showModalStep(step) {
     document.getElementById('step-search-client').classList.toggle('hidden', step !== 1);
     document.getElementById('step-select-address').classList.toggle('hidden', step !== 2);
 }
 
 async function performClientSearch() {
+    if (!document.getElementById('addressSearchModal')) return;
     const q = document.getElementById('modalSearchInput').value;
     if (q.length < 3) return;
     const res = await fetch(`/clientes/api/search/?q=${q}`);
@@ -456,6 +656,7 @@ async function performClientSearch() {
 }
 
 async function fetchAddresses(clientId) {
+    if (!document.getElementById('addressSearchModal')) return;
     const res = await fetch(`/clientes/api/addresses/${clientId}/`);
     const data = await res.json();
     showModalStep(2);

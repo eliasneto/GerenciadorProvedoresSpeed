@@ -4,7 +4,7 @@ from django.apps import AppConfig
 class LeadsConfig(AppConfig):
     default_auto_field = 'django.db.models.BigAutoField'
     name = 'leads'
-    verbose_name = 'Prospecção'
+    verbose_name = 'Cotação'
 
     def ready(self):
         # Import relativo: busca o signals.py NA MESMA PASTA deste apps.py

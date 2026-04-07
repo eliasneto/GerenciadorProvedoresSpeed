@@ -1,0 +1,149 @@
+{% extends "core/base.html" %}
+
+{% block title %}Speed | Cotação por Cliente{% endblock %}
+
+{% block content %}
+<div class="p-6 md:p-10 max-w-7xl mx-auto">
+    <div class="flex flex-col lg:flex-row lg:items-end justify-between gap-4 mb-6">
+        <div>
+            <h1 class="text-3xl font-black text-gray-900 italic uppercase tracking-tighter">Cotação por Cliente</h1>
+            <p class="text-[10px] text-gray-500 font-bold uppercase tracking-widest mt-1">Quantidade de cotações por cliente em cada status</p>
+        </div>
+        <div class="flex flex-wrap items-center gap-3">
+            <span class="bg-ageis-yellow text-black px-4 py-2.5 rounded-full text-[10px] font-black uppercase tracking-widest shadow-sm">
+                {{ page_obj.paginator.count }} Resultados
+            </span>
+            <span class="bg-yellow-50 text-yellow-700 px-4 py-2.5 rounded-full text-[10px] font-black uppercase tracking-widest border border-yellow-100">
+                {{ totais_por_status.analise }} Em negociação
+            </span>
+            <span class="bg-green-50 text-green-700 px-4 py-2.5 rounded-full text-[10px] font-black uppercase tracking-widest border border-green-100">
+                {{ totais_por_status.ativa }} Viável
+            </span>
+            <span class="bg-blue-50 text-blue-700 px-4 py-2.5 rounded-full text-[10px] font-black uppercase tracking-widest border border-blue-100">
+                {{ totais_por_status.aguardando_contratacao }} Aguardando contratação
+            </span>
+            <span class="bg-emerald-50 text-emerald-700 px-4 py-2.5 rounded-full text-[10px] font-black uppercase tracking-widest border border-emerald-100">
+                {{ totais_por_status.contratado }} Contratado
+            </span>
+            <span class="bg-orange-50 text-orange-700 px-4 py-2.5 rounded-full text-[10px] font-black uppercase tracking-widest border border-orange-100">
+                {{ totais_por_status.declinado }} Declinado
+            </span>
+            <span class="bg-red-50 text-red-700 px-4 py-2.5 rounded-full text-[10px] font-black uppercase tracking-widest border border-red-100">
+                {{ totais_por_status.encerrada }} Inviável
+            </span>
+        </div>
+    </div>
+
+    <div class="bg-white p-2 rounded-3xl shadow-sm border border-gray-100 mb-8">
+        <form method="GET" class="flex flex-col xl:flex-row items-center gap-2 w-full">
+            <div class="flex-1 flex items-center gap-3 px-5 py-3.5 bg-gray-50 hover:bg-gray-100 rounded-2xl transition-colors w-full">
+                <i data-lucide="search" class="w-4 h-4 text-gray-400 shrink-0"></i>
+                <input type="text" name="busca" value="{{ busca }}" placeholder="Buscar por cliente, parceiro, cotação ou endereço..." class="bg-transparent border-none outline-none w-full text-xs font-bold text-gray-700 placeholder-gray-400">
+            </div>
+
+            <div class="flex items-center gap-2 w-full xl:w-auto shrink-0">
+                {% if busca %}
+                <a href="{% url 'gestao_relatorio_status_cliente' %}" class="w-12 h-12 flex items-center justify-center rounded-full bg-red-50 text-red-500 hover:bg-red-100 transition" title="Limpar Filtros">
+                    <i data-lucide="x" class="w-4 h-4"></i>
+                </a>
+                {% endif %}
+                <button type="submit" class="w-full xl:w-auto bg-ageis-black text-ageis-yellow font-black italic uppercase tracking-widest px-8 py-3.5 rounded-2xl hover:bg-gray-900 transition-all">
+                    FILTRAR
+                </button>
+            </div>
+        </form>
+    </div>
+
+    <div class="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
+        <div class="overflow-x-auto">
+            <table class="w-full text-left min-w-[1200px]">
+                <thead class="bg-gray-50 border-b border-gray-100">
+                    <tr>
+                        <th class="px-6 py-4 text-xs font-bold uppercase text-gray-400"><a href="?{{ sort_links.cliente }}" class="hover:text-gray-700">Cliente</a></th>
+                        <th class="px-6 py-4 text-xs font-bold uppercase text-gray-400"><a href="?{{ sort_links.total_cotacoes }}" class="hover:text-gray-700">Total Cotações</a></th>
+                        <th class="px-6 py-4 text-xs font-bold uppercase text-gray-400"><a href="?{{ sort_links.em_negociacao }}" class="hover:text-gray-700">Em Negociação</a></th>
+                        <th class="px-6 py-4 text-xs font-bold uppercase text-gray-400"><a href="?{{ sort_links.viavel }}" class="hover:text-gray-700">Viável</a></th>
+                        <th class="px-6 py-4 text-xs font-bold uppercase text-gray-400"><a href="?{{ sort_links.aguardando_contratacao }}" class="hover:text-gray-700">Aguardando Contratação</a></th>
+                        <th class="px-6 py-4 text-xs font-bold uppercase text-gray-400"><a href="?{{ sort_links.contratado }}" class="hover:text-gray-700">Contratado</a></th>
+                        <th class="px-6 py-4 text-xs font-bold uppercase text-gray-400"><a href="?{{ sort_links.declinado }}" class="hover:text-gray-700">Declinado</a></th>
+                        <th class="px-6 py-4 text-xs font-bold uppercase text-gray-400"><a href="?{{ sort_links.inviavel }}" class="hover:text-gray-700">Inviável</a></th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-50">
+                    {% for item in page_obj %}
+                    <tr class="hover:bg-gray-50/50 transition align-top">
+                        <td class="px-6 py-5 font-bold text-gray-900">{{ item.cliente_nome }}</td>
+                        <td class="px-6 py-5 font-semibold text-gray-900">
+                            <a href="{% url 'gestao_relatorio_proposta_status' %}?busca={{ item.cliente_nome|urlencode }}" class="hover:text-ageis-yellow transition-colors">
+                                {{ item.total_cotacoes }}
+                            </a>
+                        </td>
+                        <td class="px-6 py-5 font-semibold text-yellow-700">
+                            <a href="{% url 'gestao_relatorio_proposta_status' %}?busca={{ item.cliente_nome|urlencode }}&status=analise" class="hover:text-ageis-yellow transition-colors">
+                                {{ item.em_negociacao }}
+                            </a>
+                        </td>
+                        <td class="px-6 py-5 font-semibold text-green-700">
+                            <a href="{% url 'gestao_relatorio_proposta_status' %}?busca={{ item.cliente_nome|urlencode }}&status=ativa" class="hover:text-ageis-yellow transition-colors">
+                                {{ item.viavel }}
+                            </a>
+                        </td>
+                        <td class="px-6 py-5 font-semibold text-blue-700">
+                            <a href="{% url 'gestao_relatorio_proposta_status' %}?busca={{ item.cliente_nome|urlencode }}&status=aguardando_contratacao" class="hover:text-ageis-yellow transition-colors">
+                                {{ item.aguardando_contratacao }}
+                            </a>
+                        </td>
+                        <td class="px-6 py-5 font-semibold text-emerald-700">
+                            <a href="{% url 'gestao_relatorio_proposta_status' %}?busca={{ item.cliente_nome|urlencode }}&status=contratado" class="hover:text-ageis-yellow transition-colors">
+                                {{ item.contratado }}
+                            </a>
+                        </td>
+                        <td class="px-6 py-5 font-semibold text-orange-700">
+                            <a href="{% url 'gestao_relatorio_proposta_status' %}?busca={{ item.cliente_nome|urlencode }}&status=declinado" class="hover:text-ageis-yellow transition-colors">
+                                {{ item.declinado }}
+                            </a>
+                        </td>
+                        <td class="px-6 py-5 font-semibold text-red-700">
+                            <a href="{% url 'gestao_relatorio_proposta_status' %}?busca={{ item.cliente_nome|urlencode }}&status=encerrada" class="hover:text-ageis-yellow transition-colors">
+                                {{ item.inviavel }}
+                            </a>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="8" class="px-6 py-20 text-center text-gray-400 font-medium">
+                            <div class="flex flex-col items-center gap-2">
+                                <i data-lucide="inbox" class="w-8 h-8 opacity-50"></i>
+                                Nenhum cliente encontrado com este filtro.
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        {% if page_obj.has_other_pages %}
+        <div class="px-6 py-6 border-t border-gray-100 bg-white flex flex-col sm:flex-row items-center justify-between gap-4">
+            <span class="text-[10px] font-black italic text-gray-400 uppercase tracking-widest">
+                Pagina {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}
+            </span>
+
+            <div class="flex items-center gap-2">
+                {% if page_obj.has_previous %}
+                    <a href="?page={{ page_obj.previous_page_number }}&busca={{ busca }}&sort={{ sort_by }}&direction={{ direction }}" class="w-10 h-10 flex items-center justify-center rounded-xl border border-gray-200 bg-white text-gray-500 hover:bg-gray-50 hover:text-gray-900 transition shadow-sm" title="Pagina Anterior">
+                        <i data-lucide="chevron-left" class="w-4 h-4"></i>
+                    </a>
+                {% endif %}
+
+                {% if page_obj.has_next %}
+                    <a href="?page={{ page_obj.next_page_number }}&busca={{ busca }}&sort={{ sort_by }}&direction={{ direction }}" class="w-10 h-10 flex items-center justify-center rounded-xl border border-gray-200 bg-white text-gray-500 hover:bg-gray-50 hover:text-gray-900 transition shadow-sm" title="Proxima Pagina">
+                        <i data-lucide="chevron-right" class="w-4 h-4"></i>
+                    </a>
+                {% endif %}
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

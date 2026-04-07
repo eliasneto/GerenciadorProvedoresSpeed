@@ -29,4 +29,4 @@ COPY . /app/
 EXPOSE 8000
 
 # O comando que prepara o sistema E mantém ele no ar profissionalmente!
-CMD python setup_speed.py && gunicorn --bind 0.0.0.0:8000 config.wsgi:application
+CMD python setup_speed.py && gunicorn --bind 0.0.0.0:8000 --timeout 1200 config.wsgi:application

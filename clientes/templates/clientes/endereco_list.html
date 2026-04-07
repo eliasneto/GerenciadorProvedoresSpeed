@@ -150,13 +150,14 @@
 
                         <td class="px-8 py-6 text-right">
                             <div class="flex justify-end gap-2">
-                                <a href="{% url 'address_proposals_list' endereco.pk %}" 
-                                   class="p-3 bg-ageis-black text-ageis-yellow rounded-xl hover:shadow-lg transition-all hover:scale-110 active:scale-95 group/os" 
-                                   title="Gerenciar Ordens de Serviço (Propostas)">
-                                    <i data-lucide="clipboard-list" class="w-5 h-5 transition-transform group-hover/os:scale-110"></i>
+                                <a href="{% url 'endereco_tecnico_detail' endereco.pk %}"
+                                   class="p-3 bg-ageis-black text-ageis-yellow rounded-xl hover:shadow-lg transition-all hover:scale-110 active:scale-95"
+                                   title="Visualizar dados técnicos">
+                                    <i data-lucide="file-search" class="w-5 h-5"></i>
                                 </a>
                             </div>
                         </td>
+
                     </tr>
                     {% empty %}
                     <tr>

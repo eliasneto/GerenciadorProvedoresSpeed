@@ -1,16 +1,22 @@
 import os
 import sys
-import ldap
 from pathlib import Path
-from dotenv import load_dotenv
+
 from decouple import config
-from django_auth_ldap.config import LDAPSearch, ActiveDirectoryGroupType
+from dotenv import load_dotenv
 
 # ============================================
 #  CARREGA VARIÁVEIS DE AMBIENTE
 # ============================================
 load_dotenv()
 USE_AD_AUTH = os.getenv("USE_AD_AUTH", "false").lower() == "true"
+
+if USE_AD_AUTH:
+    try:
+        import ldap
+        from django_auth_ldap.config import LDAPSearch
+    except ImportError:
+        USE_AD_AUTH = False
 
 # Build paths inside the project
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -85,9 +91,9 @@ WSGI_APPLICATION = 'config.wsgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.mysql',
-        'NAME': config('DB_NAME', default='speed_banco'),
-        'USER': config('DB_USER', default='speed_user'),
-        'PASSWORD': config('DB_PASSWORD', default='speed_password'),
+        'NAME': config('DB_NAME', default='speed_prod'),
+        'USER': config('DB_USER', default='speed_app'),
+        'PASSWORD': config('DB_PASSWORD', default='SpeedApp!2026#Prod'),
         'HOST': config('DB_HOST', default='speed_db'),
         'PORT': config('DB_PORT', default='3306'),
         'OPTIONS': {
@@ -200,7 +206,7 @@ LOGIN_REDIRECT_URL = 'home'
 LOGOUT_REDIRECT_URL = 'login'
 
 # Segurança de Sessão (10 minutos)
-SESSION_COOKIE_AGE = 600
+SESSION_COOKIE_AGE = 1800
 SESSION_SAVE_EVERY_REQUEST = True
 SESSION_EXPIRE_AT_BROWSER_CLOSE = True
 
