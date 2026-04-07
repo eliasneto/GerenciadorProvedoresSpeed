@@ -1,4 +1,4 @@
-from django.shortcuts import render, get_object_or_404, redirect
+﻿from django.shortcuts import render, get_object_or_404, redirect
 from django.contrib.auth.decorators import login_required, user_passes_test
 from django.core.exceptions import PermissionDenied
 from django.core.paginator import Paginator
@@ -10,7 +10,7 @@ from django.utils import timezone
 from datetime import datetime, time
 from urllib.parse import urlparse, urlencode
 
-# Importações do próprio App
+# Importações do próprio app
 from .models import Partner, PartnerPlan, Proposal, ProposalMotivoInviavel
 from .forms import PartnerForm, PartnerPlanForm, ProposalForm
 from clientes.models import Endereco 
@@ -22,10 +22,10 @@ from core.models import RegistroHistorico
 def grupo_Parceiro_required(user):
     if not user.is_authenticated:
         return False
-    # O Superuser (você) sempre passa. Os outros precisam estar no grupo.
+    # O superuser sempre passa. Os outros precisam estar no grupo.
     if user.groups.filter(name='Parceiro').exists() or user.is_superuser:
         return True
-    # Se não for do grupo, joga um Erro 403 (Acesso Negado)
+    # Se não for do grupo, gera erro 403 (acesso negado).
     raise PermissionDenied
 
 
@@ -109,7 +109,7 @@ def _append_next(url, next_param):
 @user_passes_test(grupo_Parceiro_required)
 @login_required
 def partner_list(request):
-    """Lista APENAS os parceiros ATIVOS (A operação real)."""
+    """Lista apenas os parceiros ativos."""
     proposal_statuses_partner_list = ['aguardando_contratacao', 'contratado', 'declinado']
     partners_queryset = (
         Partner.objects.filter(proposals__status__in=proposal_statuses_partner_list)
@@ -152,8 +152,8 @@ def partner_list(request):
 @user_passes_test(grupo_Parceiro_required)
 @login_required
 def partner_inactive_list(request):
-    """Esteira de Reativação (Win-back) para parceiros inativos."""
-    # Traz todo mundo que NÃO está ativo (inativo, negociacao, inviavel)
+    """Esteira de reativação (win-back) para parceiros inativos."""
+    # Traz todo mundo que não está ativo (inativo, negociacao, inviavel)
     partners_inativos = Partner.objects.exclude(status__in=['ativo', 'aguardando_contratacao', 'contratado']).order_by('-data_cadastro')
     
     paginator = Paginator(partners_inativos, 10)
@@ -167,7 +167,7 @@ def partner_inactive_list(request):
 @user_passes_test(grupo_Parceiro_required)
 @login_required
 def partner_detail(request, pk):
-    """Exibe o perfil do parceiro, propostas e o HISTÓRICO (Timeline)."""
+    """Exibe o perfil do parceiro, propostas e o histórico."""
     partner = get_object_or_404(Partner, pk=pk)
     back_url, next_param = _resolver_back_url(request, reverse('partner_list'))
     proposals = partner.proposals.exclude(status__in=['encerrada', 'ativa', 'aguardando_contratacao', 'contratado', 'declinado']).order_by('-id')
@@ -210,7 +210,7 @@ def partner_detail(request, pk):
     
     partner_type = ContentType.objects.get_for_model(Partner)
     
-    # MÁGICA SPEED: Leitura de Histórico "Ativo" x "Arquivado"
+    # Leitura de histórico "ativo" x "arquivado"
     ver_antigos = request.GET.get('ver_antigos') == 'true'
     
     if ver_antigos:
@@ -286,7 +286,7 @@ def partner_plan_delete(request, partner_pk, plan_pk):
 @user_passes_test(grupo_Parceiro_required)
 @login_required
 def partner_add_historico(request, pk):
-    """Mini-view que recebe o POST do comentário/anexo na tela do Parceiro"""
+    """Recebe o POST do comentário/anexo na tela do parceiro."""
     partner = get_object_or_404(Partner, pk=pk)
     
     if request.method == 'POST':
@@ -332,19 +332,19 @@ def update_partner_status(request, pk):
             if status_antigo != novo_status:
                 if novo_status == 'inativo':
                     tipo_hist = 'anexo' if arquivo else 'sistema'
-                    texto_historico = f"🚫 PARCEIRO INATIVADO\n\nMotivo / Observação:\n{observacao}" if observacao else "🚫 PARCEIRO INATIVADO"
+                    texto_historico = f"PARCEIRO INATIVADO\n\nMotivo / Observação:\n{observacao}" if observacao else "PARCEIRO INATIVADO"
                 elif novo_status == 'declinado':
                     tipo_hist = 'anexo' if arquivo else 'sistema'
-                    texto_historico = f"❌ PARCEIRO DECLINADO\n\nMotivo / Observação:\n{observacao}" if observacao else "❌ PARCEIRO DECLINADO"
+                    texto_historico = f"PARCEIRO DECLINADO\n\nMotivo / Observação:\n{observacao}" if observacao else "PARCEIRO DECLINADO"
                 elif novo_status == 'contratado':
                     tipo_hist = 'sistema'
-                    texto_historico = "✅ PARCEIRO CONTRATADO\n\nStatus operacional alterado para [CONTRATADO]."
+                    texto_historico = "PARCEIRO CONTRATADO\n\nStatus operacional alterado para [CONTRATADO]."
                 elif novo_status == 'aguardando_contratacao':
                     tipo_hist = 'sistema'
-                    texto_historico = "📝 PARCEIRO EM AGUARDANDO CONTRATAÇÃO\n\nA proposta viável foi encaminhada para negociação contratual."
+                    texto_historico = "PARCEIRO EM AGUARDANDO CONTRATAÇÃO\n\nA proposta viável foi encaminhada para negociação contratual."
                 else:
                     tipo_hist = 'sistema'
-                    texto_historico = f"✅ PARCEIRO REATIVADO\n\nStatus operacional alterado para [ATIVO]."
+                    texto_historico = "PARCEIRO REATIVADO\n\nStatus operacional alterado para [ATIVO]."
 
                 RegistroHistorico.objects.create(
                     tipo=tipo_hist, 
@@ -360,7 +360,7 @@ def update_partner_status(request, pk):
 @user_passes_test(grupo_Parceiro_required)
 @login_required
 def update_winback_status(request, pk):
-    """Avança o estágio na esteira de reativação (Win-back)."""
+    """Avança o estágio na esteira de reativação (win-back)."""
     if request.method == 'POST':
         partner = get_object_or_404(Partner, pk=pk)
         novo_status = request.POST.get('status')
@@ -371,13 +371,13 @@ def update_winback_status(request, pk):
             from django.contrib.contenttypes.models import ContentType
             tipo_parceiro = ContentType.objects.get_for_model(Partner)
 
-            # 1. FORÇA BRUTA NO ARQUIVAMENTO (Salva um por um para não falhar)
+            # 1. Arquiva um por um para evitar falhas silenciosas.
             historicos_antigos = RegistroHistorico.objects.filter(content_type=tipo_parceiro, object_id=partner.id)
             for hist in historicos_antigos:
                 hist.arquivado = True
                 hist.save()
 
-            # 2. FORÇA BRUTA NA LIMPEZA (Deleta OS uma por uma)
+            # 2. Limpa as OS uma por uma.
             for prop in partner.proposals.all():
                 prop.delete()
 
@@ -388,7 +388,7 @@ def update_winback_status(request, pk):
             # 4. GERA O LOG INICIAL DO NOVO CICLO (Blindado e Corrigido)
             RegistroHistorico.objects.create(
                 tipo='sistema',
-                acao="🎉 NOVO CICLO DE PARCERIA!\nO parceiro foi reativado na esteira Win-back. O histórico antigo foi arquivado e o perfil foi limpo para a inclusão de novas OS.", # CORRIGIDO
+                acao="NOVO CICLO DE PARCERIA!\nO parceiro foi reativado na esteira win-back. O histórico antigo foi arquivado e o perfil foi limpo para a inclusão de novas OS.",
                 usuario=request.user, # CORRIGIDO
                 content_type=tipo_parceiro,
                 object_id=partner.id,
@@ -402,7 +402,7 @@ def update_winback_status(request, pk):
             partner.status = novo_status
             partner.save()
             
-            texto = "🤝 Negociação de reativação iniciada." if novo_status == 'negociacao' else f"❌ Tentativa de reativação recusada/inviável.\nMotivo: {observacao}"
+            texto = "Negociação de reativação iniciada." if novo_status == 'negociacao' else f"Tentativa de reativação recusada/inviável.\nMotivo: {observacao}"
             
             RegistroHistorico.objects.create(
                 tipo='sistema', 
@@ -666,7 +666,7 @@ def proposal_batch_status_update(request, pk):
                 return redirect(_append_next(reverse('proposal_batch_detail', args=[proposal.pk]), next_param))
 
         if novo_status == 'ativa':
-            messages.success(request, "CotaÃ§Ã£o marcada como viÃ¡vel. Complete agora os dados tÃ©cnicos e financeiros.")
+            messages.success(request, "Cotação marcada como viável. Complete agora os dados técnicos e financeiros.")
             return redirect(
                 _append_next(
                     f"{reverse('proposal_update', args=[proposal.pk])}?modo=convertida&status_pendente=ativa",
@@ -873,8 +873,8 @@ def proposal_update(request, pk):
                             str_antigo = str(valor_antigo) if valor_antigo else 'Vazio'
                             str_novo = str(valor_novo) if valor_novo else 'Vazio'
                             
-                        valores_novos.append(f"• {nome_campo}: {str_novo}")
-                        valores_antigos.append(f"• {nome_campo}: {str_antigo}")
+                        valores_novos.append(f"â€¢ {nome_campo}: {str_novo}")
+                        valores_antigos.append(f"â€¢ {nome_campo}: {str_antigo}")
 
             mudou_unidade, novas_unidades = False, []
             if enderecos_ids:
@@ -886,8 +886,8 @@ def proposal_update(request, pk):
                 
                 if endereco_atual != primeiro_endereco:
                     mudou_unidade = True
-                    valores_antigos.append(f"• Unidade Base: {endereco_atual}")
-                    valores_novos.append(f"• Unidade Base: {primeiro_endereco}")
+                    valores_antigos.append(f"â€¢ Unidade Base: {endereco_atual}")
+                    valores_novos.append(f"â€¢ Unidade Base: {primeiro_endereco}")
                 
                 proposta_base.client_address = primeiro_endereco
                 proposta_base.save()
@@ -926,14 +926,14 @@ def proposal_update(request, pk):
                 proposta_salva.save(update_fields=['grupo_proposta_id', 'codigo_proposta'])
 
             if valores_novos or valores_antigos or novas_unidades:
-                texto_snapshot = f"✏️ Edição de Proposta/OS realizada.\n\n"
+                texto_snapshot = "Edição de Proposta/OS realizada.\n\n"
                 if novas_unidades:
-                    texto_snapshot += f"➕ {len(novas_unidades)} NOVO(S) LINK(S) ADICIONADO(S):\n" + "\n".join(novas_unidades) + "\n\n"
+                    texto_snapshot += f"+ {len(novas_unidades)} NOVO(S) LINK(S) ADICIONADO(S):\n" + "\n".join(novas_unidades) + "\n\n"
                 if valores_novos or mudou_unidade:
                     if not mudou_unidade and endereco_atual:
-                        texto_snapshot += f"🔗 REFERÊNCIA: {endereco_atual}\n\n"
-                    texto_snapshot += "✅ Atualizado:\n" + "\n".join(valores_novos) + "\n\n--------------------------------------\n\n"
-                    texto_snapshot += "⏳ Antes:\n" + "\n".join(valores_antigos)
+                        texto_snapshot += f"REFERÊNCIA: {endereco_atual}\n\n"
+                    texto_snapshot += "Atualizado:\n" + "\n".join(valores_novos) + "\n\n--------------------------------------\n\n"
+                    texto_snapshot += "Antes:\n" + "\n".join(valores_antigos)
 
                 RegistroHistorico.objects.create(
                     tipo='sistema', 
@@ -949,7 +949,7 @@ def proposal_update(request, pk):
                     texto_snapshot.strip(),
                 )
 
-            messages.success(request, f"Sucesso! Atualizações salvas para a Speed.")
+            messages.success(request, "Sucesso! Atualizações salvas para a Speed.")
             return redirect('partner_detail', pk=partner.pk)
     else:
         form = ProposalForm(instance=proposal, lock_relationship_fields=is_conversion_completion)
@@ -978,7 +978,7 @@ def proposal_status_update(request, pk):
             return redirect('partner_detail', pk=partner.pk)
 
         if novo_status == 'ativa':
-            messages.success(request, "CotaÃ§Ã£o marcada como viÃ¡vel. Complete agora os dados tÃ©cnicos e financeiros.")
+            messages.success(request, "Cotação marcada como viável. Complete agora os dados técnicos e financeiros.")
             return redirect(f"{reverse('proposal_update', args=[proposal.pk])}?modo=convertida&status_pendente=ativa")
 
         status_antigo = proposal.status
@@ -1046,3 +1046,4 @@ def partner_clients_list(request, pk):
     return render(request, 'partners/partner_clients_list.html', {
         'partner': partner, 'clientes_agrupados': clientes_agrupados, 'total_links': proposals.count()
     })
+

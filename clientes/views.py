@@ -213,41 +213,99 @@ def endereco_tecnico_detail(request, pk):
 # ==========================================
 @login_required
 def api_cliente_search(request):
-    """API para busca rápida: agora busca também pelo ID do IXC"""
-    q = request.GET.get('q', '')
-    
-    clientes = Cliente.objects.filter(
-        Q(razao_social__icontains=q) | 
-        Q(nome_fantasia__icontains=q) |
-        Q(id_ixc__icontains=q) 
-    )[:10] 
-    
+    """API para busca rápida de clientes, com suporte opcional a paginação."""
+    q = (request.GET.get('q') or '').strip()
+    pagina = max(int(request.GET.get('page', 1) or 1), 1)
+    paginado = (request.GET.get('paginated') or '').lower() in {'1', 'true', 'yes'}
+
+    try:
+        tamanho_pagina = int(request.GET.get('page_size', 20) or 20)
+    except ValueError:
+        tamanho_pagina = 20
+    tamanho_pagina = max(1, min(tamanho_pagina, 50))
+
+    clientes = Cliente.objects.all()
+    if q:
+        clientes = clientes.filter(
+            Q(razao_social__icontains=q) |
+            Q(nome_fantasia__icontains=q) |
+            Q(cnpj_cpf__icontains=q) |
+            Q(id_ixc__icontains=q)
+        ).order_by('nome_fantasia', 'razao_social', 'id')
+    else:
+        clientes = clientes.order_by('-atualizado_em', '-id')
+
+    paginator = Paginator(clientes, tamanho_pagina)
+    page_obj = paginator.get_page(pagina)
+
     data = [{
-        'id': c.id, 
+        'id': c.id,
         'nome': f"[{c.id_ixc}] {c.nome_fantasia or c.razao_social}" if c.id_ixc else (c.nome_fantasia or c.razao_social),
         'documento': getattr(c, 'cnpj_cpf', 'Sem documento')
-    } for c in clientes]
-    
+    } for c in page_obj.object_list]
+
+    if paginado:
+        return JsonResponse({
+            'results': data,
+            'page': page_obj.number,
+            'has_next': page_obj.has_next(),
+            'next_page': page_obj.next_page_number() if page_obj.has_next() else None,
+            'total': paginator.count,
+        })
+
     return JsonResponse(data, safe=False)
 
 # Em apps/clientes/views.py
 
 @login_required
 def api_cliente_enderecos(request, pk):
-    """Retorna endereços de um cliente específico (AGORA COM O LOGIN IXC)"""
+    """Retorna endereços de um cliente específico, com suporte opcional a paginação."""
     cliente = get_object_or_404(Cliente, pk=pk)
-    enderecos = cliente.enderecos.all().order_by('logradouro')
-    
+    q = (request.GET.get('q') or '').strip()
+    pagina = max(int(request.GET.get('page', 1) or 1), 1)
+    paginado = (request.GET.get('paginated') or '').lower() in {'1', 'true', 'yes'}
+
+    try:
+        tamanho_pagina = int(request.GET.get('page_size', 30) or 30)
+    except ValueError:
+        tamanho_pagina = 30
+    tamanho_pagina = max(1, min(tamanho_pagina, 100))
+
+    enderecos = cliente.enderecos.all()
+    if q:
+        enderecos = enderecos.filter(
+            Q(login_ixc__icontains=q) |
+            Q(logradouro__icontains=q) |
+            Q(numero__icontains=q) |
+            Q(bairro__icontains=q) |
+            Q(cidade__icontains=q) |
+            Q(cep__icontains=q) |
+            Q(agent_circuit_id__icontains=q)
+        )
+
+    enderecos = enderecos.order_by('logradouro', 'numero', 'id')
+    paginator = Paginator(enderecos, tamanho_pagina)
+    page_obj = paginator.get_page(pagina)
+
     data = [{
-        'id': e.id, 
-        'endereco': e.logradouro if e.logradouro else f"Unidade: {e.tipo}", 
+        'id': e.id,
+        'endereco': e.logradouro if e.logradouro else f"Unidade: {e.tipo}",
         'numero': e.numero if e.numero else "S/N",
+        'bairro': e.bairro,
         'cidade': e.cidade,
         'cep': e.cep,
-        # ⚡ MÁGICA AQUI: Mandamos o Login do IXC para o Frontend!
-        'login_ixc': e.login_ixc if e.login_ixc else "[Pendente/Não Sincronizado no IXC]",
-    } for e in enderecos]
-    
+        'login_ixc': e.login_ixc if e.login_ixc else "[Pendente/Nao Sincronizado no IXC]",
+    } for e in page_obj.object_list]
+
+    if paginado:
+        return JsonResponse({
+            'results': data,
+            'page': page_obj.number,
+            'has_next': page_obj.has_next(),
+            'next_page': page_obj.next_page_number() if page_obj.has_next() else None,
+            'total': paginator.count,
+        })
+
     return JsonResponse(data, safe=False)
 
 @login_required

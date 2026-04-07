@@ -50,9 +50,16 @@ class Endereco(models.Model):
     estado = models.CharField('UF', max_length=2, choices=ESTADO_CHOICES, default='CE')
 
     login_ixc = models.CharField('Login IXC (PPPoE)', max_length=150, blank=True, null=True)
+    login_id_ixc = models.CharField('Login ID IXC', max_length=50, blank=True, null=True, db_index=True)
+    contrato_id_ixc = models.CharField('Contrato ID IXC', max_length=50, blank=True, null=True, db_index=True)
     filial_ixc = models.CharField('Filial (IXC)', max_length=100, blank=True, null=True)
     agente_id_ixc = models.CharField('Agente ID', max_length=50, blank=True, null=True)
     agent_circuit_id = models.CharField('ID do Circuito', max_length=100, null=True, blank=True)
+    possui_primeira_os = models.BooleanField('Possui Primeira OS?', default=False, db_index=True)
+    primeiro_ticket_ixc = models.CharField('Primeiro Ticket IXC', max_length=50, blank=True, null=True)
+    primeira_os_ixc = models.CharField('Primeira OS IXC', max_length=50, blank=True, null=True)
+    primeira_os_setor_id_ixc = models.CharField('Primeira OS Setor ID IXC', max_length=50, blank=True, null=True)
+    primeira_os_setor_nome = models.CharField('Primeira OS Setor', max_length=150, blank=True, null=True)
 
     velocidade = models.CharField('Velocidade (Mbps)', max_length=50, blank=True, null=True)
     tecnologia = models.CharField('Tecnologia de Acesso', max_length=50, blank=True, null=True)

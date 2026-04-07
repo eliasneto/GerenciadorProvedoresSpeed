@@ -1,26 +1,32 @@
 {% extends "core/base.html" %}
 
-{% block title %}Speed | Minhas Cotações{% endblock %}
+{% block title %}Speed | Minhas Cotacoes{% endblock %}
 
 {% block content %}
 <div class="p-6 md:p-10 max-w-7xl mx-auto">
     <div class="flex flex-col lg:flex-row lg:items-end justify-between gap-4 mb-6">
         <div>
-            <h1 class="text-3xl font-black text-gray-900 italic uppercase tracking-tighter">Minhas Cotações</h1>
-            <p class="text-[10px] text-gray-500 font-bold uppercase tracking-widest mt-1">Cotações vinculadas ao usuário logado</p>
+            <h1 class="text-3xl font-black text-gray-900 italic uppercase tracking-tighter">Minhas Cotacoes</h1>
+            <p class="text-[10px] text-gray-500 font-bold uppercase tracking-widest mt-1">Cotacoes vinculadas ao usuario logado</p>
         </div>
         <div class="flex flex-wrap items-center gap-3">
             <span class="bg-ageis-yellow text-black px-4 py-2.5 rounded-full text-[10px] font-black uppercase tracking-widest shadow-sm">
                 {{ total_resultados }} Resultados
             </span>
             <span class="bg-yellow-50 text-yellow-700 px-4 py-2.5 rounded-full text-[10px] font-black uppercase tracking-widest border border-yellow-100">
-                {{ totais_por_status.analise }} Em Negociação
-            </span>
-            <span class="bg-green-50 text-green-700 px-4 py-2.5 rounded-full text-[10px] font-black uppercase tracking-widest border border-green-100">
-                {{ totais_por_status.ativa }} Viável
+                {{ totais_por_status.analise }} Em negociacao
             </span>
             <span class="bg-blue-50 text-blue-700 px-4 py-2.5 rounded-full text-[10px] font-black uppercase tracking-widest border border-blue-100">
-                {{ totais_por_status.aguardando_contratacao }} Aguardando Contratação
+                {{ totais_por_status.aguardando_contratacao }} Aguardando contratacao
+            </span>
+            <span class="bg-emerald-50 text-emerald-700 px-4 py-2.5 rounded-full text-[10px] font-black uppercase tracking-widest border border-emerald-100">
+                {{ totais_por_status.contratado }} Contratado
+            </span>
+            <span class="bg-orange-50 text-orange-700 px-4 py-2.5 rounded-full text-[10px] font-black uppercase tracking-widest border border-orange-100">
+                {{ totais_por_status.declinado }} Declinado
+            </span>
+            <span class="bg-red-50 text-red-700 px-4 py-2.5 rounded-full text-[10px] font-black uppercase tracking-widest border border-red-100">
+                {{ totais_por_status.encerrada }} Inviavel
             </span>
         </div>
     </div>
@@ -29,10 +35,13 @@
         <form method="GET" class="flex flex-col xl:flex-row items-center gap-2 w-full">
             <div class="flex-1 flex items-center gap-3 px-5 py-3.5 bg-gray-50 hover:bg-gray-100 md:rounded-full rounded-2xl transition-colors w-full">
                 <i data-lucide="search" class="w-4 h-4 text-gray-400 shrink-0"></i>
-                <input type="text" name="busca" value="{{ busca }}" placeholder="Buscar por parceiro, cotação, cliente ou endereço..." class="bg-transparent border-none outline-none w-full text-xs font-bold text-gray-700 placeholder-gray-400">
+                <input type="text" name="busca" value="{{ busca }}" placeholder="Buscar por parceiro, cotacao, cliente ou endereco..." class="bg-transparent border-none outline-none w-full text-xs font-bold text-gray-700 placeholder-gray-400">
             </div>
 
             <div class="flex items-center gap-2 w-full xl:w-auto shrink-0">
+                <a href="?{{ csv_query }}" class="w-12 h-12 flex items-center justify-center rounded-full bg-emerald-50 text-emerald-600 hover:bg-emerald-100 transition" title="Baixar CSV">
+                    <i data-lucide="download" class="w-4 h-4"></i>
+                </a>
                 {% if busca %}
                 <a href="{% url 'minhas_cotacoes' %}" class="w-12 h-12 flex items-center justify-center rounded-full bg-red-50 text-red-500 hover:bg-red-100 transition" title="Limpar Filtros">
                     <i data-lucide="x" class="w-4 h-4"></i>
@@ -51,62 +60,46 @@
                 <thead class="bg-gray-50 border-b border-gray-100">
                     <tr>
                         <th class="px-6 py-4 text-xs font-bold uppercase text-gray-400"><a href="?{{ sort_links.empresa }}" class="hover:text-gray-700">Parceiro</a></th>
-                        <th class="px-6 py-4 text-xs font-bold uppercase text-gray-400"><a href="?{{ sort_links.cotacao }}" class="hover:text-gray-700">Cotação</a></th>
+                        <th class="px-6 py-4 text-xs font-bold uppercase text-gray-400"><a href="?{{ sort_links.cotacao }}" class="hover:text-gray-700">Cotacao</a></th>
                         <th class="px-6 py-4 text-xs font-bold uppercase text-gray-400"><a href="?{{ sort_links.cliente }}" class="hover:text-gray-700">Cliente</a></th>
-                        <th class="px-6 py-4 text-xs font-bold uppercase text-gray-400"><a href="?{{ sort_links.endereco }}" class="hover:text-gray-700">Endereço</a></th>
-                        <th class="px-6 py-4 text-xs font-bold uppercase text-gray-400"><a href="?{{ sort_links.ultimo_comentario }}" class="hover:text-gray-700">Último Comentário</a></th>
+                        <th class="px-6 py-4 text-xs font-bold uppercase text-gray-400"><a href="?{{ sort_links.endereco }}" class="hover:text-gray-700">Endereco</a></th>
+                        <th class="px-6 py-4 text-xs font-bold uppercase text-gray-400"><a href="?{{ sort_links.ultimo_comentario }}" class="hover:text-gray-700">Ultimo Comentario</a></th>
                         <th class="px-6 py-4 text-xs font-bold uppercase text-gray-400"><a href="?{{ sort_links.status }}" class="hover:text-gray-700">Status</a></th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-gray-50">
                     {% for item in page_obj %}
                     <tr class="hover:bg-gray-50/50 transition align-top">
-                        <td class="px-6 py-5">
-                            <div class="font-bold text-gray-900">
-                                {{ item.partner.nome_fantasia|default:item.partner.razao_social }}
-                            </div>
-                        </td>
+                        <td class="px-6 py-5"><div class="font-bold text-gray-900">{{ item.partner.nome_fantasia|default:item.partner.razao_social }}</div></td>
                         <td class="px-6 py-5">
                             <div class="font-bold text-ageis-yellow">
                                 <a href="{% url 'proposal_detail' item.pk %}?next={{ request.get_full_path|urlencode }}" class="hover:text-gray-900 transition-colors">
                                     #{{ item.codigo_exibicao }}
                                 </a>
                             </div>
-                            <div class="text-sm text-gray-700 mt-1">
-                                {{ item.nome_proposta|default:"Cotação sem nome" }}
-                            </div>
+                            <div class="text-sm text-gray-700 mt-1">{{ item.nome_proposta|default:"Cotacao sem nome" }}</div>
                         </td>
-                        <td class="px-6 py-5">
-                            <div class="font-semibold text-gray-900">
-                                {{ item.cliente|default:"--" }}
-                            </div>
-                        </td>
+                        <td class="px-6 py-5"><div class="font-semibold text-gray-900">{{ item.cliente|default:"--" }}</div></td>
                         <td class="px-6 py-5">
                             <a href="{% url 'proposal_detail' item.pk %}?next={{ request.get_full_path|urlencode }}" class="font-semibold text-blue-600 hover:text-ageis-yellow transition-colors">
                                 {{ item.client_address.login_ixc|default:"--" }}
                             </a>
-                            <div class="text-xs text-gray-400 mt-1">Clique para abrir o histórico do endereço</div>
+                            <div class="text-xs text-gray-400 mt-1">Clique para abrir o historico do endereco</div>
                         </td>
                         <td class="px-6 py-5">
                             {% if item.ultima_interacao %}
-                            <div class="font-semibold text-gray-900">
-                                {{ item.ultima_interacao|date:"d/m/Y H:i" }}
-                            </div>
+                            <div class="font-semibold text-gray-900">{{ item.ultima_interacao|date:"d/m/Y H:i" }}</div>
                             {% else %}
                             <div class="font-semibold text-gray-400">-</div>
                             {% endif %}
                         </td>
                         <td class="px-6 py-5">
-                            {% if item.status == 'analise' %}
-                            <span title="Em Negociação" class="inline-flex items-center justify-center w-10 h-10 rounded-full bg-yellow-50 text-yellow-700 border border-yellow-100">
+                            {% if item.status == 'analise' or item.status == 'ativa' %}
+                            <span title="Em negociacao" class="inline-flex items-center justify-center w-10 h-10 rounded-full bg-yellow-50 text-yellow-700 border border-yellow-100">
                                 <i data-lucide="clock-3" class="w-4 h-4"></i>
                             </span>
-                            {% elif item.status == 'ativa' %}
-                            <span title="Viável" class="inline-flex items-center justify-center w-10 h-10 rounded-full bg-green-50 text-green-700 border border-green-100">
-                                <i data-lucide="check-circle-2" class="w-4 h-4"></i>
-                            </span>
                             {% elif item.status == 'aguardando_contratacao' %}
-                            <span title="Aguardando Contratação" class="inline-flex items-center justify-center w-10 h-10 rounded-full bg-blue-50 text-blue-700 border border-blue-100">
+                            <span title="Aguardando contratacao" class="inline-flex items-center justify-center w-10 h-10 rounded-full bg-blue-50 text-blue-700 border border-blue-100">
                                 <i data-lucide="file-clock" class="w-4 h-4"></i>
                             </span>
                             {% elif item.status == 'contratado' %}
@@ -118,7 +111,7 @@
                                 <i data-lucide="ban" class="w-4 h-4"></i>
                             </span>
                             {% else %}
-                            <span title="Inviável" class="inline-flex items-center justify-center w-10 h-10 rounded-full bg-red-50 text-red-600 border border-red-100">
+                            <span title="Inviavel" class="inline-flex items-center justify-center w-10 h-10 rounded-full bg-red-50 text-red-600 border border-red-100">
                                 <i data-lucide="alert-circle" class="w-4 h-4"></i>
                             </span>
                             {% endif %}
@@ -129,7 +122,7 @@
                         <td colspan="6" class="px-6 py-20 text-center text-gray-400 font-medium">
                             <div class="flex flex-col items-center gap-2">
                                 <i data-lucide="inbox" class="w-8 h-8 opacity-50"></i>
-                                Você ainda não possui cotações vinculadas.
+                                Voce ainda nao possui cotacoes vinculadas.
                             </div>
                         </td>
                     </tr>
@@ -141,18 +134,16 @@
         {% if page_obj.has_other_pages %}
         <div class="px-6 py-6 border-t border-gray-100 bg-white flex flex-col sm:flex-row items-center justify-between gap-4">
             <span class="text-[10px] font-black italic text-gray-400 uppercase tracking-widest">
-                Página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}
+                Pagina {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}
             </span>
-
             <div class="flex items-center gap-2">
                 {% if page_obj.has_previous %}
-                    <a href="?page={{ page_obj.previous_page_number }}&busca={{ busca }}&sort={{ sort_by }}&direction={{ direction }}" class="w-10 h-10 flex items-center justify-center rounded-xl border border-gray-200 bg-white text-gray-500 hover:bg-gray-50 hover:text-gray-900 transition shadow-sm" title="Página Anterior">
+                    <a href="?page={{ page_obj.previous_page_number }}&busca={{ busca }}&sort={{ sort_by }}&direction={{ direction }}" class="w-10 h-10 flex items-center justify-center rounded-xl border border-gray-200 bg-white text-gray-500 hover:bg-gray-50 hover:text-gray-900 transition shadow-sm" title="Pagina Anterior">
                         <i data-lucide="chevron-left" class="w-4 h-4"></i>
                     </a>
                 {% endif %}
-
                 {% if page_obj.has_next %}
-                    <a href="?page={{ page_obj.next_page_number }}&busca={{ busca }}&sort={{ sort_by }}&direction={{ direction }}" class="w-10 h-10 flex items-center justify-center rounded-xl border border-gray-200 bg-white text-gray-500 hover:bg-gray-50 hover:text-gray-900 transition shadow-sm" title="Próxima Página">
+                    <a href="?page={{ page_obj.next_page_number }}&busca={{ busca }}&sort={{ sort_by }}&direction={{ direction }}" class="w-10 h-10 flex items-center justify-center rounded-xl border border-gray-200 bg-white text-gray-500 hover:bg-gray-50 hover:text-gray-900 transition shadow-sm" title="Proxima Pagina">
                         <i data-lucide="chevron-right" class="w-4 h-4"></i>
                     </a>
                 {% endif %}

@@ -225,6 +225,7 @@ def extrair_todos_os_clientes(historico):
                     "contratos": [],
                     "logins": [
                         {
+                            "id_login": str(l.get('id') or '').strip(),
                             "id_contrato": l.get('id_contrato', ''),
                             "login": l['login'],
                             "ativo": l.get('ativo', 'S'),
@@ -326,6 +327,8 @@ def salvar_clientes_no_django(dados_ixc, mapa_filiais, mapa_cidades, historico):
                     'cidade': endereco_resolvido['cidade'],
                     'cidade_id_ixc': endereco_resolvido['cidade_id_ixc'],
                     'estado': endereco_resolvido['estado'],
+                    'login_id_ixc': str(lg.get('id_login') or '').strip() or None,
+                    'contrato_id_ixc': str(lg.get('id_contrato') or '').strip() or None,
                     'filial_ixc': filial_nova,
                     'agent_circuit_id': circuit_id_novo,
                     'status': status_django,

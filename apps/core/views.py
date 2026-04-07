@@ -1,3 +1,4 @@
+import csv
 from datetime import datetime, time
 
 from django.contrib import messages
@@ -7,6 +8,7 @@ from django.contrib.contenttypes.models import ContentType
 from django.core.exceptions import PermissionDenied
 from django.core.paginator import Paginator
 from django.db.models import OuterRef, Q, Subquery
+from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
@@ -50,6 +52,58 @@ def _sortable_value(value):
     if isinstance(value, str):
         return value.lower()
     return value
+
+
+def _report_status_key(status):
+    if status in {'analise', 'ativa'}:
+        return 'analise'
+    return status
+
+
+def _report_status_display_from_key(status_key):
+    labels = {
+        'analise': 'Em negociacao',
+        'aguardando_contratacao': 'Aguardando contratacao',
+        'contratado': 'Contratado',
+        'declinado': 'Declinado',
+        'encerrada': 'Inviavel',
+    }
+    return labels.get(status_key, status_key or '-')
+
+
+def _report_status_display(proposal):
+    return _report_status_display_from_key(_report_status_key(getattr(proposal, 'status', '')))
+
+
+def _report_status_choices():
+    return [
+        ('analise', 'Em negociacao'),
+        ('aguardando_contratacao', 'Aguardando contratacao'),
+        ('contratado', 'Contratado'),
+        ('declinado', 'Declinado'),
+        ('encerrada', 'Inviavel'),
+    ]
+
+
+def _report_totais_vazios():
+    return {
+        'analise': 0,
+        'aguardando_contratacao': 0,
+        'contratado': 0,
+        'declinado': 0,
+        'encerrada': 0,
+    }
+
+
+def _csv_response(filename, headers, rows):
+    response = HttpResponse(content_type='text/csv; charset=utf-8')
+    response['Content-Disposition'] = f'attachment; filename="{filename}"'
+    response.write('\ufeff')
+    writer = csv.writer(response)
+    writer.writerow(headers)
+    for row in rows:
+        writer.writerow(row)
+    return response
 
 
 def _proposal_cliente_nome(proposal):
@@ -272,31 +326,33 @@ def minhas_cotacoes(request):
         ordering = [f"-{field}" for field in ordering]
     queryset = queryset.order_by(*ordering)
 
-    totais_por_status = {
-        'analise': queryset.filter(status='analise').count(),
-        'ativa': queryset.filter(status='ativa').count(),
-        'aguardando_contratacao': queryset.filter(status='aguardando_contratacao').count(),
-        'contratado': queryset.filter(status='contratado').count(),
-        'declinado': queryset.filter(status='declinado').count(),
-        'encerrada': queryset.filter(status='encerrada').count(),
-    }
+    totais_por_status = _report_totais_vazios()
+    totais_por_status['analise'] = queryset.filter(status__in=['analise', 'ativa']).count()
+    totais_por_status['aguardando_contratacao'] = queryset.filter(status='aguardando_contratacao').count()
+    totais_por_status['contratado'] = queryset.filter(status='contratado').count()
+    totais_por_status['declinado'] = queryset.filter(status='declinado').count()
+    totais_por_status['encerrada'] = queryset.filter(status='encerrada').count()
+
+    if request.GET.get('export') == 'csv':
+        return _csv_response(
+            'minhas_cotacoes.csv',
+            ['Parceiro', 'Cotacao', 'Cliente', 'Endereco', 'Ultimo comentario', 'Status'],
+            [
+                [
+                    _proposal_partner_nome(item),
+                    item.codigo_exibicao,
+                    _proposal_cliente_nome(item),
+                    _proposal_endereco_nome(item),
+                    item.ultima_interacao.strftime('%d/%m/%Y %H:%M') if item.ultima_interacao else '-',
+                    _report_status_display(item),
+                ]
+                for item in queryset
+            ],
+        )
 
     paginator = Paginator(queryset, 20)
     page_number = request.GET.get('page')
     page_obj = paginator.get_page(page_number)
-    rows = []
-    for item in page_obj:
-        rows.append({
-            'pk': item.pk,
-            'partner_nome': _proposal_partner_nome(item),
-            'codigo_exibicao': item.codigo_exibicao,
-            'nome_proposta': item.nome_proposta or 'Cotacao sem nome',
-            'cliente_nome': _proposal_cliente_nome(item),
-            'login_nome': _proposal_endereco_nome(item),
-            'responsavel_nome': _proposal_responsavel_nome(item),
-            'responsavel_id': item.responsavel_id or '',
-            'ultima_interacao': item.ultima_interacao,
-        })
 
     return render(request, 'core/minhas_cotacoes.html', {
         'page_obj': page_obj,
@@ -311,6 +367,14 @@ def minhas_cotacoes(request):
         ),
         'totais_por_status': totais_por_status,
         'total_resultados': queryset.count(),
+        'csv_query': urlencode({
+            **{k: v for k, v in {
+                'busca': busca,
+                'sort': sort_by,
+                'direction': direction,
+            }.items() if v not in ('', None)},
+            'export': 'csv',
+        }),
     })
 
 
@@ -513,8 +577,11 @@ def gestao_relatorio_login_status(request):
             | Q(client_address__logradouro__icontains=endereco_param)
         )
 
-    if status:
-        queryset = queryset.filter(status=status)
+    status_filtrado = _report_status_key(status)
+    if status_filtrado == 'analise':
+        queryset = queryset.filter(status__in=['analise', 'ativa'])
+    elif status_filtrado:
+        queryset = queryset.filter(status=status_filtrado)
 
     order_map = {
         'empresa': ['partner__nome_fantasia', 'partner__razao_social', 'id'],
@@ -530,20 +597,15 @@ def gestao_relatorio_login_status(request):
         ordering = [f"-{field}" for field in ordering]
     queryset = queryset.order_by(*ordering)
 
-    totais_por_status = {
-        'analise': Proposal.objects.filter(status='analise').count(),
-        'ativa': Proposal.objects.filter(status='ativa').count(),
-        'aguardando_contratacao': Proposal.objects.filter(status='aguardando_contratacao').count(),
-        'contratado': Proposal.objects.filter(status='contratado').count(),
-        'declinado': Proposal.objects.filter(status='declinado').count(),
-        'encerrada': Proposal.objects.filter(status='encerrada').count(),
-    }
+    totais_por_status = _report_totais_vazios()
+    totais_por_status['analise'] = queryset.filter(status__in=['analise', 'ativa']).count()
+    totais_por_status['aguardando_contratacao'] = queryset.filter(status='aguardando_contratacao').count()
+    totais_por_status['contratado'] = queryset.filter(status='contratado').count()
+    totais_por_status['declinado'] = queryset.filter(status='declinado').count()
+    totais_por_status['encerrada'] = queryset.filter(status='encerrada').count()
 
-    paginator = Paginator(queryset, 20)
-    page_number = request.GET.get('page')
-    page_obj = paginator.get_page(page_number)
     rows = []
-    for item in page_obj:
+    for item in queryset:
         rows.append({
             'pk': item.pk,
             'partner_nome': _proposal_partner_nome(item),
@@ -551,11 +613,33 @@ def gestao_relatorio_login_status(request):
             'nome_proposta': item.nome_proposta or 'Cotacao sem nome',
             'cliente_nome': _proposal_cliente_nome(item),
             'login_nome': _proposal_endereco_nome(item),
-            'status': item.status,
-            'status_display': _proposal_status_display(item),
+            'status': _report_status_key(item.status),
+            'status_display': _report_status_display(item),
             'responsavel_nome': _proposal_responsavel_nome(item),
             'ultima_interacao': item.ultima_interacao,
         })
+
+    if request.GET.get('export') == 'csv':
+        return _csv_response(
+            'relatorio_login_status.csv',
+            ['Parceiro', 'Cotacao', 'Cliente', 'Login', 'Status', 'Responsavel', 'Ultima interacao'],
+            [
+                [
+                    item['partner_nome'],
+                    item['codigo_exibicao'],
+                    item['cliente_nome'],
+                    item['login_nome'],
+                    item['status_display'],
+                    item['responsavel_nome'],
+                    item['ultima_interacao'].strftime('%d/%m/%Y %H:%M') if item['ultima_interacao'] else '-',
+                ]
+                for item in rows
+            ],
+        )
+
+    paginator = Paginator(rows, 20)
+    page_number = request.GET.get('page')
+    page_obj = paginator.get_page(page_number)
 
     return render(request, 'core/gestao_relatorio_proposta_status.html', {
         'page_obj': page_obj,
@@ -563,13 +647,13 @@ def gestao_relatorio_login_status(request):
         'busca': busca,
         'cliente_param': cliente_param,
         'endereco_param': endereco_param,
-        'status_filtro': status,
+        'status_filtro': status_filtrado,
         'sort_by': sort_by,
         'direction': direction,
         'sort_links': _build_sort_links(
             {
                 'busca': busca,
-                'status': status,
+                'status': status_filtrado,
                 'cliente': cliente_param,
                 'endereco': endereco_param,
             },
@@ -578,7 +662,18 @@ def gestao_relatorio_login_status(request):
             ['empresa', 'cotacao', 'cliente', 'login', 'status', 'responsavel', 'ultima_interacao'],
         ),
         'totais_por_status': totais_por_status,
-        'status_choices': Proposal.STATUS_CHOICES,
+        'status_choices': _report_status_choices(),
+        'csv_query': urlencode({
+            **{k: v for k, v in {
+                'busca': busca,
+                'status': status_filtrado,
+                'cliente': cliente_param,
+                'endereco': endereco_param,
+                'sort': sort_by,
+                'direction': direction,
+            }.items() if v not in ('', None)},
+            'export': 'csv',
+        }),
     })
 
 
@@ -619,19 +714,15 @@ def gestao_relatorio_proposta_status(request):
             | Q(cliente__razao_social__icontains=busca)
         )
 
-    if status:
-        queryset = queryset.filter(status=status)
+    status_filtrado = _report_status_key(status)
+    if status_filtrado == 'analise':
+        queryset = queryset.filter(status__in=['analise', 'ativa'])
+    elif status_filtrado:
+        queryset = queryset.filter(status=status_filtrado)
 
     proposals_rows = []
     grouped_rows = {}
-    totais_por_status = {
-        'analise': 0,
-        'ativa': 0,
-        'aguardando_contratacao': 0,
-        'contratado': 0,
-        'declinado': 0,
-        'encerrada': 0,
-    }
+    totais_por_status = _report_totais_vazios()
 
     for item in queryset:
         group_key = (
@@ -647,15 +738,16 @@ def gestao_relatorio_proposta_status(request):
                 'nome_proposta': item.nome_proposta or 'Cotação sem nome',
                 'partner_nome': _proposal_partner_nome(item),
                 'cliente_nome': _proposal_cliente_nome(item),
-                'status': item.status,
-                'status_display': _proposal_status_display(item),
+                'status': _report_status_key(item.status),
+                'status_display': _report_status_display(item),
                 'responsavel_nome': _proposal_responsavel_nome(item),
                 'total_logins': 0,
                 'ultima_interacao': item.ultima_interacao,
             }
             proposals_rows.append(grouped_rows[group_key])
-            if item.status in totais_por_status:
-                totais_por_status[item.status] += 1
+            status_key = _report_status_key(item.status)
+            if status_key in totais_por_status:
+                totais_por_status[status_key] += 1
 
         grouped_rows[group_key]['total_logins'] += 1
 
@@ -681,20 +773,45 @@ def gestao_relatorio_proposta_status(request):
     page_number = request.GET.get('page')
     page_obj = paginator.get_page(page_number)
 
+    if request.GET.get('export') == 'csv':
+        return _csv_response(
+            'relatorio_status_cotacao.csv',
+            ['Parceiro', 'Cotacao', 'Cliente', 'Qtd logins', 'Status'],
+            [
+                [
+                    item['partner_nome'],
+                    item['codigo_exibicao'],
+                    item['cliente_nome'],
+                    item['total_logins'],
+                    item['status_display'],
+                ]
+                for item in proposals_rows
+            ],
+        )
+
     return render(request, 'core/gestao_relatorio_proposta_status_real.html', {
         'page_obj': page_obj,
         'busca': busca,
-        'status_filtro': status,
+        'status_filtro': status_filtrado,
         'sort_by': sort_by,
         'direction': direction,
         'sort_links': _build_sort_links(
-            {'busca': busca, 'status': status},
+            {'busca': busca, 'status': status_filtrado},
             sort_by,
             direction,
             ['empresa', 'cotacao', 'cliente', 'qtd_logins', 'status'],
         ),
         'totais_por_status': totais_por_status,
-        'status_choices': Proposal.STATUS_CHOICES,
+        'status_choices': _report_status_choices(),
+        'csv_query': urlencode({
+            **{k: v for k, v in {
+                'busca': busca,
+                'status': status_filtrado,
+                'sort': sort_by,
+                'direction': direction,
+            }.items() if v not in ('', None)},
+            'export': 'csv',
+        }),
     })
 
 
@@ -704,7 +821,7 @@ def gestao_relatorio_status_cliente(request):
     busca = (request.GET.get('busca') or '').strip()
     sort_by, direction = _resolve_sort(
         request,
-        {'cliente', 'total_cotacoes', 'em_negociacao', 'viavel', 'aguardando_contratacao', 'contratado', 'declinado', 'inviavel'},
+        {'cliente', 'total_cotacoes', 'em_negociacao', 'aguardando_contratacao', 'contratado', 'declinado', 'inviavel'},
         'cliente',
     )
 
@@ -730,14 +847,12 @@ def gestao_relatorio_status_cliente(request):
             | Q(client_address__login_ixc__icontains=busca)
         )
 
-    totais_por_status = {
-        'analise': queryset.filter(status='analise').count(),
-        'ativa': queryset.filter(status='ativa').count(),
-        'aguardando_contratacao': queryset.filter(status='aguardando_contratacao').count(),
-        'contratado': queryset.filter(status='contratado').count(),
-        'declinado': queryset.filter(status='declinado').count(),
-        'encerrada': queryset.filter(status='encerrada').count(),
-    }
+    totais_por_status = _report_totais_vazios()
+    totais_por_status['analise'] = queryset.filter(status__in=['analise', 'ativa']).count()
+    totais_por_status['aguardando_contratacao'] = queryset.filter(status='aguardando_contratacao').count()
+    totais_por_status['contratado'] = queryset.filter(status='contratado').count()
+    totais_por_status['declinado'] = queryset.filter(status='declinado').count()
+    totais_por_status['encerrada'] = queryset.filter(status='encerrada').count()
 
     grouped_rows = {}
     rows = []
@@ -756,7 +871,6 @@ def gestao_relatorio_status_cliente(request):
             grouped_rows[cliente_key] = {
                 'cliente_nome': cliente_nome,
                 'em_negociacao': 0,
-                'viavel': 0,
                 'aguardando_contratacao': 0,
                 'contratado': 0,
                 'declinado': 0,
@@ -764,7 +878,6 @@ def gestao_relatorio_status_cliente(request):
                 'total_cotacoes': 0,
                 '_cotacoes_total': set(),
                 '_cotacoes_em_negociacao': set(),
-                '_cotacoes_viavel': set(),
                 '_cotacoes_aguardando_contratacao': set(),
                 '_cotacoes_contratado': set(),
                 '_cotacoes_declinado': set(),
@@ -779,14 +892,10 @@ def gestao_relatorio_status_cliente(request):
             row['_cotacoes_total'].add(cotacao_key)
             row['total_cotacoes'] += 1
 
-        if item.status == 'analise':
+        if item.status in {'analise', 'ativa'}:
             if cotacao_key not in row['_cotacoes_em_negociacao']:
                 row['_cotacoes_em_negociacao'].add(cotacao_key)
                 row['em_negociacao'] += 1
-        elif item.status == 'ativa':
-            if cotacao_key not in row['_cotacoes_viavel']:
-                row['_cotacoes_viavel'].add(cotacao_key)
-                row['viavel'] += 1
         elif item.status == 'aguardando_contratacao':
             if cotacao_key not in row['_cotacoes_aguardando_contratacao']:
                 row['_cotacoes_aguardando_contratacao'].add(cotacao_key)
@@ -807,7 +916,6 @@ def gestao_relatorio_status_cliente(request):
     for row in rows:
         row.pop('_cotacoes_total', None)
         row.pop('_cotacoes_em_negociacao', None)
-        row.pop('_cotacoes_viavel', None)
         row.pop('_cotacoes_aguardando_contratacao', None)
         row.pop('_cotacoes_contratado', None)
         row.pop('_cotacoes_declinado', None)
@@ -819,7 +927,6 @@ def gestao_relatorio_status_cliente(request):
             'cliente': item['cliente_nome'],
             'total_cotacoes': item['total_cotacoes'],
             'em_negociacao': item['em_negociacao'],
-            'viavel': item['viavel'],
             'aguardando_contratacao': item['aguardando_contratacao'],
             'contratado': item['contratado'],
             'declinado': item['declinado'],
@@ -832,6 +939,24 @@ def gestao_relatorio_status_cliente(request):
     page_number = request.GET.get('page')
     page_obj = paginator.get_page(page_number)
 
+    if request.GET.get('export') == 'csv':
+        return _csv_response(
+            'relatorio_status_cliente.csv',
+            ['Cliente', 'Total cotacoes', 'Em negociacao', 'Aguardando contratacao', 'Contratado', 'Declinado', 'Inviavel'],
+            [
+                [
+                    item['cliente_nome'],
+                    item['total_cotacoes'],
+                    item['em_negociacao'],
+                    item['aguardando_contratacao'],
+                    item['contratado'],
+                    item['declinado'],
+                    item['inviavel'],
+                ]
+                for item in rows
+            ],
+        )
+
     return render(request, 'core/gestao_relatorio_status_cliente.html', {
         'page_obj': page_obj,
         'busca': busca,
@@ -841,9 +966,17 @@ def gestao_relatorio_status_cliente(request):
             {'busca': busca},
             sort_by,
             direction,
-            ['cliente', 'total_cotacoes', 'em_negociacao', 'viavel', 'aguardando_contratacao', 'contratado', 'declinado', 'inviavel'],
+            ['cliente', 'total_cotacoes', 'em_negociacao', 'aguardando_contratacao', 'contratado', 'declinado', 'inviavel'],
         ),
         'totais_por_status': totais_por_status,
+        'csv_query': urlencode({
+            **{k: v for k, v in {
+                'busca': busca,
+                'sort': sort_by,
+                'direction': direction,
+            }.items() if v not in ('', None)},
+            'export': 'csv',
+        }),
     })
 
 
@@ -853,7 +986,7 @@ def gestao_relatorio_cotacao_endereco(request):
     busca = (request.GET.get('busca') or '').strip()
     sort_by, direction = _resolve_sort(
         request,
-        {'endereco', 'cliente', 'total_cotacoes', 'em_negociacao', 'viavel', 'aguardando_contratacao', 'contratado', 'declinado', 'inviavel'},
+        {'endereco', 'cliente', 'total_cotacoes', 'em_negociacao', 'aguardando_contratacao', 'contratado', 'declinado', 'inviavel'},
         'endereco',
     )
 
@@ -879,14 +1012,12 @@ def gestao_relatorio_cotacao_endereco(request):
             | Q(nome_proposta__icontains=busca)
         )
 
-    totais_por_status = {
-        'analise': queryset.filter(status='analise').count(),
-        'ativa': queryset.filter(status='ativa').count(),
-        'aguardando_contratacao': queryset.filter(status='aguardando_contratacao').count(),
-        'contratado': queryset.filter(status='contratado').count(),
-        'declinado': queryset.filter(status='declinado').count(),
-        'encerrada': queryset.filter(status='encerrada').count(),
-    }
+    totais_por_status = _report_totais_vazios()
+    totais_por_status['analise'] = queryset.filter(status__in=['analise', 'ativa']).count()
+    totais_por_status['aguardando_contratacao'] = queryset.filter(status='aguardando_contratacao').count()
+    totais_por_status['contratado'] = queryset.filter(status='contratado').count()
+    totais_por_status['declinado'] = queryset.filter(status='declinado').count()
+    totais_por_status['encerrada'] = queryset.filter(status='encerrada').count()
 
     grouped_rows = {}
     rows = []
@@ -904,14 +1035,12 @@ def gestao_relatorio_cotacao_endereco(request):
                 'cliente_nome': _proposal_cliente_nome(item),
                 'total_cotacoes': 0,
                 'em_negociacao': 0,
-                'viavel': 0,
                 'aguardando_contratacao': 0,
                 'contratado': 0,
                 'declinado': 0,
                 'inviavel': 0,
                 '_cotacoes_total': set(),
                 '_cotacoes_em_negociacao': set(),
-                '_cotacoes_viavel': set(),
                 '_cotacoes_aguardando_contratacao': set(),
                 '_cotacoes_contratado': set(),
                 '_cotacoes_declinado': set(),
@@ -925,14 +1054,10 @@ def gestao_relatorio_cotacao_endereco(request):
             row['_cotacoes_total'].add(cotacao_key)
             row['total_cotacoes'] += 1
 
-        if item.status == 'analise':
+        if item.status in {'analise', 'ativa'}:
             if cotacao_key not in row['_cotacoes_em_negociacao']:
                 row['_cotacoes_em_negociacao'].add(cotacao_key)
                 row['em_negociacao'] += 1
-        elif item.status == 'ativa':
-            if cotacao_key not in row['_cotacoes_viavel']:
-                row['_cotacoes_viavel'].add(cotacao_key)
-                row['viavel'] += 1
         elif item.status == 'aguardando_contratacao':
             if cotacao_key not in row['_cotacoes_aguardando_contratacao']:
                 row['_cotacoes_aguardando_contratacao'].add(cotacao_key)
@@ -953,7 +1078,6 @@ def gestao_relatorio_cotacao_endereco(request):
     for row in rows:
         row.pop('_cotacoes_total', None)
         row.pop('_cotacoes_em_negociacao', None)
-        row.pop('_cotacoes_viavel', None)
         row.pop('_cotacoes_aguardando_contratacao', None)
         row.pop('_cotacoes_contratado', None)
         row.pop('_cotacoes_declinado', None)
@@ -966,7 +1090,6 @@ def gestao_relatorio_cotacao_endereco(request):
             'cliente': item['cliente_nome'],
             'total_cotacoes': item['total_cotacoes'],
             'em_negociacao': item['em_negociacao'],
-            'viavel': item['viavel'],
             'aguardando_contratacao': item['aguardando_contratacao'],
             'contratado': item['contratado'],
             'declinado': item['declinado'],
@@ -979,6 +1102,26 @@ def gestao_relatorio_cotacao_endereco(request):
     page_number = request.GET.get('page')
     page_obj = paginator.get_page(page_number)
 
+    if request.GET.get('export') == 'csv':
+        return _csv_response(
+            'relatorio_cotacao_endereco.csv',
+            ['Endereco', 'Complemento', 'Cliente', 'Total cotacoes', 'Em negociacao', 'Aguardando contratacao', 'Contratado', 'Declinado', 'Inviavel'],
+            [
+                [
+                    item['endereco_nome'],
+                    item['endereco_complemento'],
+                    item['cliente_nome'],
+                    item['total_cotacoes'],
+                    item['em_negociacao'],
+                    item['aguardando_contratacao'],
+                    item['contratado'],
+                    item['declinado'],
+                    item['inviavel'],
+                ]
+                for item in rows
+            ],
+        )
+
     return render(request, 'core/gestao_relatorio_cotacao_endereco.html', {
         'page_obj': page_obj,
         'busca': busca,
@@ -988,9 +1131,17 @@ def gestao_relatorio_cotacao_endereco(request):
             {'busca': busca},
             sort_by,
             direction,
-            ['endereco', 'cliente', 'total_cotacoes', 'em_negociacao', 'viavel', 'aguardando_contratacao', 'contratado', 'declinado', 'inviavel'],
+            ['endereco', 'cliente', 'total_cotacoes', 'em_negociacao', 'aguardando_contratacao', 'contratado', 'declinado', 'inviavel'],
         ),
         'totais_por_status': totais_por_status,
+        'csv_query': urlencode({
+            **{k: v for k, v in {
+                'busca': busca,
+                'sort': sort_by,
+                'direction': direction,
+            }.items() if v not in ('', None)},
+            'export': 'csv',
+        }),
     })
 
 
@@ -1057,11 +1208,8 @@ def gestao_relatorio_login_usuario(request):
     total_com_responsavel = queryset.exclude(responsavel__isnull=True).count()
     total_sem_responsavel = queryset.filter(responsavel__isnull=True).count()
 
-    paginator = Paginator(queryset, 20)
-    page_number = request.GET.get('page')
-    page_obj = paginator.get_page(page_number)
     rows = []
-    for item in page_obj:
+    for item in queryset:
         rows.append({
             'pk': item.pk,
             'partner_nome': _proposal_partner_nome(item),
@@ -1073,6 +1221,28 @@ def gestao_relatorio_login_usuario(request):
             'responsavel_id': item.responsavel_id or '',
             'ultima_interacao': item.ultima_interacao,
         })
+
+    if request.GET.get('export') == 'csv':
+        return _csv_response(
+            'relatorio_login_usuario.csv',
+            ['Parceiro', 'Cotacao', 'Cliente', 'Endereco', 'Usuario', 'Ultimo comentario', 'Status'],
+            [
+                [
+                    item['partner_nome'],
+                    item['codigo_exibicao'],
+                    item['cliente_nome'],
+                    item['login_nome'],
+                    item['responsavel_nome'],
+                    item['ultima_interacao'].strftime('%d/%m/%Y %H:%M') if item['ultima_interacao'] else '-',
+                    'Vinculado' if item['responsavel_nome'] != '-' else 'Sem responsavel',
+                ]
+                for item in rows
+            ],
+        )
+
+    paginator = Paginator(rows, 20)
+    page_number = request.GET.get('page')
+    page_obj = paginator.get_page(page_number)
 
     usuarios_disponiveis = User.objects.filter(
         is_active=True,
@@ -1102,6 +1272,15 @@ def gestao_relatorio_login_usuario(request):
         'total_sem_responsavel': total_sem_responsavel,
         'usuarios_disponiveis': usuarios_disponiveis,
         'usuarios_filtro': usuarios_filtro,
+        'csv_query': urlencode({
+            **{k: v for k, v in {
+                'busca': busca,
+                'usuario': usuario_filtro,
+                'sort': sort_by,
+                'direction': direction,
+            }.items() if v not in ('', None)},
+            'export': 'csv',
+        }),
     })
 
 

@@ -30,6 +30,7 @@ services:
       - DB_PASSWORD=${DB_PASSWORD}
       - DB_HOST=${DB_HOST}
       - DB_PORT=${DB_PORT}
+      - DB_STARTUP_TIMEOUT=${DB_STARTUP_TIMEOUT}
       - USE_AD_AUTH=${USE_AD_AUTH}
       - AD_SERVER_URI=${AD_SERVER_URI}
       - AD_BIND_DN=${AD_BIND_DN}

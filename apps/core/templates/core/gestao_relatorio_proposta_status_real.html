@@ -1,13 +1,13 @@
 {% extends "core/base.html" %}
 
-{% block title %}Speed | Status por Cotação{% endblock %}
+{% block title %}Speed | Status por Cotacao{% endblock %}
 
 {% block content %}
 <div class="p-6 md:p-10 max-w-7xl mx-auto">
     <div class="flex flex-col lg:flex-row lg:items-end justify-between gap-4 mb-6">
         <div>
-            <h1 class="text-3xl font-black text-gray-900 italic uppercase tracking-tighter">Status por Cotação</h1>
-            <p class="text-[10px] text-gray-500 font-bold uppercase tracking-widest mt-1">Acompanhamento consolidado por cotação</p>
+            <h1 class="text-3xl font-black text-gray-900 italic uppercase tracking-tighter">Status por Cotacao</h1>
+            <p class="text-[10px] text-gray-500 font-bold uppercase tracking-widest mt-1">Acompanhamento consolidado por cotacao</p>
         </div>
         <div class="flex flex-wrap items-center gap-3">
             <span class="bg-ageis-yellow text-black px-4 py-2.5 rounded-full text-[10px] font-black uppercase tracking-widest shadow-sm">
@@ -15,9 +15,6 @@
             </span>
             <span class="bg-yellow-50 text-yellow-700 px-4 py-2.5 rounded-full text-[10px] font-black uppercase tracking-widest border border-yellow-100">
                 {{ totais_por_status.analise }} Em negociacao
-            </span>
-            <span class="bg-green-50 text-green-700 px-4 py-2.5 rounded-full text-[10px] font-black uppercase tracking-widest border border-green-100">
-                {{ totais_por_status.ativa }} Viavel
             </span>
             <span class="bg-blue-50 text-blue-700 px-4 py-2.5 rounded-full text-[10px] font-black uppercase tracking-widest border border-blue-100">
                 {{ totais_por_status.aguardando_contratacao }} Aguardando contratacao
@@ -38,7 +35,7 @@
         <form method="GET" class="flex flex-col xl:flex-row items-center gap-2 w-full">
             <div class="flex-1 flex items-center gap-3 px-5 py-3.5 bg-gray-50 hover:bg-gray-100 rounded-2xl transition-colors w-full">
                 <i data-lucide="search" class="w-4 h-4 text-gray-400 shrink-0"></i>
-                <input type="text" name="busca" value="{{ busca }}" placeholder="Buscar por parceiro, cotação ou cliente..." class="bg-transparent border-none outline-none w-full text-xs font-bold text-gray-700 placeholder-gray-400">
+                <input type="text" name="busca" value="{{ busca }}" placeholder="Buscar por parceiro, cotacao ou cliente..." class="bg-transparent border-none outline-none w-full text-xs font-bold text-gray-700 placeholder-gray-400">
             </div>
 
             <div class="w-full xl:w-64 flex items-center gap-3 px-5 py-3.5 bg-gray-50 hover:bg-gray-100 rounded-2xl transition-colors">
@@ -52,6 +49,9 @@
             </div>
 
             <div class="flex items-center gap-2 w-full xl:w-auto shrink-0">
+                <a href="?{{ csv_query }}" class="w-12 h-12 flex items-center justify-center rounded-full bg-emerald-50 text-emerald-600 hover:bg-emerald-100 transition" title="Baixar CSV">
+                    <i data-lucide="download" class="w-4 h-4"></i>
+                </a>
                 {% if busca or status_filtro %}
                 <a href="{% url 'gestao_relatorio_proposta_status' %}" class="w-12 h-12 flex items-center justify-center rounded-full bg-red-50 text-red-500 hover:bg-red-100 transition" title="Limpar Filtros">
                     <i data-lucide="x" class="w-4 h-4"></i>
@@ -70,7 +70,7 @@
                 <thead class="bg-gray-50 border-b border-gray-100">
                     <tr>
                         <th class="px-6 py-4 text-xs font-bold uppercase text-gray-400"><a href="?{{ sort_links.empresa }}" class="hover:text-gray-700">Parceiro</a></th>
-                        <th class="px-6 py-4 text-xs font-bold uppercase text-gray-400"><a href="?{{ sort_links.cotacao }}" class="hover:text-gray-700">Cotação</a></th>
+                        <th class="px-6 py-4 text-xs font-bold uppercase text-gray-400"><a href="?{{ sort_links.cotacao }}" class="hover:text-gray-700">Cotacao</a></th>
                         <th class="px-6 py-4 text-xs font-bold uppercase text-gray-400"><a href="?{{ sort_links.cliente }}" class="hover:text-gray-700">Cliente</a></th>
                         <th class="px-6 py-4 text-xs font-bold uppercase text-gray-400"><a href="?{{ sort_links.qtd_logins }}" class="hover:text-gray-700">Qtd. Logins</a></th>
                         <th class="px-6 py-4 text-xs font-bold uppercase text-gray-400"><a href="?{{ sort_links.status }}" class="hover:text-gray-700">Status</a></th>
@@ -79,25 +79,18 @@
                 <tbody class="divide-y divide-gray-50">
                     {% for item in page_obj %}
                     <tr class="hover:bg-gray-50/50 transition align-top">
-                        <td class="px-6 py-5">
-                            <div class="font-bold text-gray-900">{{ item.partner_nome }}</div>
-                        </td>
+                        <td class="px-6 py-5"><div class="font-bold text-gray-900">{{ item.partner_nome }}</div></td>
                         <td class="px-6 py-5">
                             <a href="{% url 'proposal_batch_detail' item.proposal_pk %}?next={{ request.get_full_path|urlencode }}" class="font-bold text-ageis-yellow hover:text-black transition-colors">
                                 #{{ item.codigo_exibicao }}
                             </a>
                             <div class="text-sm text-gray-700 mt-1">{{ item.nome_proposta }}</div>
                         </td>
-                        <td class="px-6 py-5">
-                            <div class="font-semibold text-gray-900">{{ item.cliente_nome }}</div>
-                        </td>
-                        <td class="px-6 py-5">
-                            <div class="font-semibold text-gray-900">{{ item.total_logins }}</div>
-                        </td>
+                        <td class="px-6 py-5"><div class="font-semibold text-gray-900">{{ item.cliente_nome }}</div></td>
+                        <td class="px-6 py-5"><div class="font-semibold text-gray-900">{{ item.total_logins }}</div></td>
                         <td class="px-6 py-5">
                             <span class="inline-flex items-center gap-2 rounded-full px-3 py-1 text-[10px] font-black uppercase tracking-widest
                                 {% if item.status == 'analise' %}bg-yellow-100 text-yellow-700
-                                {% elif item.status == 'ativa' %}bg-green-100 text-green-700
                                 {% elif item.status == 'aguardando_contratacao' %}bg-blue-100 text-blue-700
                                 {% elif item.status == 'contratado' %}bg-emerald-100 text-emerald-700
                                 {% elif item.status == 'declinado' %}bg-orange-100 text-orange-700
@@ -111,7 +104,7 @@
                         <td colspan="5" class="px-6 py-20 text-center text-gray-400 font-medium">
                             <div class="flex flex-col items-center gap-2">
                                 <i data-lucide="inbox" class="w-8 h-8 opacity-50"></i>
-                                Nenhuma cotação encontrada com este filtro.
+                                Nenhuma cotacao encontrada com este filtro.
                             </div>
                         </td>
                     </tr>
@@ -125,14 +118,12 @@
             <span class="text-[10px] font-black italic text-gray-400 uppercase tracking-widest">
                 Pagina {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}
             </span>
-
             <div class="flex items-center gap-2">
                 {% if page_obj.has_previous %}
                     <a href="?page={{ page_obj.previous_page_number }}&busca={{ busca }}&status={{ status_filtro }}&sort={{ sort_by }}&direction={{ direction }}" class="w-10 h-10 flex items-center justify-center rounded-xl border border-gray-200 bg-white text-gray-500 hover:bg-gray-50 hover:text-gray-900 transition shadow-sm" title="Pagina Anterior">
                         <i data-lucide="chevron-left" class="w-4 h-4"></i>
                     </a>
                 {% endif %}
-
                 {% if page_obj.has_next %}
                     <a href="?page={{ page_obj.next_page_number }}&busca={{ busca }}&status={{ status_filtro }}&sort={{ sort_by }}&direction={{ direction }}" class="w-10 h-10 flex items-center justify-center rounded-xl border border-gray-200 bg-white text-gray-500 hover:bg-gray-50 hover:text-gray-900 transition shadow-sm" title="Proxima Pagina">
                         <i data-lucide="chevron-right" class="w-4 h-4"></i>

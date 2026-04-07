@@ -142,6 +142,7 @@ def _converter_lead_em_parceiro_rapido(lead, enderecos, user, ticket_cliente=Non
 
         proposta_base = Proposal.objects.create(
             partner=partner,
+            responsavel=user,
             cliente=enderecos[0].cliente,
             client_address=enderecos[0],
             nome_proposta=nome_proposta,
@@ -558,10 +559,6 @@ def lead_quick_proposal(request, pk):
 
     if not enderecos_ids:
         messages.error(request, "Selecione pelo menos um login/unidade para abrir a cotação.")
-        return redirect('lead_list')
-
-    if not nome_proposta:
-        messages.error(request, "Informe o nome da cotação para continuar.")
         return redirect('lead_list')
 
     if request.POST.get('ticket_cliente') and ticket_cliente is None:

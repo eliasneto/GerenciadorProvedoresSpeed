@@ -124,7 +124,7 @@ class ProposalForm(forms.ModelForm):
             conflito = conflito.exclude(pk=partner.pk)
 
         if conflito.exists():
-            raise forms.ValidationError('JÃ¡ existe outro parceiro com este CNPJ/CPF.')
+            raise forms.ValidationError('Já existe outro parceiro com este CNPJ/CPF.')
 
         return valor
 
