@@ -1,23 +1,292 @@
 {% extends "admin/change_list.html" %}
 {% load i18n admin_urls %}
 
+{% block extrastyle %}
+{{ block.super }}
+<style>
+  .sync-launcher {
+    margin: 0 0 18px;
+    padding: 0;
+    list-style: none;
+  }
+
+  .sync-launcher__panel {
+    display: none;
+    margin-top: 14px;
+    padding: 18px;
+    border: 1px solid #2f3742;
+    border-radius: 14px;
+    background: linear-gradient(180deg, #1b2129 0%, #14191f 100%);
+    box-shadow: 0 14px 30px rgba(0, 0, 0, 0.22);
+  }
+
+  .sync-launcher__panel.is-open {
+    display: block;
+  }
+
+  .sync-launcher__hero {
+    display: flex;
+    justify-content: space-between;
+    gap: 16px;
+    align-items: flex-start;
+    margin-bottom: 18px;
+  }
+
+  .sync-launcher__title {
+    margin: 0 0 6px;
+    color: #f7fafc;
+    font-size: 18px;
+    font-weight: 700;
+  }
+
+  .sync-launcher__subtitle {
+    margin: 0;
+    color: #94a3b8;
+    font-size: 13px;
+    line-height: 1.5;
+    max-width: 700px;
+  }
+
+  .sync-launcher__close {
+    border: 1px solid #364152;
+    background: transparent;
+    color: #cbd5e1;
+    border-radius: 10px;
+    padding: 8px 12px;
+    cursor: pointer;
+    font-weight: 600;
+  }
+
+  .sync-launcher__close:hover {
+    background: #202833;
+  }
+
+  .sync-launcher__form {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(160px, 1fr));
+    gap: 14px;
+    align-items: end;
+  }
+
+  .sync-launcher__field {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .sync-launcher__field label {
+    color: #cbd5e1;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+
+  .sync-launcher__field input {
+    height: 42px;
+    padding: 0 12px;
+    border-radius: 10px;
+    border: 1px solid #364152;
+    background: #0f141a;
+    color: #f8fafc;
+    box-sizing: border-box;
+  }
+
+  .sync-launcher__field input::placeholder {
+    color: #7f8ea3;
+  }
+
+  .sync-launcher__field input:focus {
+    outline: none;
+    border-color: #f59e0b;
+    box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.16);
+  }
+
+  .sync-launcher__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 18px;
+  }
+
+  .sync-launcher__run {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 42px;
+    padding: 0 16px;
+    border: none;
+    border-radius: 999px;
+    background: #f59e0b;
+    color: #111827;
+    font-weight: 800;
+    cursor: pointer;
+  }
+
+  .sync-launcher__run:hover {
+    background: #fbbf24;
+  }
+
+  .sync-launcher__hint {
+    color: #94a3b8;
+    font-size: 12px;
+    line-height: 1.5;
+  }
+
+  .object-tools .sync-launcher__trigger a {
+    background: #2563eb;
+    color: #fff;
+    border-radius: 999px;
+    padding: 0 14px;
+    min-height: 32px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 12px;
+    line-height: 1;
+    letter-spacing: 0.02em;
+  }
+
+  .object-tools .sync-launcher__trigger a:hover {
+    background: #1d4ed8;
+  }
+
+  .object-tools a.sync-launcher__faxina {
+    background: #243447;
+    color: #fff;
+  }
+
+  .object-tools a.sync-launcher__incremental {
+    background: #f59e0b;
+    color: #111827;
+  }
+
+  .object-tools a.sync-launcher__total {
+    background: #22c55e;
+    color: #052e16;
+  }
+
+  .object-tools a.sync-launcher__faxina,
+  .object-tools a.sync-launcher__incremental,
+  .object-tools a.sync-launcher__total {
+    min-height: 32px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 14px;
+    font-size: 12px;
+    line-height: 1;
+    letter-spacing: 0.02em;
+  }
+
+  @media (max-width: 1200px) {
+    .sync-launcher__form {
+      grid-template-columns: repeat(2, minmax(160px, 1fr));
+    }
+  }
+
+  @media (max-width: 700px) {
+    .sync-launcher__hero {
+      flex-direction: column;
+    }
+
+    .sync-launcher__form {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>
+{% endblock %}
+
 {% block object-tools-items %}
+    <li class="sync-launcher__trigger">
+        <a href="#" id="open-os-lastmile-panel">OS Comercial | Lastmile</a>
+    </li>
     <li>
-        <a href="rodar-faxina/" class="addlink" style="background-color: #2c3e50; color: white;">
-            🧹 Rodar Faxina
+        <a href="rodar-faxina/" class="addlink sync-launcher__faxina">
+            Rodar Faxina
         </a>
     </li>
     <li>
-        <a href="rodar-incremental/" class="addlink" style="background-color: #f39c12; color: white;">
-            ⚡ Incremental
+        <a href="rodar-incremental/" class="addlink sync-launcher__incremental">
+            Incremental
         </a>
     </li>
     <li>
-        <a href="rodar-carga-total/" class="addlink" style="background-color: #27ae60; color: white;">
-            🚀 Carga Total
+        <a href="rodar-carga-total/" class="addlink sync-launcher__total">
+            Carga Total
         </a>
     </li>
-    
-    <!-- Renderiza os botões originais do Django -->
     {{ block.super }}
+{% endblock %}
+
+{% block content_title %}
+{{ block.super }}
+<div class="sync-launcher">
+    <section id="os-lastmile-panel" class="sync-launcher__panel{% if request.GET.open_os_form %} is-open{% endif %}">
+        <div class="sync-launcher__hero">
+            <div>
+                <h2 class="sync-launcher__title">Rodar Integração de OS Comercial | Lastmile</h2>
+                <p class="sync-launcher__subtitle">
+                    Use este painel só quando quiser filtrar cliente e recorte de O.S. alteradas.
+                    A execução continua em segundo plano e a auditoria aparece nesta lista.
+                </p>
+            </div>
+            <button type="button" id="close-os-lastmile-panel" class="sync-launcher__close">Fechar</button>
+        </div>
+
+        <form action="rodar-os-comercial-lastmile/" method="get">
+            <div class="sync-launcher__form">
+                <div class="sync-launcher__field">
+                    <label for="id_cliente_local_id">Cliente Local</label>
+                    <input id="id_cliente_local_id" type="text" name="cliente_local_id" placeholder="Ex: 24">
+                </div>
+                <div class="sync-launcher__field">
+                    <label for="id_cliente_ixc_id">Cliente IXC</label>
+                    <input id="id_cliente_ixc_id" type="text" name="cliente_ixc_id" placeholder="Ex: 5">
+                </div>
+                <div class="sync-launcher__field">
+                    <label for="id_os_alterada_desde">O.S. Alterada Desde</label>
+                    <input id="id_os_alterada_desde" type="date" name="os_alterada_desde">
+                </div>
+                <div class="sync-launcher__field">
+                    <label for="id_os_alterada_nos_ultimos_dias">Últimos Dias</label>
+                    <input id="id_os_alterada_nos_ultimos_dias" type="number" min="0" name="os_alterada_nos_ultimos_dias" placeholder="Ex: 10">
+                </div>
+            </div>
+
+            <div class="sync-launcher__actions">
+                <button type="submit" class="sync-launcher__run">Rodar Integração</button>
+                <span class="sync-launcher__hint">
+                    Se preencher "Últimos Dias", o recorte é feito sobre a última alteração da O.S.
+                </span>
+            </div>
+        </form>
+    </section>
+</div>
+{% endblock %}
+
+{% block footer %}
+{{ block.super }}
+<script>
+  (function() {
+    const panel = document.getElementById('os-lastmile-panel');
+    const openButton = document.getElementById('open-os-lastmile-panel');
+    const closeButton = document.getElementById('close-os-lastmile-panel');
+
+    if (!panel || !openButton || !closeButton) {
+      return;
+    }
+
+    openButton.addEventListener('click', function(event) {
+      event.preventDefault();
+      panel.classList.add('is-open');
+      panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+
+    closeButton.addEventListener('click', function() {
+      panel.classList.remove('is-open');
+    });
+  })();
+</script>
 {% endblock %}

@@ -11,6 +11,10 @@ urlpatterns = [
     path('<int:pk>/converter/', views.lead_convert, name='lead_convert'),
     path('<int:pk>/historico/add/', views.lead_add_historico, name='lead_add_historico'),
     path('integracoes/', views.integracoes_view, name='integracoes_lastmile'),
+    path('enderecos/', views.enderecos_lastmile_view, name='enderecos_lastmile'),
+    path('enderecos/<int:endereco_pk>/parceiros/', views.endereco_lastmile_partner_search, name='endereco_lastmile_partner_search'),
+    path('enderecos/<int:endereco_pk>/cotacoes/criar/', views.endereco_lastmile_batch_proposal_create, name='endereco_lastmile_batch_proposal_create'),
+    path('enderecos/<int:pk>/', views.enderecos_lastmile_cliente_view, name='enderecos_lastmile_cliente'),
     path('integracoes/modelo/', views.download_modelo_google_view, name='download_modelo_google'),
     
 ]

@@ -1,0 +1,337 @@
+{% extends "core/base.html" %}
+
+{% block title %}Speed | Endereços do Cliente{% endblock %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto p-6 md:p-10">
+    <div class="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-10">
+        <div>
+            <nav class="flex mb-2" aria-label="Breadcrumb">
+                <ol class="flex items-center space-x-2 text-xs font-black uppercase tracking-widest text-gray-400">
+                    <li><a href="{% url 'enderecos_lastmile' %}" class="hover:text-ageis-yellow transition">Endereços</a></li>
+                    <li><i data-lucide="chevron-right" class="w-3 h-3"></i></li>
+                    <li class="text-gray-900">Cliente</li>
+                </ol>
+            </nav>
+            <h1 class="text-4xl font-black text-gray-900 italic uppercase tracking-tighter leading-none">
+                Endereços <span class="text-ageis-yellow">/</span> {{ cliente.nome_fantasia|default:cliente.razao_social }}
+            </h1>
+            {% if cliente.id_ixc %}
+            <span class="inline-block mt-2 px-3 py-1 bg-gray-900 text-ageis-yellow text-[10px] font-black uppercase italic rounded-lg">
+                ID IXC: {{ cliente.id_ixc }}
+            </span>
+            {% endif %}
+        </div>
+
+        <div class="flex gap-4">
+            <div class="bg-ageis-black px-6 py-3 rounded-2xl shadow-lg text-white">
+                <p class="text-[10px] font-black text-gray-500 uppercase leading-none mb-1">Endereços Elegíveis</p>
+                <p class="text-xl font-black italic text-ageis-yellow">{{ total_enderecos }}</p>
+            </div>
+        </div>
+    </div>
+
+    <form method="GET" class="bg-white p-4 rounded-[2rem] border border-gray-100 shadow-sm mb-8 flex flex-col md:flex-row gap-4 items-center">
+        <div class="relative flex-grow w-full">
+            <i data-lucide="search" class="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-300"></i>
+            <input type="text" name="q" value="{{ q }}" placeholder="Buscar login, endereço, cidade ou ticket..."
+                   class="w-full pl-12 pr-4 py-4 bg-gray-50 border-none rounded-2xl outline-none focus:ring-2 focus:ring-ageis-yellow transition-all font-bold text-gray-800 uppercase">
+        </div>
+
+        <div class="flex gap-2 w-full md:w-auto">
+            <div class="relative w-full md:w-56">
+                <i data-lucide="arrow-up-down" class="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400"></i>
+                <select name="sort" onchange="this.form.submit()" class="w-full pl-10 pr-8 py-4 bg-gray-50 border-none rounded-2xl outline-none focus:ring-2 focus:ring-ageis-yellow transition-all cursor-pointer font-black text-[11px] uppercase tracking-widest text-gray-600 appearance-none">
+                    <option value="logradouro" {% if sort == 'logradouro' %}selected{% endif %}>Endereço</option>
+                    <option value="cidade" {% if sort == 'cidade' %}selected{% endif %}>Cidade</option>
+                    <option value="ticket" {% if sort == 'ticket' %}selected{% endif %}>Ticket / O.S.</option>
+                </select>
+                <i data-lucide="chevron-down" class="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none"></i>
+            </div>
+
+            <button type="submit" class="px-6 py-4 bg-ageis-black text-ageis-yellow font-black uppercase italic rounded-2xl hover:bg-gray-800 transition shadow-lg flex items-center gap-2">
+                Filtrar
+            </button>
+
+            {% if q or sort != 'logradouro' %}
+            <a href="{% url 'enderecos_lastmile_cliente' cliente.pk %}" class="px-4 py-4 bg-gray-100 text-gray-400 rounded-2xl hover:bg-red-50 hover:text-red-500 transition flex items-center justify-center" title="Limpar Filtros">
+                <i data-lucide="x" class="w-5 h-5"></i>
+            </a>
+            {% endif %}
+        </div>
+    </form>
+
+    <div class="bg-white rounded-[2.5rem] border border-gray-100 shadow-sm overflow-hidden flex flex-col">
+        <div class="overflow-x-auto">
+            <table class="w-full text-left border-collapse">
+                <thead>
+                    <tr class="text-[10px] font-black uppercase text-gray-400 border-b border-gray-50 bg-gray-50/30">
+                        <th class="px-8 py-5">Serviço / Login</th>
+                        <th class="px-4 py-5">Endereço</th>
+                        <th class="px-4 py-5">Cidade</th>
+                        <th class="px-4 py-5">Setor Atual</th>
+                        <th class="px-8 py-5 text-right">Ações</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-50">
+                    {% for endereco in page_obj %}
+                    <tr class="hover:bg-gray-50/50 transition-all group">
+                        <td class="px-8 py-6">
+                            <div class="flex flex-col">
+                                <span class="block font-black text-gray-900 italic uppercase text-base leading-none mb-1">
+                                    {{ endereco.login_ixc|default:"MANUAL / SEM LOGIN" }}
+                                </span>
+                                <div class="flex items-center gap-2">
+                                    <span class="text-[10px] font-bold text-gray-400 uppercase bg-gray-100 px-2 py-0.5 rounded">
+                                        ID: {{ endereco.id }}
+                                    </span>
+                                    {% if endereco.principal %}
+                                    <span class="text-[9px] font-black text-yellow-600 uppercase bg-yellow-50 px-2 py-0.5 rounded border border-yellow-100">
+                                        Principal
+                                    </span>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </td>
+
+                        <td class="px-4 py-6">
+                            <div class="flex flex-col">
+                                <span class="font-black text-gray-800 text-[11px] uppercase">
+                                    {{ endereco.logradouro|default:"SEM ENDEREÇO" }}, {{ endereco.numero|default:"S/N" }}
+                                </span>
+                                <span class="text-[10px] text-gray-400 font-bold uppercase">
+                                    {{ endereco.bairro|default:"SEM BAIRRO" }} {% if endereco.cep %}• {{ endereco.cep }}{% endif %}
+                                </span>
+                            </div>
+                        </td>
+
+                        <td class="px-4 py-6">
+                            <div class="flex flex-col">
+                                <span class="font-black text-gray-800 text-[11px] uppercase">{{ endereco.cidade|default:"NÃO INFORMADA" }}</span>
+                                <span class="text-[10px] text-gray-400 font-bold uppercase">{{ endereco.estado|default:"--" }}</span>
+                            </div>
+                        </td>
+
+                        <td class="px-4 py-6">
+                            <span class="inline-flex items-center gap-2 px-3 py-1 bg-green-50 rounded-lg border border-green-100 text-xs font-black text-green-700">
+                                {{ endereco.setor_os_atual_nome|default:"SEM SETOR" }}
+                            </span>
+                        </td>
+
+                        <td class="px-8 py-6 text-right">
+                            <div class="flex justify-end gap-2">
+                                <a href="#"
+                                   data-endereco-id="{{ endereco.id }}"
+                                   data-login="{{ endereco.login_ixc|default:'MANUAL / SEM LOGIN'|escape }}"
+                                   data-cidade="{{ endereco.cidade|default:''|escape }}"
+                                   data-estado="{{ endereco.estado|default:''|escape }}"
+                                   onclick="event.preventDefault(); openPartnerProposalModal(this)"
+                                   class="w-10 h-10 inline-flex items-center justify-center rounded-xl text-slate-400 hover:bg-gray-100 hover:text-ageis-black transition-all"
+                                   title="Acessar cotação">
+                                    <i data-lucide="file-pen-line" class="w-5 h-5"></i>
+                                </a>
+                                <a href="{% url 'endereco_tecnico_detail' endereco.pk %}"
+                                   class="w-10 h-10 inline-flex items-center justify-center rounded-xl text-slate-400 hover:bg-gray-100 hover:text-ageis-black transition-all"
+                                   title="Visualizar dados técnicos">
+                                    <i data-lucide="file-search" class="w-5 h-5"></i>
+                                </a>
+                            </div>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="5" class="px-8 py-20 text-center">
+                            <div class="flex flex-col items-center gap-4 opacity-40">
+                                <div class="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center text-gray-400">
+                                    <i data-lucide="map-pin-off" class="w-8 h-8"></i>
+                                </div>
+                                <div>
+                                    <p class="font-black italic uppercase text-gray-600">Nenhum endereço encontrado</p>
+                                    <p class="text-xs font-bold text-gray-400 mt-1">Só aparecem endereços com O.S. aberta e ativa em Comercial | Lastmile.</p>
+                                </div>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        {% if page_obj.has_other_pages %}
+        <div class="bg-gray-50/50 px-8 py-6 border-t border-gray-100 flex items-center justify-between">
+            <span class="text-[10px] font-black text-gray-400 uppercase italic tracking-widest">
+                Página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}
+            </span>
+            <div class="flex gap-2">
+                {% if page_obj.has_previous %}
+                    <a href="?page={{ page_obj.previous_page_number }}{% if q %}&q={{ q }}{% endif %}{% if sort %}&sort={{ sort }}{% endif %}" class="p-2.5 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 transition shadow-sm text-gray-600">
+                        <i data-lucide="chevron-left" class="w-5 h-5"></i>
+                    </a>
+                {% endif %}
+                {% if page_obj.has_next %}
+                    <a href="?page={{ page_obj.next_page_number }}{% if q %}&q={{ q }}{% endif %}{% if sort %}&sort={{ sort }}{% endif %}" class="p-2.5 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 transition shadow-sm text-gray-600">
+                        <i data-lucide="chevron-right" class="w-5 h-5"></i>
+                    </a>
+                {% endif %}
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<div id="partnerProposalModal" class="fixed inset-0 bg-black/60 z-[80] hidden flex items-center justify-center backdrop-blur-sm p-4">
+    <div class="bg-white rounded-[2rem] p-6 md:p-8 max-w-5xl w-full shadow-2xl border border-gray-100 max-h-[90vh] overflow-hidden flex flex-col">
+        <div class="flex items-start justify-between gap-4 mb-6">
+            <div>
+                <div class="flex items-center gap-3 mb-3">
+                    <div class="w-11 h-11 bg-ageis-yellow rounded-2xl flex items-center justify-center">
+                        <i data-lucide="file-pen-line" class="w-5 h-5 text-black"></i>
+                    </div>
+                    <div>
+                        <h3 class="text-xl font-black text-gray-900 leading-none">Abrir Cotação por Endereço</h3>
+                        <p class="text-xs text-gray-500 font-bold mt-1">Selecione um ou mais parceiros para criar cotações para este login.</p>
+                    </div>
+                </div>
+                <div class="flex flex-wrap items-center gap-2 text-[11px] font-black uppercase">
+                    <span id="partnerProposalLoginBadge" class="px-3 py-1 rounded-lg bg-gray-100 text-gray-700">--</span>
+                    <span id="partnerProposalCidadeBadge" class="px-3 py-1 rounded-lg bg-gray-100 text-gray-500">--</span>
+                </div>
+            </div>
+            <button type="button" onclick="closePartnerProposalModal()" class="w-10 h-10 rounded-xl border border-gray-200 text-gray-400 hover:bg-gray-50 hover:text-gray-700 transition inline-flex items-center justify-center">
+                <i data-lucide="x" class="w-5 h-5"></i>
+            </button>
+        </div>
+
+        <form id="partnerProposalFilterForm" class="grid grid-cols-1 md:grid-cols-[120px_220px_minmax(0,1fr)_auto] gap-3 mb-5">
+            <input type="text" id="partnerFilterEstado" placeholder="UF" class="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-2xl outline-none focus:ring-2 focus:ring-ageis-yellow transition-all font-bold uppercase text-gray-800">
+            <input type="text" id="partnerFilterCidade" placeholder="Cidade" class="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-2xl outline-none focus:ring-2 focus:ring-ageis-yellow transition-all font-bold uppercase text-gray-800">
+            <input type="text" id="partnerFilterQuery" placeholder="Buscar parceiro por nome ou CNPJ" class="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-2xl outline-none focus:ring-2 focus:ring-ageis-yellow transition-all font-bold uppercase text-gray-800">
+            <button type="submit" class="px-6 py-3 bg-ageis-black text-ageis-yellow font-black uppercase italic rounded-2xl hover:bg-gray-800 transition shadow-lg">
+                Buscar
+            </button>
+        </form>
+
+        <form id="partnerProposalCreateForm" method="POST" class="flex flex-col min-h-0">
+            {% csrf_token %}
+            <input type="hidden" name="next" value="{{ request.get_full_path }}">
+            <div id="partnerProposalSummary" class="text-[11px] font-bold text-gray-500 mb-4">Carregando parceiros...</div>
+            <div id="partnerProposalList" class="flex-1 min-h-0 overflow-y-auto border border-gray-100 rounded-[1.5rem] bg-gray-50/40 p-3 space-y-3">
+            </div>
+
+            <div class="flex items-center justify-between gap-4 pt-5 mt-5 border-t border-gray-100">
+                <p class="text-[11px] font-bold text-gray-400">O sistema evita duplicidade para parceiro + endereço com cotação em aberto.</p>
+                <div class="flex items-center gap-3">
+                    <button type="button" onclick="closePartnerProposalModal()" class="px-5 py-3 rounded-2xl font-bold text-gray-500 hover:bg-gray-50 transition">
+                        Cancelar
+                    </button>
+                    <button type="submit" class="px-6 py-3 bg-ageis-black text-ageis-yellow font-black uppercase italic rounded-2xl hover:bg-gray-800 transition shadow-lg">
+                        Criar Cotações
+                    </button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let partnerProposalAddressId = null;
+
+function partnerSearchUrl(addressId) {
+    return `/prospeccao/enderecos/${addressId}/parceiros/`;
+}
+
+function partnerCreateUrl(addressId) {
+    return `/prospeccao/enderecos/${addressId}/cotacoes/criar/`;
+}
+
+function openPartnerProposalModal(button) {
+    partnerProposalAddressId = button.dataset.enderecoId;
+    const login = button.dataset.login || '--';
+    const cidade = button.dataset.cidade || '';
+    const estado = button.dataset.estado || '';
+
+    document.getElementById('partnerProposalLoginBadge').innerText = login;
+    document.getElementById('partnerProposalCidadeBadge').innerText = `${cidade || 'Cidade não informada'}${estado ? ' - ' + estado : ''}`;
+    document.getElementById('partnerFilterEstado').value = estado;
+    document.getElementById('partnerFilterCidade').value = cidade;
+    document.getElementById('partnerProposalCreateForm').action = partnerCreateUrl(partnerProposalAddressId);
+    document.getElementById('partnerProposalModal').classList.remove('hidden');
+    loadPartnerProposalOptions();
+}
+
+function closePartnerProposalModal() {
+    document.getElementById('partnerProposalModal').classList.add('hidden');
+    document.getElementById('partnerProposalList').innerHTML = '';
+    document.getElementById('partnerProposalSummary').innerText = '';
+    partnerProposalAddressId = null;
+}
+
+async function loadPartnerProposalOptions() {
+    if (!partnerProposalAddressId) return;
+
+    const estado = document.getElementById('partnerFilterEstado').value.trim();
+    const cidade = document.getElementById('partnerFilterCidade').value.trim();
+    const q = document.getElementById('partnerFilterQuery').value.trim();
+    const summary = document.getElementById('partnerProposalSummary');
+    const list = document.getElementById('partnerProposalList');
+
+    summary.innerText = 'Buscando parceiros...';
+    list.innerHTML = '<div class="px-4 py-10 text-center text-sm font-bold text-gray-400 uppercase">Carregando...</div>';
+
+    const url = new URL(partnerSearchUrl(partnerProposalAddressId), window.location.origin);
+    if (estado) url.searchParams.set('estado', estado);
+    if (cidade) url.searchParams.set('cidade', cidade);
+    if (q) url.searchParams.set('q', q);
+
+    const response = await fetch(url.toString(), {
+        headers: {
+            'X-Requested-With': 'XMLHttpRequest'
+        }
+    });
+
+    const data = await response.json();
+    const resultados = data.resultados || [];
+
+    summary.innerText = `${resultados.length} parceiro(s) encontrado(s).`;
+
+    if (!resultados.length) {
+        list.innerHTML = `
+            <div class="px-4 py-10 text-center">
+                <p class="text-sm font-black uppercase italic text-gray-500">Nenhum parceiro encontrado</p>
+                <p class="text-xs font-bold text-gray-400 mt-2">Ajuste UF/cidade para ampliar o filtro.</p>
+            </div>
+        `;
+        return;
+    }
+
+    list.innerHTML = resultados.map((partner) => {
+        const disabled = partner.ja_possui_cotacao_aberta ? 'disabled' : '';
+        const checkedClass = partner.ja_possui_cotacao_aberta ? 'opacity-50' : '';
+        const statusBadge = partner.ja_possui_cotacao_aberta
+            ? '<span class="px-3 py-1 rounded-lg bg-yellow-50 text-yellow-700 border border-yellow-100 text-[10px] font-black uppercase">Cotação já aberta</span>'
+            : '<span class="px-3 py-1 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-100 text-[10px] font-black uppercase">Disponível</span>';
+
+        return `
+            <label class="flex items-center justify-between gap-4 rounded-2xl border border-gray-100 bg-white px-4 py-4 hover:border-ageis-yellow transition ${checkedClass}">
+                <div class="flex items-start gap-4 min-w-0">
+                    <input type="checkbox" name="partner_ids" value="${partner.id}" class="mt-1 w-4 h-4 rounded border-gray-300 text-ageis-yellow focus:ring-ageis-yellow" ${disabled}>
+                    <div class="min-w-0">
+                        <div class="text-sm font-black text-gray-900 uppercase italic leading-tight">${partner.nome}</div>
+                        <div class="text-[10px] font-bold uppercase text-gray-400 mt-1">${partner.cnpj_cpf || 'Sem CNPJ/CPF'}${partner.status ? ' • ' + partner.status : ''}</div>
+                        ${partner.razao_social && partner.razao_social !== partner.nome ? `<div class="text-[11px] text-gray-500 font-bold mt-2">${partner.razao_social}</div>` : ''}
+                    </div>
+                </div>
+                <div class="shrink-0">${statusBadge}</div>
+            </label>
+        `;
+    }).join('');
+}
+
+document.getElementById('partnerProposalFilterForm').addEventListener('submit', function (event) {
+    event.preventDefault();
+    loadPartnerProposalOptions();
+});
+</script>
+{% endblock %}
