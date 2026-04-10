@@ -1,0 +1,52 @@
+{% extends "core/base.html" %}
+
+{% block content %}
+<div class="min-h-screen bg-[#F8F9FA] -mx-6 -my-6 md:-mx-10 md:-my-10 px-6 md:px-10 py-10">
+    <div class="max-w-3xl mx-auto">
+        <div class="mb-10 flex flex-col items-center">
+            <div class="w-20 h-20 bg-ageis-yellow rounded-[2rem] flex items-center justify-center shadow-2xl mb-6">
+                <i data-lucide="rotate-ccw" class="text-black w-10 h-10"></i>
+            </div>
+            <h1 class="text-3xl font-black text-gray-900 uppercase italic text-center">Restaurar Backup</h1>
+            <p class="text-gray-400 font-bold text-xs uppercase tracking-widest mt-2">Administração • Banco e mídia</p>
+        </div>
+
+        <div class="bg-white p-10 rounded-[3rem] border border-gray-100 shadow-sm space-y-8">
+            <div class="p-6 bg-red-50 rounded-3xl border border-dashed border-red-200 text-center">
+                <p class="text-sm text-red-700 mb-3 font-bold">Operação destrutiva</p>
+                <p class="text-xs text-red-600 font-medium leading-relaxed">
+                    Este processo vai substituir o banco atual pelo conteúdo do ZIP enviado e, se existir, sincronizar a pasta <span class="font-black">media</span>.
+                </p>
+            </div>
+
+            <div class="rounded-2xl border border-gray-100 bg-gray-50 px-4 py-4 space-y-2">
+                <p class="text-xs text-gray-700 font-medium leading-relaxed">
+                    <span class="font-black text-gray-900">Esperado:</span> um arquivo <span class="font-black">.zip</span> gerado pelo backup diário.
+                </p>
+                <p class="text-[11px] text-gray-500 font-bold leading-relaxed">
+                    O ZIP precisa conter o arquivo SQL do banco e, opcionalmente, a pasta <span class="text-gray-900">media</span>.
+                </p>
+            </div>
+
+            <form method="POST" enctype="multipart/form-data" class="space-y-6">
+                {% csrf_token %}
+                <div class="space-y-2">
+                    <label class="text-[10px] font-black uppercase text-gray-400 ml-2">Selecione o backup (.zip)</label>
+                    <input type="file" name="file" required accept=".zip" class="w-full p-4 bg-gray-50 border border-gray-100 rounded-2xl file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-black file:bg-ageis-yellow file:text-black">
+                </div>
+
+                <label class="flex items-start gap-3 p-4 rounded-2xl border border-gray-100 bg-gray-50">
+                    <input type="checkbox" name="confirmar" required class="mt-1 w-4 h-4 rounded border-gray-300 text-ageis-yellow focus:ring-ageis-yellow">
+                    <span class="text-xs text-gray-700 font-medium leading-relaxed">
+                        Confirmo que entendi que os dados atuais serão substituídos pelo backup enviado.
+                    </span>
+                </label>
+
+                <button type="submit" class="w-full bg-ageis-black text-ageis-yellow py-5 rounded-3xl font-black uppercase italic shadow-xl hover:bg-gray-800 transition-all flex items-center justify-center gap-3">
+                    <i data-lucide="upload" class="w-5 h-5"></i> Restaurar Backup
+                </button>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

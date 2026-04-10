@@ -1,0 +1,150 @@
+{% extends "core/base.html" %}
+
+{% block content %}
+<div class="p-6 md:p-10 max-w-7xl mx-auto">
+    <div class="mb-6">
+        <a href="{% url 'lead_list' %}" class="page-back-button">
+            <i data-lucide="arrow-left" class="w-4 h-4"></i> Voltar para empresas
+        </a>
+    </div>
+
+    <div class="flex flex-col md:flex-row md:items-end justify-between mb-6 gap-4">
+        <div>
+            <p class="text-[10px] text-gray-400 font-black uppercase tracking-[0.2em] mb-2">Clientes • Endereços</p>
+            <h1 class="text-3xl font-black text-gray-900 italic uppercase tracking-tighter">{{ empresa.nome_fantasia|default:empresa.razao_social }}</h1>
+            <p class="text-[10px] text-gray-500 font-bold uppercase tracking-widest mt-1">{{ empresa.razao_social }}</p>
+        </div>
+        <div class="flex items-center gap-4">
+            <span class="bg-ageis-yellow text-black px-4 py-2.5 rounded-full text-[10px] font-black uppercase tracking-widest shadow-sm">
+                {{ total_enderecos }} endereço(s)
+            </span>
+        </div>
+    </div>
+
+    <div class="bg-white p-2 md:rounded-full rounded-3xl shadow-sm border border-gray-100 mb-8">
+        <form method="GET" class="flex flex-col xl:flex-row items-center gap-2 w-full">
+            <div class="flex-1 flex items-center gap-3 px-5 py-3.5 bg-gray-50 md:rounded-full rounded-2xl w-full">
+                <i data-lucide="search" class="w-4 h-4 text-gray-400 shrink-0"></i>
+                <input type="text" name="q" value="{{ q }}" placeholder="Buscar por endereço, bairro, cidade, estado ou CEP..." class="bg-transparent border-none outline-none w-full text-xs font-bold text-gray-700 placeholder-gray-400">
+            </div>
+            <div class="flex items-center gap-2 w-full xl:w-auto shrink-0">
+                {% if q %}
+                <a href="{% url 'lead_empresa_detail' empresa.pk %}" class="w-12 h-12 flex items-center justify-center rounded-full bg-red-50 text-red-500 hover:bg-red-100 transition" title="Limpar Filtros">
+                    <i data-lucide="x" class="w-4 h-4"></i>
+                </a>
+                {% endif %}
+                <button type="submit" class="w-full xl:w-auto bg-ageis-black text-ageis-yellow font-black italic uppercase tracking-widest px-8 py-3.5 md:rounded-full rounded-2xl hover:bg-gray-900 transition-all">
+                    Filtrar
+                </button>
+            </div>
+        </form>
+    </div>
+
+    <div class="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
+        <div class="overflow-x-auto">
+            <table class="w-full text-left">
+                <thead class="bg-gray-50 border-b border-gray-100">
+                    <tr>
+                        <th class="px-6 py-4 text-xs font-bold uppercase text-gray-400">Endereço</th>
+                        <th class="px-6 py-4 text-xs font-bold uppercase text-gray-400">Bairro</th>
+                        <th class="px-6 py-4 text-xs font-bold uppercase text-gray-400">Município / UF</th>
+                        <th class="px-6 py-4 text-xs font-bold uppercase text-gray-400">CEP</th>
+                        <th class="px-6 py-4 text-xs font-bold uppercase text-gray-400 text-right">Ações</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-50">
+                    {% for endereco in page_obj %}
+                    <tr class="hover:bg-gray-50/50 transition">
+                        <td class="px-6 py-4">
+                            <p class="font-semibold text-gray-900">{{ endereco.endereco|default:"Não informado" }}</p>
+                            <p class="text-[10px] font-normal text-gray-400">Número: {{ endereco.numero|default:"S/N" }}</p>
+                        </td>
+                        <td class="px-6 py-4 text-sm font-semibold text-gray-700">
+                            {{ endereco.bairro|default:"Não informado" }}
+                        </td>
+                        <td class="px-6 py-4 text-sm font-semibold text-gray-700">
+                            {% if endereco.cidade and endereco.estado %}
+                                {{ endereco.cidade }} - {{ endereco.estado }}
+                            {% elif endereco.cidade %}
+                                {{ endereco.cidade }}
+                            {% else %}
+                                Não informado
+                            {% endif %}
+                        </td>
+                        <td class="px-6 py-4 text-sm font-semibold text-gray-700">
+                            {{ endereco.cep|default:"Não informado" }}
+                        </td>
+                        <td class="px-6 py-4 text-right">
+                            <div class="flex justify-end items-center gap-2">
+                                {% if endereco.lead_espelho %}
+                                <button type="button" onclick="openQuickProposalModal('{{ endereco.lead_espelho.pk }}', '{{ endereco.lead_espelho.nome_fantasia|default:endereco.lead_espelho.razao_social|escapejs }}', '{{ endereco.lead_espelho.cnpj_cpf|default:''|escapejs }}')" class="p-2 text-gray-400 hover:text-ageis-yellow hover:bg-yellow-50 rounded-lg transition" title="Abrir cotação rápida">
+                                    <i data-lucide="file-plus-2" class="w-5 h-5"></i>
+                                </button>
+
+                                {% if endereco.lead_espelho.partner_relacionado %}
+                                <a href="{% url 'partner_plan_manage' endereco.lead_espelho.partner_relacionado.pk %}?next={{ request.get_full_path|urlencode }}" class="p-2 text-gray-400 hover:text-violet-600 hover:bg-violet-50 rounded-lg transition" title="Cadastrar planos do parceiro">
+                                    <i data-lucide="waypoints" class="w-5 h-5"></i>
+                                </a>
+                                <a href="{% url 'partner_detail' endereco.lead_espelho.partner_relacionado.pk %}?next={{ request.get_full_path|urlencode }}" class="p-2 text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition" title="Ver detalhes do parceiro e propostas relacionadas">
+                                    <i data-lucide="folder-open" class="w-5 h-5"></i>
+                                </a>
+                                {% else %}
+                                <button type="button" class="p-2 text-gray-300 bg-gray-50 rounded-lg cursor-not-allowed" title="Cadastre ou vincule um parceiro para gerenciar os planos">
+                                    <i data-lucide="waypoints" class="w-5 h-5"></i>
+                                </button>
+                                <button type="button" class="p-2 text-gray-300 bg-gray-50 rounded-lg cursor-not-allowed" title="Este prospecto ainda não possui cotação aberta">
+                                    <i data-lucide="folder-open" class="w-5 h-5"></i>
+                                </button>
+                                {% endif %}
+
+                                <a href="{% url 'timeline_global' 'leads' 'lead' endereco.lead_espelho.pk %}" class="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition" title="Ver histórico e auditoria">
+                                    <i data-lucide="history" class="w-5 h-5"></i>
+                                </a>
+
+                                <a href="{% url 'lead_update' endereco.lead_espelho.pk %}" class="p-2 text-gray-400 hover:text-ageis-black hover:bg-gray-100 rounded-lg transition" title="Editar lead">
+                                    <i data-lucide="edit-3" class="w-5 h-5"></i>
+                                </a>
+                                {% else %}
+                                <span class="text-xs text-gray-300 font-bold uppercase tracking-widest">Sem lead espelho</span>
+                                {% endif %}
+                            </div>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="5" class="px-6 py-20 text-center text-gray-400 font-medium">
+                            <div class="flex flex-col items-center gap-2">
+                                <i data-lucide="map-pinned" class="w-8 h-8 opacity-50"></i>
+                                Nenhum endereço encontrado com estes filtros.
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        {% if page_obj.has_other_pages %}
+        <div class="px-6 py-6 border-t border-gray-100 bg-white flex flex-col sm:flex-row items-center justify-between gap-4">
+            <span class="text-[10px] font-black italic text-gray-400 uppercase tracking-widest">
+                Página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}
+            </span>
+            <div class="flex items-center gap-2">
+                {% if page_obj.has_previous %}
+                    <a href="?page={{ page_obj.previous_page_number }}&q={{ q }}" class="w-10 h-10 flex items-center justify-center rounded-xl border border-gray-200 bg-white text-gray-500 hover:bg-gray-50 hover:text-gray-900 transition shadow-sm" title="Página Anterior">
+                        <i data-lucide="chevron-left" class="w-4 h-4"></i>
+                    </a>
+                {% endif %}
+                {% if page_obj.has_next %}
+                    <a href="?page={{ page_obj.next_page_number }}&q={{ q }}" class="w-10 h-10 flex items-center justify-center rounded-xl border border-gray-200 bg-white text-gray-500 hover:bg-gray-50 hover:text-gray-900 transition shadow-sm" title="Próxima Página">
+                        <i data-lucide="chevron-right" class="w-4 h-4"></i>
+                    </a>
+                {% endif %}
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% include "leads/partials/quick_proposal_modal.html" %}
+{% include "leads/partials/quick_proposal_modal_script.html" %}
+{% endblock %}

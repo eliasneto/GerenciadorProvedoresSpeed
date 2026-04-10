@@ -10,6 +10,7 @@ WORKDIR /app
 
 # MÁGICA SPEED + AD AUTH: Instala as ferramentas do Linux necessárias
 RUN apt-get update && apt-get install -y \
+    default-mysql-client \
     default-libmysqlclient-dev \
     build-essential \
     libldap2-dev \

@@ -2,22 +2,22 @@
 # Criar maquina Virtual:
 python3 -m venv .venv
 
-# Rode este comando para instalar o Django e o REST Framework (essencial para sistemas de gestÃ£o):
+# Rode este comando para instalar o Django e o REST Framework (essencial para sistemas de gest?o):
 pip install django djangorestframework python-decouple
 
 # Criar o Projeto Principal
 python -m django startproject config .
 
-# Criar a pasta para os MÃ³dulos
+# Criar a pasta para os M?dulos
 mkdir apps
 
-# Criar o MÃ³dulo Core
+# Criar o M?dulo Core
 python manage.py startapp core apps/core
 
 # 1. Cria os arquivos de migraÃ§Ã£o para o mÃ³dulo core
 python manage.py makemigrations core
 
-# 2. Aplica as mudanÃ§as no banco de dados
+# 2. Aplica as mudan?as no banco de dados
 python manage.py migrate
 
 #Clonar um repositorio:
@@ -75,7 +75,7 @@ git checkout homolog
 #Altera a branch e copia o main
 git checkout -b homolog
 
-#Roda antes de fazer commit para verificar se o codigo estÃ¡ ok:
+#Roda antes de fazer commit para verificar se o codigo est? ok:
 .\.venv\Scripts\python.exe scripts\verificar_repositorio.py
 
 # COMPATIBILIDADE COM VOLUME MYSQL LEGADO
@@ -105,9 +105,9 @@ Bash
 sudo apt-get update && sudo apt-get install cifs-utils -y
 
 
-Eu queria uma melhoria no meu sistema, eu queria que uma proposta fosse lincada a um prospecto e que um prospecto possa ter varias proposta.
-Porque isso?. Eu quero ter um botÃ£o dentro do prospecto onde tenha a opÃ§Ã£o de proposta, ai tenha uma tela com todas as proposta desse cliente.
-cada proposta vai ter o status de "Em negociaÃ§Ã£o". "Inviavel", "Proposta Aceita".
+Eu queria uma melhoria no meu sistema, eu queria que uma proposta fosse vinculada a um prospecto e que um prospecto possa ter vÃ¡rias propostas.
+Porque isso?. Eu quero ter um botÃ£o dentro do prospecto onde tenha a opÃ§Ã£o de proposta, aÃ­ tenha uma tela com todas as propostas desse cliente.
+cada proposta vai ter o status de "Em negociaÃ§Ã£o". "InviÃ¡vel", "Proposta Aceita".
 
 # COmando para rodar o backup:
 docker exec -it speed_backup_diario sh -c 'DATA=$(date +%Y-%m-%d_TESTE); mysqldump -h speed_db -u speed_user -pspeed_password speed_banco > /tmp/banco_$DATA.sql; zip -r /mnt/windows/backup_speed_$DATA.zip /app/media /tmp/banco_$DATA.sql > /dev/null; rm /tmp/banco_$DATA.sql; echo "Backup manual enviado para o Windows!"'
@@ -117,7 +117,7 @@ Elias, essa Ã© a pergunta de ouro de todo engenheiro de software! Fazer o back
 
 O processo de restauraÃ§Ã£o no Docker Ã© extremamente simples. Como o nosso backup salva tanto o banco de dados (.sql) quanto os anexos (media/) dentro de um .zip, o passo a passo Ã© este:
 
-ðŸš‘ Guia de SobrevivÃªncia: Restaurando o Banco de Dados
+ð Guia de SobrevivÃªncia: Restaurando o Banco de Dados
 Passo 1: Traga o arquivo de volta para o Linux
 VÃ¡ na sua mÃ¡quina Windows, pegue o arquivo de backup desejado (ex: backup_speed_2026-03-27_02-00.zip) e copie ele para dentro do seu servidor Linux, na mesma pasta onde estÃ¡ o seu docker-compose.yml (~/SGP_Speed/GerenciadorProvedoresSpeed).
 (VocÃª pode usar programas como WinSCP, FileZilla, ou o MobaXterm para arrastar o arquivo para lÃ¡).
@@ -140,19 +140,19 @@ Rode este comando (substituindo o nome do arquivo .sql pelo nome exato que foi e
 
 Bash
 docker exec -i speed_mysql mysql -u root -proot_super_password speed_banco < tmp/banco_2026-03-27_02-00.sql
-âš ï¸ Detalhe Ninja: Note que usamos a setinha < apontando para a esquerda. Ela diz para o Linux: "Pegue todo o texto desse arquivo SQL e jogue para dentro do comando mysql lÃ¡ no container".
+â ï¸ Detalhe Ninja: Note que usamos a setinha < apontando para a esquerda. Ela diz para o Linux: "Pegue todo o texto desse arquivo SQL e jogue para dentro do comando mysql lÃ¡ no container".
 
 Passo 4: Restaurando os Anexos (Opcional)
 Se vocÃª tambÃ©m perdeu os arquivos fÃ­sicos (fotos, PDFs, etc.) e precisa restaurar a pasta media, Ã© sÃ³ copiar os arquivos que foram extraÃ­dos em app/media/ para a sua pasta ./media verdadeira do projeto:
 
 Bash
 cp -r app/media/* ./media/
-ðŸ§¹ Limpeza PÃ³s-Crise
+Pós-Crise
 Depois que o banco de dados voltar Ã  vida e o sistema estiver rodando liso novamente, vocÃª pode apagar a sujeira que o unzip deixou no seu servidor Linux para nÃ£o gastar espaÃ§o:
 
 Bash
 rm -rf tmp/ app/ backup_speed_*.zip
-Ã‰ isso! Com esse Ãºnico comando do docker exec -i, o banco de dados lÃª o .sql, destrÃ³i as tabelas corrompidas e recria todas elas exatamente como estavam no momento do backup.
+Ã isso! Com esse Ãºnico comando do docker exec -i, o banco de dados lÃª o .sql, destrÃ³i as tabelas corrompidas e recria todas elas exatamente como estavam no momento do backup.
 
 Gostaria de aproveitar que o sistema estÃ¡ todo "azeitado" e simular um teste de restore na prÃ¡tica com aquele .zip de teste que geramos, ou prefere seguir com o desenvolvimento do sistema web?
 

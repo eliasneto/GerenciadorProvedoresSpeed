@@ -62,8 +62,8 @@ def _report_status_key(status):
 
 def _report_status_display_from_key(status_key):
     labels = {
-        'analise': 'Em negociacao',
-        'aguardando_contratacao': 'Aguardando contratacao',
+        'analise': 'Em negociação',
+        'aguardando_contratacao': 'Aguardando contratação',
         'contratado': 'Contratado',
         'declinado': 'Declinado',
         'encerrada': 'Inviavel',
@@ -77,8 +77,8 @@ def _report_status_display(proposal):
 
 def _report_status_choices():
     return [
-        ('analise', 'Em negociacao'),
-        ('aguardando_contratacao', 'Aguardando contratacao'),
+        ('analise', 'Em negociação'),
+        ('aguardando_contratacao', 'Aguardando contratação'),
         ('contratado', 'Contratado'),
         ('declinado', 'Declinado'),
         ('encerrada', 'Inviavel'),
@@ -208,7 +208,7 @@ def grupo_Operacao_required(user):
 def grupo_Gestao_required(user):
     if not user.is_authenticated:
         return False
-    if user.is_superuser or user.is_gestor or user.groups.filter(name='Administrador').exists():
+    if user.is_superuser or user.is_gestor or user.groups.filter(name__in=['Administrador', 'Gestao', 'Gestão']).exists():
         return True
     raise PermissionDenied
 
@@ -336,7 +336,7 @@ def minhas_cotacoes(request):
     if request.GET.get('export') == 'csv':
         return _csv_response(
             'minhas_cotacoes.csv',
-            ['Parceiro', 'Cotacao', 'Cliente', 'Endereco', 'Ultimo comentario', 'Status'],
+            ['Parceiro', 'Cotação', 'Cliente', 'Endereço', 'Último comentário', 'Status'],
             [
                 [
                     _proposal_partner_nome(item),
@@ -610,7 +610,7 @@ def gestao_relatorio_login_status(request):
             'pk': item.pk,
             'partner_nome': _proposal_partner_nome(item),
             'codigo_exibicao': item.codigo_exibicao,
-            'nome_proposta': item.nome_proposta or 'Cotacao sem nome',
+            'nome_proposta': item.nome_proposta or 'Cotação sem nome',
             'cliente_nome': _proposal_cliente_nome(item),
             'login_nome': _proposal_endereco_nome(item),
             'status': _report_status_key(item.status),
@@ -622,7 +622,7 @@ def gestao_relatorio_login_status(request):
     if request.GET.get('export') == 'csv':
         return _csv_response(
             'relatorio_login_status.csv',
-            ['Parceiro', 'Cotacao', 'Cliente', 'Login', 'Status', 'Responsavel', 'Ultima interacao'],
+            ['Parceiro', 'Cotação', 'Cliente', 'Login', 'Status', 'Responsável', 'Última interação'],
             [
                 [
                     item['partner_nome'],
@@ -776,7 +776,7 @@ def gestao_relatorio_proposta_status(request):
     if request.GET.get('export') == 'csv':
         return _csv_response(
             'relatorio_status_cotacao.csv',
-            ['Parceiro', 'Cotacao', 'Cliente', 'Qtd logins', 'Status'],
+            ['Parceiro', 'Cotação', 'Cliente', 'Qtd logins', 'Status'],
             [
                 [
                     item['partner_nome'],
@@ -942,7 +942,7 @@ def gestao_relatorio_status_cliente(request):
     if request.GET.get('export') == 'csv':
         return _csv_response(
             'relatorio_status_cliente.csv',
-            ['Cliente', 'Total cotacoes', 'Em negociacao', 'Aguardando contratacao', 'Contratado', 'Declinado', 'Inviavel'],
+            ['Cliente', 'Total cotações', 'Em negociação', 'Aguardando contratação', 'Contratado', 'Declinado', 'Inviável'],
             [
                 [
                     item['cliente_nome'],
@@ -1105,7 +1105,7 @@ def gestao_relatorio_cotacao_endereco(request):
     if request.GET.get('export') == 'csv':
         return _csv_response(
             'relatorio_cotacao_endereco.csv',
-            ['Endereco', 'Complemento', 'Cliente', 'Total cotacoes', 'Em negociacao', 'Aguardando contratacao', 'Contratado', 'Declinado', 'Inviavel'],
+            ['Endereço', 'Complemento', 'Cliente', 'Total cotações', 'Em negociação', 'Aguardando contratação', 'Contratado', 'Declinado', 'Inviável'],
             [
                 [
                     item['endereco_nome'],
@@ -1214,7 +1214,7 @@ def gestao_relatorio_login_usuario(request):
             'pk': item.pk,
             'partner_nome': _proposal_partner_nome(item),
             'codigo_exibicao': item.codigo_exibicao,
-            'nome_proposta': item.nome_proposta or 'Cotacao sem nome',
+            'nome_proposta': item.nome_proposta or 'Cotação sem nome',
             'cliente_nome': _proposal_cliente_nome(item),
             'login_nome': _proposal_endereco_nome(item),
             'responsavel_nome': _proposal_responsavel_nome(item),
@@ -1225,7 +1225,7 @@ def gestao_relatorio_login_usuario(request):
     if request.GET.get('export') == 'csv':
         return _csv_response(
             'relatorio_login_usuario.csv',
-            ['Parceiro', 'Cotacao', 'Cliente', 'Endereco', 'Usuario', 'Ultimo comentario', 'Status'],
+            ['Parceiro', 'Cotação', 'Cliente', 'Endereço', 'Usuário', 'Último comentário', 'Status'],
             [
                 [
                     item['partner_nome'],
@@ -1234,7 +1234,7 @@ def gestao_relatorio_login_usuario(request):
                     item['login_nome'],
                     item['responsavel_nome'],
                     item['ultima_interacao'].strftime('%d/%m/%Y %H:%M') if item['ultima_interacao'] else '-',
-                    'Vinculado' if item['responsavel_nome'] != '-' else 'Sem responsavel',
+                    'Vinculado' if item['responsavel_nome'] != '-' else 'Sem respons?vel',
                 ]
                 for item in rows
             ],
@@ -1292,7 +1292,7 @@ def gestao_relatorio_login_usuario_responsavel(request, pk):
 
     if request.method == 'POST':
         if proposal.status != 'analise':
-            messages.error(request, "So e possivel trocar o responsavel quando a proposta estiver em Em Negociacao.")
+            messages.error(request, "Só é possível trocar o responsável quando a proposta estiver em Em Negociação.")
             return redirect('gestao_relatorio_login_usuario')
 
         usuario_id = (request.POST.get('responsavel_id') or '').strip()
@@ -1318,7 +1318,7 @@ def gestao_relatorio_login_usuario_responsavel(request, pk):
         RegistroHistorico.objects.create(
             tipo='sistema',
             acao=(
-                "Responsavel do login atualizado pela area de Gestao.\n\n"
+                "Responsável do login atualizado pela área de Gestão.\n\n"
                 f"ID da proposta: #{proposal.codigo_exibicao}\n"
                 f"Login: {proposal.client_address.login_ixc if proposal.client_address else '--'}\n"
                 f"De: {nome_anterior}\n"
@@ -1328,7 +1328,7 @@ def gestao_relatorio_login_usuario_responsavel(request, pk):
             content_type=ContentType.objects.get_for_model(Proposal),
             object_id=proposal.id
         )
-        messages.success(request, "Responsavel do login atualizado com sucesso.")
+        messages.success(request, "Responsável do login atualizado com sucesso.")
 
     return redirect('gestao_relatorio_login_usuario')
 

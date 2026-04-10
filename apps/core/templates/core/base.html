@@ -166,16 +166,14 @@
 
             {% if request.user|has_group:"LastMile" %}
             <div class="mb-1 relative">
-                <button onclick="toggleSubmenu('submenu-posvenda', 'seta-posvenda')" class="w-full flex items-center justify-between px-4 py-3 rounded-xl transition-all duration-200 group {% if 'clientes' in request.path or 'prospects' in request.path or 'leads' in request.path or request.resolver_match.url_name == 'proposal_global_list' or 'integracoes' in request.path or request.resolver_match.url_name == 'enderecos_lastmile' or request.resolver_match.url_name == 'enderecos_lastmile_cliente' %} text-ageis-yellow bg-white/5 {% else %} text-gray-400 hover:text-white hover:bg-white/5 {% endif %}">
+                <button onclick="toggleSubmenu('submenu-posvenda', 'seta-posvenda')" class="w-full flex items-center justify-between px-4 py-3 rounded-xl transition-all duration-200 group {% if request.resolver_match.url_name in 'lead_list,integracoes_lastmile,enderecos_lastmile,enderecos_lastmile_cliente' or request.resolver_match.url_name == 'proposal_global_list' %} text-ageis-yellow bg-white/5 {% else %} text-gray-400 hover:text-white hover:bg-white/5 {% endif %}">
                     <div class="flex items-center gap-3"><i data-lucide="network" class="w-5 h-5 group-hover:scale-110 transition-transform"></i><span class="text-sm font-semibold">LastMile</span></div>
-                    <i data-lucide="chevron-down" id="seta-posvenda" class="w-4 h-4 transition-transform duration-300 {% if 'clientes' in request.path or 'prospects' in request.path or 'leads' in request.path or request.resolver_match.url_name == 'proposal_global_list' or 'integracoes' in request.path or request.resolver_match.url_name == 'enderecos_lastmile' or request.resolver_match.url_name == 'enderecos_lastmile_cliente' %} rotate-180 {% endif %}"></i>
+                    <i data-lucide="chevron-down" id="seta-posvenda" class="w-4 h-4 transition-transform duration-300 {% if request.resolver_match.url_name in 'lead_list,integracoes_lastmile,enderecos_lastmile,enderecos_lastmile_cliente' or request.resolver_match.url_name == 'proposal_global_list' %} rotate-180 {% endif %}"></i>
                 </button>
-                <div id="submenu-posvenda" class="{% if 'clientes' not in request.path and 'prospects' not in request.path and 'leads' not in request.path and request.resolver_match.url_name != 'proposal_global_list' and 'integracoes' not in request.path and request.resolver_match.url_name != 'enderecos_lastmile' and request.resolver_match.url_name != 'enderecos_lastmile_cliente' %}hidden{% endif %} flex flex-col gap-1 bg-black/20 rounded-xl mt-1 py-2 overflow-hidden">
-                    <a href="{% url 'lead_list' %}" class="pl-[3.25rem] pr-4 py-2 text-sm font-semibold transition-colors flex items-center gap-2 {% if request.resolver_match.url_name == 'lead_list' %} text-ageis-yellow {% else %} text-gray-500 hover:text-gray-300 {% endif %}"><div class="w-1.5 h-1.5 rounded-full {% if request.resolver_match.url_name == 'lead_list' %} bg-ageis-yellow {% else %} bg-gray-500 {% endif %}"></div> Cotação</a>
+                <div id="submenu-posvenda" class="{% if request.resolver_match.url_name not in 'lead_list,integracoes_lastmile,enderecos_lastmile,enderecos_lastmile_cliente,proposal_global_list' %}hidden{% endif %} flex flex-col gap-1 bg-black/20 rounded-xl mt-1 py-2 overflow-hidden">
+                    <a href="{% url 'lead_list' %}" class="pl-[3.25rem] pr-4 py-2 text-sm font-semibold transition-colors flex items-center gap-2 {% if request.resolver_match.url_name == 'lead_list' %} text-ageis-yellow {% else %} text-gray-500 hover:text-gray-300 {% endif %}"><div class="w-1.5 h-1.5 rounded-full {% if request.resolver_match.url_name == 'lead_list' %} bg-ageis-yellow {% else %} bg-gray-500 {% endif %}"></div> Lead</a>
                     <a href="{% url 'integracoes_lastmile' %}" class="pl-[3.25rem] pr-4 py-2 text-sm font-semibold transition-colors flex items-center gap-2 {% if request.resolver_match.url_name == 'integracoes_lastmile' %} text-ageis-yellow {% else %} text-gray-500 hover:text-gray-300 {% endif %}"><div class="w-1.5 h-1.5 rounded-full {% if request.resolver_match.url_name == 'integracoes_lastmile' %} bg-ageis-yellow {% else %} bg-gray-500 {% endif %}"></div> Automações</a>
-                    <a href="{% url 'enderecos_lastmile' %}" class="pl-[3.25rem] pr-4 py-2 text-sm font-semibold transition-colors flex items-center gap-2 {% if request.resolver_match.url_name == 'enderecos_lastmile' or request.resolver_match.url_name == 'enderecos_lastmile_cliente' %} text-ageis-yellow {% else %} text-gray-500 hover:text-gray-300 {% endif %}"><div class="w-1.5 h-1.5 rounded-full {% if request.resolver_match.url_name == 'enderecos_lastmile' or request.resolver_match.url_name == 'enderecos_lastmile_cliente' %} bg-ageis-yellow {% else %} bg-gray-500 {% endif %}"></div> Endereços</a>
-                    <a href="{% url 'cliente_list' %}" class="pl-[3.25rem] pr-4 py-2 text-sm font-semibold transition-colors flex items-center gap-2 {% if 'clientes' in request.path %} text-ageis-yellow {% else %} text-gray-500 hover:text-gray-300 {% endif %}"><div class="w-1.5 h-1.5 rounded-full {% if 'clientes' in request.path %} bg-ageis-yellow {% else %} bg-gray-500 {% endif %}"></div> Base de Clientes</a>
-                    <a href="{% url 'proposal_global_list' %}" class="pl-[3.25rem] pr-4 py-2 text-sm font-semibold transition-colors flex items-center gap-2 {% if request.resolver_match.url_name == 'proposal_global_list' %} text-ageis-yellow {% else %} text-gray-500 hover:text-gray-300 {% endif %}"><div class="w-1.5 h-1.5 rounded-full {% if request.resolver_match.url_name == 'proposal_global_list' %} bg-ageis-yellow {% else %} bg-gray-500 {% endif %}"></div> Gestão de O.S.</a>
+                    <a href="{% url 'enderecos_lastmile' %}" class="pl-[3.25rem] pr-4 py-2 text-sm font-semibold transition-colors flex items-center gap-2 {% if request.resolver_match.url_name == 'enderecos_lastmile' or request.resolver_match.url_name == 'enderecos_lastmile_cliente' %} text-ageis-yellow {% else %} text-gray-500 hover:text-gray-300 {% endif %}"><div class="w-1.5 h-1.5 rounded-full {% if request.resolver_match.url_name == 'enderecos_lastmile' or request.resolver_match.url_name == 'enderecos_lastmile_cliente' %} bg-ageis-yellow {% else %} bg-gray-500 {% endif %}"></div> Cotação</a>
                 </div>
             </div>
             {% endif %}
@@ -189,6 +187,7 @@
                 <div id="submenu-parceiros" class="{% if 'parceiros' not in request.path %}hidden{% endif %} flex flex-col gap-1 bg-black/20 rounded-xl mt-1 py-2 overflow-hidden">
                     <a href="{% url 'partner_list' %}" class="pl-[3.25rem] pr-4 py-2 text-sm font-semibold transition-colors flex items-center gap-2 {% if request.resolver_match.url_name == 'partner_list' %} text-ageis-yellow {% else %} text-gray-500 hover:text-gray-300 {% endif %}"><div class="w-1.5 h-1.5 rounded-full {% if request.resolver_match.url_name == 'partner_list' %} bg-ageis-yellow {% else %} bg-gray-500 {% endif %}"></div> Parceiros Ativos</a>
                     <a href="{% url 'partner_inactive_list' %}" class="pl-[3.25rem] pr-4 py-2 text-sm font-semibold transition-colors flex items-center gap-2 {% if request.resolver_match.url_name == 'partner_inactive_list' %} text-ageis-yellow {% else %} text-gray-500 hover:text-gray-300 {% endif %}"><div class="w-1.5 h-1.5 rounded-full {% if request.resolver_match.url_name == 'partner_inactive_list' %} bg-ageis-yellow {% else %} bg-gray-500 {% endif %}"></div> Parceiros Inativos</a>
+                    <a href="{% url 'cliente_list' %}" class="pl-[3.25rem] pr-4 py-2 text-sm font-semibold transition-colors flex items-center gap-2 {% if request.resolver_match.url_name == 'cliente_list' %} text-ageis-yellow {% else %} text-gray-500 hover:text-gray-300 {% endif %}"><div class="w-1.5 h-1.5 rounded-full {% if request.resolver_match.url_name == 'cliente_list' %} bg-ageis-yellow {% else %} bg-gray-500 {% endif %}"></div> Base de Clientes</a>
                 </div>
             </div>
             {% endif %}
@@ -205,7 +204,7 @@
             </div>
             {% endif %}
 
-            {% if request.user.is_gestor or request.user.is_superuser or request.user|has_group:"Administrador" %}
+            {% if request.user.is_gestor or request.user.is_superuser or request.user|has_group:"Administrador" or request.user|has_group:"Gestao" or request.user|has_group:"Gestão" %}
             <p class="text-[10px] uppercase text-gray-600 font-extrabold px-4 py-3 tracking-widest mt-6">Gestão</p>
             <div class="mb-1 relative">
                 <button onclick="toggleSubmenu('submenu-gestao', 'seta-gestao')" class="w-full flex items-center justify-between px-4 py-3 rounded-xl transition-all duration-200 group {% if 'gestao' in request.path %} text-ageis-yellow bg-white/5 {% else %} text-gray-400 hover:text-white hover:bg-white/5 {% endif %}">
@@ -223,6 +222,10 @@
             <a href="{% url 'import_prospects' %}" class="flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 text-gray-400 hover:bg-white/5 hover:text-white group">
                 <i data-lucide="database-backup" class="w-5 h-5 group-hover:scale-110 transition-transform"></i>
                 <span class="text-sm font-semibold">Importar Dados</span>
+            </a>
+            <a href="{% url 'restore_backup' %}" class="flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 text-gray-400 hover:bg-white/5 hover:text-white group">
+                <i data-lucide="rotate-ccw" class="w-5 h-5 group-hover:scale-110 transition-transform"></i>
+                <span class="text-sm font-semibold">Restaurar Backup</span>
             </a>
             {% endif %}
         </nav>

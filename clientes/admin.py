@@ -61,6 +61,7 @@ class HistoricoSincronizacaoAdmin(admin.ModelAdmin):
             path('rodar-incremental/', self.admin_site.admin_view(self.btn_rodar_incremental), name='rodar-incremental'),
             path('rodar-faxina/', self.admin_site.admin_view(self.btn_rodar_faxina), name='rodar-faxina'),
             path('rodar-os-comercial-lastmile/', self.admin_site.admin_view(self.btn_rodar_os_comercial_lastmile), name='rodar-os-comercial-lastmile'),
+            path('rodar-backup/', self.admin_site.admin_view(self.btn_rodar_backup), name='rodar-backup'),
         ]
         return custom_urls + urls
 
@@ -114,6 +115,11 @@ class HistoricoSincronizacaoAdmin(admin.ModelAdmin):
 
         self.message_user(request, mensagem, messages.SUCCESS)
         return HttpResponseRedirect("../?" + urlencode({"tipo__exact": "os_comercial_lastmile"}))
+
+    def btn_rodar_backup(self, request):
+        subprocess.Popen(["python", "scripts/integracoes/backup_manual.py", "manual", request.user.username])
+        self.message_user(request, "Backup manual iniciado em segundo plano.", messages.SUCCESS)
+        return HttpResponseRedirect("../?" + urlencode({"tipo__exact": "backup"}))
 
     @admin.action(description="PARAR processos selecionados")
     def parar_sincronizacao(self, request, queryset):

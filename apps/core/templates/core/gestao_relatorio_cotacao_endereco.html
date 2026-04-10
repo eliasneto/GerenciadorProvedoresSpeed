@@ -1,23 +1,23 @@
 {% extends "core/base.html" %}
 
-{% block title %}Speed | Cotacao por Endereco{% endblock %}
+{% block title %}Speed | Cotação por Endereço{% endblock %}
 
 {% block content %}
 <div class="p-6 md:p-10 max-w-7xl mx-auto">
     <div class="flex flex-col lg:flex-row lg:items-end justify-between gap-4 mb-6">
         <div>
-            <h1 class="text-3xl font-black text-gray-900 italic uppercase tracking-tighter">Cotacao por Endereco</h1>
-            <p class="text-[10px] text-gray-500 font-bold uppercase tracking-widest mt-1">Quantidade de cotacoes por endereco em cada status</p>
+            <h1 class="text-3xl font-black text-gray-900 italic uppercase tracking-tighter">Cotação por Endereço</h1>
+            <p class="text-[10px] text-gray-500 font-bold uppercase tracking-widest mt-1">Quantidade de cotações por endereço em cada status</p>
         </div>
         <div class="flex flex-wrap items-center gap-3">
             <span class="bg-ageis-yellow text-black px-4 py-2.5 rounded-full text-[10px] font-black uppercase tracking-widest shadow-sm">
                 {{ page_obj.paginator.count }} Resultados
             </span>
             <span class="bg-yellow-50 text-yellow-700 px-4 py-2.5 rounded-full text-[10px] font-black uppercase tracking-widest border border-yellow-100">
-                {{ totais_por_status.analise }} Em negociacao
+                {{ totais_por_status.analise }} Em negociação
             </span>
             <span class="bg-blue-50 text-blue-700 px-4 py-2.5 rounded-full text-[10px] font-black uppercase tracking-widest border border-blue-100">
-                {{ totais_por_status.aguardando_contratacao }} Aguardando contratacao
+                {{ totais_por_status.aguardando_contratacao }} Aguardando contratação
             </span>
             <span class="bg-emerald-50 text-emerald-700 px-4 py-2.5 rounded-full text-[10px] font-black uppercase tracking-widest border border-emerald-100">
                 {{ totais_por_status.contratado }} Contratado
@@ -26,7 +26,7 @@
                 {{ totais_por_status.declinado }} Declinado
             </span>
             <span class="bg-red-50 text-red-700 px-4 py-2.5 rounded-full text-[10px] font-black uppercase tracking-widest border border-red-100">
-                {{ totais_por_status.encerrada }} Inviavel
+                {{ totais_por_status.encerrada }} Invi?vel
             </span>
         </div>
     </div>
@@ -35,7 +35,7 @@
         <form method="GET" class="flex flex-col xl:flex-row items-center gap-2 w-full">
             <div class="flex-1 flex items-center gap-3 px-5 py-3.5 bg-gray-50 hover:bg-gray-100 rounded-2xl transition-colors w-full">
                 <i data-lucide="search" class="w-4 h-4 text-gray-400 shrink-0"></i>
-                <input type="text" name="busca" value="{{ busca }}" placeholder="Buscar por endereco, cliente, parceiro ou cotacao..." class="bg-transparent border-none outline-none w-full text-xs font-bold text-gray-700 placeholder-gray-400">
+                <input type="text" name="busca" value="{{ busca }}" placeholder="Buscar por endereço, cliente, parceiro ou cotação..." class="bg-transparent border-none outline-none w-full text-xs font-bold text-gray-700 placeholder-gray-400">
             </div>
 
             <div class="flex items-center gap-2 w-full xl:w-auto shrink-0">
@@ -59,14 +59,14 @@
             <table class="w-full text-left min-w-[1220px]">
                 <thead class="bg-gray-50 border-b border-gray-100">
                     <tr>
-                        <th class="px-6 py-4 text-xs font-bold uppercase text-gray-400"><a href="?{{ sort_links.endereco }}" class="hover:text-gray-700">Endereco (Login)</a></th>
+                        <th class="px-6 py-4 text-xs font-bold uppercase text-gray-400"><a href="?{{ sort_links.endereco }}" class="hover:text-gray-700">Endereço (Login)</a></th>
                         <th class="px-6 py-4 text-xs font-bold uppercase text-gray-400"><a href="?{{ sort_links.cliente }}" class="hover:text-gray-700">Cliente</a></th>
-                        <th class="px-6 py-4 text-xs font-bold uppercase text-gray-400"><a href="?{{ sort_links.total_cotacoes }}" class="hover:text-gray-700">Total Cotacoes</a></th>
-                        <th class="px-6 py-4 text-xs font-bold uppercase text-gray-400"><a href="?{{ sort_links.em_negociacao }}" class="hover:text-gray-700">Em Negociacao</a></th>
-                        <th class="px-6 py-4 text-xs font-bold uppercase text-gray-400"><a href="?{{ sort_links.aguardando_contratacao }}" class="hover:text-gray-700">Aguardando Contratacao</a></th>
+                        <th class="px-6 py-4 text-xs font-bold uppercase text-gray-400"><a href="?{{ sort_links.total_cotacoes }}" class="hover:text-gray-700">Total Cotações</a></th>
+                        <th class="px-6 py-4 text-xs font-bold uppercase text-gray-400"><a href="?{{ sort_links.em_negociacao }}" class="hover:text-gray-700">Em Negociação</a></th>
+                        <th class="px-6 py-4 text-xs font-bold uppercase text-gray-400"><a href="?{{ sort_links.aguardando_contratacao }}" class="hover:text-gray-700">Aguardando Contratação</a></th>
                         <th class="px-6 py-4 text-xs font-bold uppercase text-gray-400"><a href="?{{ sort_links.contratado }}" class="hover:text-gray-700">Contratado</a></th>
                         <th class="px-6 py-4 text-xs font-bold uppercase text-gray-400"><a href="?{{ sort_links.declinado }}" class="hover:text-gray-700">Declinado</a></th>
-                        <th class="px-6 py-4 text-xs font-bold uppercase text-gray-400"><a href="?{{ sort_links.inviavel }}" class="hover:text-gray-700">Inviavel</a></th>
+                        <th class="px-6 py-4 text-xs font-bold uppercase text-gray-400"><a href="?{{ sort_links.inviavel }}" class="hover:text-gray-700">Inviável</a></th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-gray-50">
@@ -113,7 +113,7 @@
                         <td colspan="8" class="px-6 py-20 text-center text-gray-400 font-medium">
                             <div class="flex flex-col items-center gap-2">
                                 <i data-lucide="inbox" class="w-8 h-8 opacity-50"></i>
-                                Nenhum endereco encontrado com este filtro.
+                                Nenhum endere?o encontrado com este filtro.
                             </div>
                         </td>
                     </tr>
@@ -125,18 +125,18 @@
         {% if page_obj.has_other_pages %}
         <div class="px-6 py-6 border-t border-gray-100 bg-white flex flex-col sm:flex-row items-center justify-between gap-4">
             <span class="text-[10px] font-black italic text-gray-400 uppercase tracking-widest">
-                Pagina {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}
+                Página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}
             </span>
 
             <div class="flex items-center gap-2">
                 {% if page_obj.has_previous %}
-                    <a href="?page={{ page_obj.previous_page_number }}&busca={{ busca }}&sort={{ sort_by }}&direction={{ direction }}" class="w-10 h-10 flex items-center justify-center rounded-xl border border-gray-200 bg-white text-gray-500 hover:bg-gray-50 hover:text-gray-900 transition shadow-sm" title="Pagina Anterior">
+                    <a href="?page={{ page_obj.previous_page_number }}&busca={{ busca }}&sort={{ sort_by }}&direction={{ direction }}" class="w-10 h-10 flex items-center justify-center rounded-xl border border-gray-200 bg-white text-gray-500 hover:bg-gray-50 hover:text-gray-900 transition shadow-sm" title="Página Anterior">
                         <i data-lucide="chevron-left" class="w-4 h-4"></i>
                     </a>
                 {% endif %}
 
                 {% if page_obj.has_next %}
-                    <a href="?page={{ page_obj.next_page_number }}&busca={{ busca }}&sort={{ sort_by }}&direction={{ direction }}" class="w-10 h-10 flex items-center justify-center rounded-xl border border-gray-200 bg-white text-gray-500 hover:bg-gray-50 hover:text-gray-900 transition shadow-sm" title="Proxima Pagina">
+                    <a href="?page={{ page_obj.next_page_number }}&busca={{ busca }}&sort={{ sort_by }}&direction={{ direction }}" class="w-10 h-10 flex items-center justify-center rounded-xl border border-gray-200 bg-white text-gray-500 hover:bg-gray-50 hover:text-gray-900 transition shadow-sm" title="Próxima Página">
                         <i data-lucide="chevron-right" class="w-4 h-4"></i>
                     </a>
                 {% endif %}

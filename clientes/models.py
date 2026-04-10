@@ -111,6 +111,7 @@ class HistoricoSincronizacao(models.Model):
         ('total', 'Carga Total'),
         ('faxina', 'Faxina/Lixo'),
         ('os_comercial_lastmile', 'OS Comercial | Lastmile'),
+        ('backup', 'Backup'),
     ]
 
     ORIGEM_CHOICES = [

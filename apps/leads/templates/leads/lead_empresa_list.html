@@ -1,0 +1,136 @@
+{% extends "core/base.html" %}
+
+{% block content %}
+<div class="p-6 md:p-10 max-w-7xl mx-auto">
+    {% if messages %}
+    <div class="mb-8 space-y-3">
+        {% for message in messages %}
+        <div class="flex items-center gap-3 p-4 rounded-2xl border {% if message.tags == 'error' %}bg-red-50 border-red-100 text-red-700{% else %}bg-green-50 border-green-100 text-green-700{% endif %}">
+            <i data-lucide="{% if message.tags == 'error' %}alert-circle{% else %}check-circle{% endif %}" class="w-5 h-5"></i>
+            <p class="text-sm font-bold">{{ message }}</p>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    <div class="flex flex-col md:flex-row md:items-end justify-between mb-6 gap-4">
+        <div>
+            <p class="text-[10px] text-gray-400 font-black uppercase tracking-[0.2em] mb-2">Clientes</p>
+            <h1 class="text-3xl font-black text-gray-900 italic uppercase tracking-tighter">Empresas de Prospecção</h1>
+            <p class="text-[10px] text-gray-500 font-bold uppercase tracking-widest mt-1">Base estruturada por empresa e endereço</p>
+        </div>
+        <div class="flex items-center gap-4">
+            <span class="bg-ageis-yellow text-black px-4 py-2.5 rounded-full text-[10px] font-black uppercase tracking-widest shadow-sm">
+                {{ page_obj.paginator.count }} empresas
+            </span>
+            <a href="{% url 'lead_create' %}" class="inline-flex items-center justify-center gap-2 bg-ageis-black text-ageis-yellow px-6 py-2.5 rounded-full font-bold uppercase tracking-widest text-[10px] hover:bg-gray-800 transition shadow-lg">
+                <i data-lucide="plus" class="w-4 h-4"></i> Novo Lead
+            </a>
+        </div>
+    </div>
+
+    <div class="bg-white p-2 md:rounded-full rounded-3xl shadow-sm border border-gray-100 mb-8">
+        <form method="GET" class="flex flex-col xl:flex-row items-center gap-2 w-full">
+            <div class="flex-1 flex items-center gap-3 px-5 py-3.5 bg-gray-50 md:rounded-full rounded-2xl w-full">
+                <i data-lucide="search" class="w-4 h-4 text-gray-400 shrink-0"></i>
+                <input type="text" name="empresa" value="{{ busca_empresa }}" placeholder="Buscar por nome ou CNPJ..." class="bg-transparent border-none outline-none w-full text-xs font-bold text-gray-700 placeholder-gray-400">
+            </div>
+            <div class="w-full xl:w-56 flex items-center gap-3 px-5 py-3.5 bg-gray-50 md:rounded-full rounded-2xl">
+                <i data-lucide="map-pin" class="w-4 h-4 text-gray-400 shrink-0"></i>
+                <input type="text" name="cidade" value="{{ busca_cidade }}" placeholder="Município" class="bg-transparent border-none outline-none w-full text-xs font-bold text-gray-700 placeholder-gray-400">
+            </div>
+            <div class="w-full xl:w-24 px-5 py-3.5 bg-gray-50 md:rounded-full rounded-2xl">
+                <input type="text" name="estado" value="{{ busca_estado }}" placeholder="UF" maxlength="2" class="bg-transparent border-none outline-none w-full text-xs font-bold text-gray-700 placeholder-gray-400 uppercase text-center">
+            </div>
+            <div class="flex items-center gap-2 w-full xl:w-auto shrink-0">
+                {% if busca_empresa or busca_cidade or busca_estado %}
+                <a href="{% url 'lead_list' %}" class="w-12 h-12 flex items-center justify-center rounded-full bg-red-50 text-red-500 hover:bg-red-100 transition" title="Limpar Filtros">
+                    <i data-lucide="x" class="w-4 h-4"></i>
+                </a>
+                {% endif %}
+                <button type="submit" class="w-full xl:w-auto bg-ageis-black text-ageis-yellow font-black italic uppercase tracking-widest px-8 py-3.5 md:rounded-full rounded-2xl hover:bg-gray-900 transition-all">
+                    Filtrar
+                </button>
+            </div>
+        </form>
+    </div>
+
+    <div class="flex justify-end mb-4">
+        <a href="{% url 'lead_list_legacy' %}" class="text-[10px] font-black uppercase tracking-widest text-gray-400 hover:text-gray-700 transition">
+            Ver listagem legada por endereço
+        </a>
+    </div>
+
+    <div class="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
+        <div class="overflow-x-auto">
+            <table class="w-full text-left">
+                <thead class="bg-gray-50 border-b border-gray-100">
+                    <tr>
+                        <th class="px-6 py-4 text-xs font-bold uppercase text-gray-400">Empresa</th>
+                        <th class="px-6 py-4 text-xs font-bold uppercase text-gray-400">Contato</th>
+                        <th class="px-6 py-4 text-xs font-bold uppercase text-gray-400">Documento</th>
+                        <th class="px-6 py-4 text-xs font-bold uppercase text-gray-400">Unidades</th>
+                        <th class="px-6 py-4 text-xs font-bold uppercase text-gray-400 text-right">Ações</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-50">
+                    {% for empresa in page_obj %}
+                    <tr class="hover:bg-gray-50/50 transition">
+                        <td class="px-6 py-4">
+                            <p class="font-semibold text-gray-900">{{ empresa.nome_fantasia|default:empresa.razao_social }}</p>
+                            <p class="text-[10px] font-normal text-gray-400">{{ empresa.razao_social }}</p>
+                        </td>
+                        <td class="px-6 py-4 text-gray-600">
+                            <div class="text-sm">{% if empresa.contato_nome %}{{ empresa.contato_nome }}{% else %}<span class="text-gray-400 italic text-xs">Sem nome</span>{% endif %}</div>
+                            <div class="text-xs text-gray-400">{% if empresa.telefone %}{{ empresa.telefone }}{% else %}Sem telefone{% endif %}</div>
+                        </td>
+                        <td class="px-6 py-4 text-sm font-semibold text-gray-700">
+                            {{ empresa.cnpj_cpf|default:"Não informado" }}
+                        </td>
+                        <td class="px-6 py-4">
+                            <span class="inline-flex items-center px-3 py-1 rounded-full bg-gray-100 text-gray-700 text-[10px] font-black uppercase tracking-widest">
+                                {{ empresa.total_enderecos }} endereço(s)
+                            </span>
+                        </td>
+                        <td class="px-6 py-4 text-right">
+                            <a href="{% url 'lead_empresa_detail' empresa.pk %}" class="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-ageis-black text-ageis-yellow text-[10px] font-black uppercase tracking-widest hover:bg-gray-800 transition">
+                                <i data-lucide="building-2" class="w-4 h-4"></i> Ver endereços
+                            </a>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="5" class="px-6 py-20 text-center text-gray-400 font-medium">
+                            <div class="flex flex-col items-center gap-2">
+                                <i data-lucide="inbox" class="w-8 h-8 opacity-50"></i>
+                                Nenhuma empresa encontrada com estes filtros.
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        {% if page_obj.has_other_pages %}
+        <div class="px-6 py-6 border-t border-gray-100 bg-white flex flex-col sm:flex-row items-center justify-between gap-4">
+            <span class="text-[10px] font-black italic text-gray-400 uppercase tracking-widest">
+                Página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}
+            </span>
+            <div class="flex items-center gap-2">
+                {% if page_obj.has_previous %}
+                    <a href="?page={{ page_obj.previous_page_number }}&empresa={{ busca_empresa }}&cidade={{ busca_cidade }}&estado={{ busca_estado }}" class="w-10 h-10 flex items-center justify-center rounded-xl border border-gray-200 bg-white text-gray-500 hover:bg-gray-50 hover:text-gray-900 transition shadow-sm" title="Página Anterior">
+                        <i data-lucide="chevron-left" class="w-4 h-4"></i>
+                    </a>
+                {% endif %}
+                {% if page_obj.has_next %}
+                    <a href="?page={{ page_obj.next_page_number }}&empresa={{ busca_empresa }}&cidade={{ busca_cidade }}&estado={{ busca_estado }}" class="w-10 h-10 flex items-center justify-center rounded-xl border border-gray-200 bg-white text-gray-500 hover:bg-gray-50 hover:text-gray-900 transition shadow-sm" title="Próxima Página">
+                        <i data-lucide="chevron-right" class="w-4 h-4"></i>
+                    </a>
+                {% endif %}
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

@@ -873,8 +873,8 @@ def proposal_update(request, pk):
                             str_antigo = str(valor_antigo) if valor_antigo else 'Vazio'
                             str_novo = str(valor_novo) if valor_novo else 'Vazio'
                             
-                        valores_novos.append(f"â€¢ {nome_campo}: {str_novo}")
-                        valores_antigos.append(f"â€¢ {nome_campo}: {str_antigo}")
+                        valores_novos.append(f"• {nome_campo}: {str_novo}")
+                        valores_antigos.append(f"• {nome_campo}: {str_antigo}")
 
             mudou_unidade, novas_unidades = False, []
             if enderecos_ids:
@@ -886,8 +886,8 @@ def proposal_update(request, pk):
                 
                 if endereco_atual != primeiro_endereco:
                     mudou_unidade = True
-                    valores_antigos.append(f"â€¢ Unidade Base: {endereco_atual}")
-                    valores_novos.append(f"â€¢ Unidade Base: {primeiro_endereco}")
+                    valores_antigos.append(f"• Unidade Base: {endereco_atual}")
+                    valores_novos.append(f"• Unidade Base: {primeiro_endereco}")
                 
                 proposta_base.client_address = primeiro_endereco
                 proposta_base.save()
