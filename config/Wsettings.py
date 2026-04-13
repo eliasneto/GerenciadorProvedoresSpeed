@@ -154,3 +154,7 @@ CSRF_TRUSTED_ORIGINS = [
     "http://127.0.0.1:8003",
     "http://192.168.90.202:8090",
 ]
+
+# Permite uploads grandes para restauracao de backup sem o Django bloquear com 400.
+DATA_UPLOAD_MAX_MEMORY_SIZE = None
+FILE_UPLOAD_MAX_MEMORY_SIZE = 1024 * 1024 * 1024
