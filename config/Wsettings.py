@@ -153,6 +153,8 @@ CSRF_TRUSTED_ORIGINS = [
     "http://localhost:8003",
     "http://127.0.0.1:8003",
     "http://192.168.90.202:8090",
+    "http://192.168.90.202:8091",
+    "http://192.168.90.203:8091",
 ]
 
 # Permite uploads grandes para restauracao de backup sem o Django bloquear com 400.
