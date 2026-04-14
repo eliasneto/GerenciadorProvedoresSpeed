@@ -317,6 +317,14 @@ def _find_media_dir(root_dir):
 @user_passes_test(grupo_Administrador_required)
 @login_required
 def restore_backup(request):
+    if request.method == "GET" and request.GET.get("restore_error") == "1":
+        detalhe = (request.GET.get("restore_error_detail") or "").strip()
+        messages.error(
+            request,
+            "Falha ao receber o arquivo enviado. "
+            + (f"Detalhe: {detalhe}" if detalhe else "Verifique o ZIP e tente novamente."),
+        )
+
     try:
         form = BackupRestoreForm(request.POST or None, request.FILES or None)
     except (RequestDataTooBig, MultiPartParserError, SuspiciousOperation, MultiValueDictKeyError) as exc:
