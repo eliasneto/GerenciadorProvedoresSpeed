@@ -15,6 +15,12 @@ class RestoreBackupUploadGuardMiddleware:
         self.get_response = get_response
 
     def __call__(self, request):
+        if request.method == "POST" and request.path.startswith("/ferramentas/restaurar-backup/"):
+            logger.warning(
+                "Restore backup POST recebido: content_length=%s content_type=%s",
+                request.META.get("CONTENT_LENGTH"),
+                request.META.get("CONTENT_TYPE"),
+            )
         try:
             response = self.get_response(request)
             if (
