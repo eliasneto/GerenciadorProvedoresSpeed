@@ -8,6 +8,7 @@ from django.core.management import call_command
 from django.core.management.base import CommandError
 from django.db import connections
 from django.db.utils import OperationalError
+from django.db.migrations.recorder import MigrationRecorder
 
 
 # 1. Garante que o Python reconheca a pasta atual como raiz do projeto
@@ -56,6 +57,36 @@ def obter_env_int(nome_variavel, padrao):
         return padrao
 
 
+def reconciliar_migration_legada_leads():
+    db_conn = connections["default"]
+
+    try:
+        tabelas_existentes = set(db_conn.introspection.table_names())
+    except Exception as exc:
+        print(f"Nao foi possivel inspecionar as tabelas do banco: {exc}")
+        return
+
+    tabelas_estrutura_leads = {"leads_leadempresa", "leads_leadendereco"}
+    if not tabelas_estrutura_leads.issubset(tabelas_existentes):
+        return
+
+    try:
+        aplicadas = MigrationRecorder(db_conn).applied_migrations()
+    except Exception as exc:
+        print(f"Nao foi possivel consultar o historico de migrations: {exc}")
+        return
+
+    migration_leads_0004 = ("leads", "0004_leadempresa_leadendereco_estrutura")
+    if migration_leads_0004 in aplicadas:
+        return
+
+    print(
+        "Estrutura legada de leads detectada no banco. "
+        "Marcando leads.0004 como aplicada para evitar recriacao de tabelas."
+    )
+    call_command("migrate", "leads", "0004", fake=True)
+
+
 def inicializar_sistema():
     print("Iniciando o Motor da Speed...")
 
@@ -88,6 +119,8 @@ def inicializar_sistema():
     from django.contrib.auth.models import Group
 
     User = get_user_model()
+
+    reconciliar_migration_legada_leads()
 
     print("Aplicando migracoes e criando tabelas...")
     call_command("migrate")
