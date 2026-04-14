@@ -1,4 +1,5 @@
 from io import BytesIO
+import logging
 import os
 import shutil
 import subprocess
@@ -10,14 +11,20 @@ import pandas as pd
 from django.contrib import messages
 from django.conf import settings
 from django.db import transaction
+from django.core.exceptions import RequestDataTooBig, SuspiciousOperation
 from django.http import HttpResponse
+from django.http.multipartparser import MultiPartParserError
 from django.shortcuts import redirect, render
+from django.utils.datastructures import MultiValueDictKeyError
 
 from leads.models import Lead, LeadEmpresa, LeadEndereco
 from core.views import grupo_Administrador_required
 from django.contrib.auth.decorators import login_required, user_passes_test
 
 from .forms import BackupRestoreForm, ExcelUploadForm
+
+
+logger = logging.getLogger(__name__)
 
 
 LEAD_IMPORT_COLUMNS = [
@@ -310,7 +317,16 @@ def _find_media_dir(root_dir):
 @user_passes_test(grupo_Administrador_required)
 @login_required
 def restore_backup(request):
-    form = BackupRestoreForm(request.POST or None, request.FILES or None)
+    try:
+        form = BackupRestoreForm(request.POST or None, request.FILES or None)
+    except (RequestDataTooBig, MultiPartParserError, SuspiciousOperation, MultiValueDictKeyError) as exc:
+        logger.exception("Falha ao ler o upload do backup.")
+        messages.error(
+            request,
+            f"Falha ao receber o arquivo enviado. Verifique o ZIP e tente novamente. Detalhe: {exc}",
+        )
+        form = BackupRestoreForm()
+        return render(request, "core_admin/restore_backup_form.html", {"form": form}, status=200)
 
     if request.method == "POST" and form.is_valid():
         backup_zip = form.cleaned_data["file"]
