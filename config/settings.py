@@ -222,4 +222,7 @@ CSRF_TRUSTED_ORIGINS = [
 # Restore de backup pode enviar arquivos grandes; sem isso o Django pode devolver 400
 # antes da view receber o POST.
 DATA_UPLOAD_MAX_MEMORY_SIZE = None
-FILE_UPLOAD_MAX_MEMORY_SIZE = 1024 * 1024 * 1024
+FILE_UPLOAD_MAX_MEMORY_SIZE = 1024
+FILE_UPLOAD_HANDLERS = [
+    "django.core.files.uploadhandler.TemporaryFileUploadHandler",
+]

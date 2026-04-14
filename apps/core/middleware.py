@@ -1,3 +1,4 @@
+import logging
 from urllib.parse import urlencode
 
 from django.core.exceptions import RequestDataTooBig, SuspiciousOperation
@@ -6,14 +7,34 @@ from django.http.multipartparser import MultiPartParserError
 from django.utils.datastructures import MultiValueDictKeyError
 
 
+logger = logging.getLogger(__name__)
+
+
 class RestoreBackupUploadGuardMiddleware:
     def __init__(self, get_response):
         self.get_response = get_response
 
     def __call__(self, request):
         try:
-            return self.get_response(request)
+            response = self.get_response(request)
+            if (
+                request.method == "POST"
+                and request.path.startswith("/ferramentas/restaurar-backup/")
+                and getattr(response, "status_code", None) == 400
+            ):
+                logger.warning(
+                    "Restore de backup retornou HTTP 400 antes de concluir o processamento."
+                )
+                params = urlencode(
+                    {
+                        "restore_error": "1",
+                        "restore_error_detail": "O servidor recusou o upload do arquivo antes de concluir o processamento.",
+                    }
+                )
+                return HttpResponseRedirect(f"{request.path}?{params}")
+            return response
         except (RequestDataTooBig, MultiPartParserError, SuspiciousOperation, MultiValueDictKeyError) as exc:
+            logger.exception("Falha no upload do restore de backup.")
             if request.path.startswith("/ferramentas/restaurar-backup/"):
                 params = urlencode(
                     {

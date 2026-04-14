@@ -160,4 +160,7 @@ CSRF_TRUSTED_ORIGINS = [
 
 # Permite uploads grandes para restauracao de backup sem o Django bloquear com 400.
 DATA_UPLOAD_MAX_MEMORY_SIZE = None
-FILE_UPLOAD_MAX_MEMORY_SIZE = 1024 * 1024 * 1024
+FILE_UPLOAD_MAX_MEMORY_SIZE = 1024
+FILE_UPLOAD_HANDLERS = [
+    "django.core.files.uploadhandler.TemporaryFileUploadHandler",
+]
