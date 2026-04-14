@@ -1,7 +1,13 @@
 import logging
 from urllib.parse import urlencode
 
-from django.core.exceptions import RequestDataTooBig, SuspiciousOperation
+from django.core.exceptions import (
+    RequestDataTooBig,
+    SuspiciousOperation,
+    TooManyFieldsSent,
+    TooManyFilesSent,
+)
+from django.http import UnreadablePostError
 from django.http import HttpResponseRedirect
 from django.http.multipartparser import MultiPartParserError
 from django.utils.datastructures import MultiValueDictKeyError
@@ -39,13 +45,35 @@ class RestoreBackupUploadGuardMiddleware:
                 )
                 return HttpResponseRedirect(f"{request.path}?{params}")
             return response
-        except (RequestDataTooBig, MultiPartParserError, SuspiciousOperation, MultiValueDictKeyError) as exc:
+        except (
+            RequestDataTooBig,
+            MultiPartParserError,
+            SuspiciousOperation,
+            MultiValueDictKeyError,
+            UnreadablePostError,
+            TooManyFieldsSent,
+            TooManyFilesSent,
+        ) as exc:
             logger.exception("Falha no upload do restore de backup.")
             if request.path.startswith("/ferramentas/restaurar-backup/"):
                 params = urlencode(
                     {
                         "restore_error": "1",
                         "restore_error_detail": str(exc)[:300],
+                    }
+                )
+                return HttpResponseRedirect(f"{request.path}?{params}")
+            raise
+        except Exception as exc:
+            if request.path.startswith("/ferramentas/restaurar-backup/"):
+                logger.exception(
+                    "Falha inesperada no processamento do restore de backup: %s",
+                    exc.__class__.__name__,
+                )
+                params = urlencode(
+                    {
+                        "restore_error": "1",
+                        "restore_error_detail": f"{exc.__class__.__name__}: {str(exc)[:240]}",
                     }
                 )
                 return HttpResponseRedirect(f"{request.path}?{params}")

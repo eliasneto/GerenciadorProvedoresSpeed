@@ -11,8 +11,13 @@ import pandas as pd
 from django.contrib import messages
 from django.conf import settings
 from django.db import transaction
-from django.core.exceptions import RequestDataTooBig, SuspiciousOperation
-from django.http import HttpResponse
+from django.core.exceptions import (
+    RequestDataTooBig,
+    SuspiciousOperation,
+    TooManyFieldsSent,
+    TooManyFilesSent,
+)
+from django.http import HttpResponse, UnreadablePostError
 from django.http.multipartparser import MultiPartParserError
 from django.shortcuts import redirect, render
 from django.utils.datastructures import MultiValueDictKeyError
@@ -327,7 +332,15 @@ def restore_backup(request):
 
     try:
         form = BackupRestoreForm(request.POST or None, request.FILES or None)
-    except (RequestDataTooBig, MultiPartParserError, SuspiciousOperation, MultiValueDictKeyError) as exc:
+    except (
+        RequestDataTooBig,
+        MultiPartParserError,
+        SuspiciousOperation,
+        MultiValueDictKeyError,
+        UnreadablePostError,
+        TooManyFieldsSent,
+        TooManyFilesSent,
+    ) as exc:
         logger.exception("Falha ao ler o upload do backup.")
         messages.error(
             request,
