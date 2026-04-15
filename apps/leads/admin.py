@@ -85,7 +85,7 @@ def _consolidar_empresa_raiz(empresa_raiz):
             _assinatura_endereco(endereco)
             for endereco in candidata.enderecos.all().order_by("id")
         }
-        if assinaturas_raiz.intersection(assinaturas_candidata):
+        if set(assinaturas_raiz.keys()).intersection(assinaturas_candidata):
             candidatas.append(candidata)
 
     if not candidatas:
