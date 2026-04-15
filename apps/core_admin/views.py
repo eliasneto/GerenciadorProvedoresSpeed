@@ -319,9 +319,43 @@ def _find_media_dir(root_dir):
     return None
 
 
+def _backup_storage_dir():
+    return Path(settings.MEDIA_ROOT) / "backups"
+
+
+def _listar_backups_disponiveis():
+    diretorio = _backup_storage_dir()
+    if not diretorio.exists():
+        return []
+
+    backups = []
+    for path in sorted(diretorio.glob("backup_speed_*.zip"), key=lambda item: item.stat().st_mtime, reverse=True):
+        tamanho_kb = max(1, round(path.stat().st_size / 1024))
+        backups.append((path.name, f"{path.name} ({tamanho_kb} KB)"))
+    return backups
+
+
+def _resolver_backup_existente(nome_arquivo):
+    diretorio = _backup_storage_dir().resolve()
+    arquivo = (diretorio / str(nome_arquivo or "").strip()).resolve()
+
+    if not str(arquivo).startswith(str(diretorio)):
+        raise ValueError("Backup selecionado invalido.")
+
+    if not arquivo.exists() or not arquivo.is_file():
+        raise FileNotFoundError("O backup selecionado nao foi encontrado no servidor.")
+
+    if arquivo.suffix.lower() != ".zip":
+        raise ValueError("O backup selecionado nao e um arquivo .zip valido.")
+
+    return arquivo
+
+
 @user_passes_test(grupo_Administrador_required)
 @login_required
 def restore_backup(request):
+    backup_choices = _listar_backups_disponiveis()
+
     if request.method == "GET" and request.GET.get("restore_error") == "1":
         detalhe = (request.GET.get("restore_error_detail") or "").strip()
         messages.error(
@@ -331,7 +365,7 @@ def restore_backup(request):
         )
 
     try:
-        form = BackupRestoreForm(request.POST or None, request.FILES or None)
+        form = BackupRestoreForm(request.POST or None, request.FILES or None, backup_choices=backup_choices)
     except (
         RequestDataTooBig,
         MultiPartParserError,
@@ -346,23 +380,36 @@ def restore_backup(request):
             request,
             f"Falha ao receber o arquivo enviado. Verifique o ZIP e tente novamente. Detalhe: {exc}",
         )
-        form = BackupRestoreForm()
-        return render(request, "core_admin/restore_backup_form.html", {"form": form}, status=200)
+        form = BackupRestoreForm(backup_choices=backup_choices)
+        return render(
+            request,
+            "core_admin/restore_backup_form.html",
+            {"form": form, "backups_disponiveis": backup_choices},
+            status=200,
+        )
 
     if request.method == "POST" and form.is_valid():
-        backup_zip = form.cleaned_data["file"]
-        if not backup_zip.name.lower().endswith(".zip"):
-            messages.error(request, "Envie um arquivo .zip válido.")
-            return render(request, "core_admin/restore_backup_form.html", {"form": form})
-
         temp_dir = tempfile.mkdtemp(prefix="speed_restore_")
-        temp_zip = None
 
         try:
-            temp_zip = Path(temp_dir) / backup_zip.name
-            with open(temp_zip, "wb") as handler:
-                for chunk in backup_zip.chunks():
-                    handler.write(chunk)
+            backup_selecionado = form.cleaned_data.get("backup_existente")
+            backup_zip = form.cleaned_data.get("file")
+
+            if backup_selecionado:
+                temp_zip = _resolver_backup_existente(backup_selecionado)
+            else:
+                if not backup_zip or not backup_zip.name.lower().endswith(".zip"):
+                    messages.error(request, "Envie um arquivo .zip valido.")
+                    return render(
+                        request,
+                        "core_admin/restore_backup_form.html",
+                        {"form": form, "backups_disponiveis": backup_choices},
+                    )
+
+                temp_zip = Path(temp_dir) / backup_zip.name
+                with open(temp_zip, "wb") as handler:
+                    for chunk in backup_zip.chunks():
+                        handler.write(chunk)
 
             extract_dir = Path(temp_dir) / "extract"
             extract_dir.mkdir(parents=True, exist_ok=True)
@@ -372,8 +419,12 @@ def restore_backup(request):
             media_dir = _find_media_dir(extract_dir)
 
             if sql_file is None:
-                messages.error(request, "O ZIP não contém um arquivo .sql de backup.")
-                return render(request, "core_admin/restore_backup_form.html", {"form": form})
+                messages.error(request, "O ZIP nao contem um arquivo .sql de backup.")
+                return render(
+                    request,
+                    "core_admin/restore_backup_form.html",
+                    {"form": form, "backups_disponiveis": backup_choices},
+                )
 
             db_conf = settings.DATABASES["default"]
             mysql_host = db_conf.get("HOST") or "localhost"
@@ -423,7 +474,7 @@ def restore_backup(request):
 
             messages.success(
                 request,
-                "Backup restaurado com sucesso. Banco de dados atualizado" + (" e mídia sincronizada." if media_restaurado else "."),
+                "Backup restaurado com sucesso. Banco de dados atualizado" + (" e midia sincronizada." if media_restaurado else "."),
             )
             return redirect("import_prospects")
         except Exception as exc:
@@ -432,7 +483,11 @@ def restore_backup(request):
             if temp_dir and os.path.isdir(temp_dir):
                 shutil.rmtree(temp_dir, ignore_errors=True)
 
-    return render(request, "core_admin/restore_backup_form.html", {"form": form})
+    return render(
+        request,
+        "core_admin/restore_backup_form.html",
+        {"form": form, "backups_disponiveis": backup_choices},
+    )
 
 
 def download_template(request):

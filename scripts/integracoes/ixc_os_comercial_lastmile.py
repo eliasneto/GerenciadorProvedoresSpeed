@@ -33,6 +33,7 @@ import django
 django.setup()
 
 from django.utils import timezone
+from django.db.models import Count
 
 from clientes.models import Endereco, HistoricoSincronizacao
 
@@ -568,24 +569,46 @@ def sincronizar_os_comercial_lastmile(historico):
     alterado_desde = obter_data_corte_args()
     cliente_local_id, cliente_ixc_id_arg = obter_filtro_cliente_args()
     mapa_setores = buscar_mapa_setores()
-    queryset = (
+
+    queryset_base = (
         Endereco.objects
-        .filter(status='ativo')
         .exclude(login_id_ixc__isnull=True)
         .exclude(login_id_ixc='')
         .order_by('id')
     )
 
     if cliente_local_id:
-        queryset = queryset.filter(cliente_id=cliente_local_id)
+        queryset_base = queryset_base.filter(cliente_id=cliente_local_id)
         log_etapa(inicio, f"Filtro aplicado: cliente local id={cliente_local_id}.")
 
     if cliente_ixc_id_arg:
-        queryset = queryset.filter(cliente__id_ixc=cliente_ixc_id_arg)
+        queryset_base = queryset_base.filter(cliente__id_ixc=cliente_ixc_id_arg)
         log_etapa(inicio, f"Filtro aplicado: cliente IXC id={cliente_ixc_id_arg}.")
 
+    diagnostico_status = list(
+        queryset_base.values('status').annotate(total=Count('id')).order_by('status')
+    )
+    if diagnostico_status:
+        resumo_status = ", ".join(
+            f"{item['status'] or 'vazio'}={item['total']}" for item in diagnostico_status
+        )
+        log_etapa(inicio, f"Diagnostico de enderecos com login por status: {resumo_status}.")
+    else:
+        log_etapa(inicio, "Diagnostico de enderecos com login por status: nenhum endereco com login_id_ixc no escopo.")
+
+    queryset = queryset_base.filter(status='ativo')
     total = queryset.count()
     log_etapa(inicio, f"Total de enderecos ativos elegiveis: {total}.")
+
+    if total == 0:
+        queryset = queryset_base.exclude(status='cancelado')
+        total = queryset.count()
+        log_etapa(
+            inicio,
+            "Nenhum endereco com status ativo foi encontrado. "
+            f"Usando fallback por status e considerando {total} endereco(s) nao cancelado(s)."
+        )
+
     logins_por_cliente = defaultdict(set)
     for cliente_id_ixc, login_id_ixc in queryset.values_list('cliente__id_ixc', 'login_id_ixc'):
         cliente_id_ixc = normalizar_texto(cliente_id_ixc)

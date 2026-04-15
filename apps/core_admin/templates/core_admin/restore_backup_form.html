@@ -21,18 +21,36 @@
 
             <div class="rounded-2xl border border-gray-100 bg-gray-50 px-4 py-4 space-y-2">
                 <p class="text-xs text-gray-700 font-medium leading-relaxed">
-                    <span class="font-black text-gray-900">Esperado:</span> um arquivo <span class="font-black">.zip</span> gerado pelo backup diário.
+                    <span class="font-black text-gray-900">Recomendado:</span> selecionar um backup ja salvo no servidor em <span class="font-black">media/backups</span>.
                 </p>
                 <p class="text-[11px] text-gray-500 font-bold leading-relaxed">
-                    O ZIP precisa conter o arquivo SQL do banco e, opcionalmente, a pasta <span class="text-gray-900">media</span>.
+                    O envio manual continua disponivel, mas a restauracao por arquivo local do servidor e mais estavel.
                 </p>
             </div>
 
             <form method="POST" enctype="multipart/form-data" class="space-y-6">
                 {% csrf_token %}
                 <div class="space-y-2">
-                    <label class="text-[10px] font-black uppercase text-gray-400 ml-2">Selecione o backup (.zip)</label>
-                    <input type="file" name="file" required accept=".zip" class="w-full p-4 bg-gray-50 border border-gray-100 rounded-2xl file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-black file:bg-ageis-yellow file:text-black">
+                    <label class="text-[10px] font-black uppercase text-gray-400 ml-2">Selecione um backup do servidor</label>
+                    <select name="backup_existente" class="w-full p-4 bg-gray-50 border border-gray-100 rounded-2xl text-sm text-gray-700 font-medium">
+                        {% for value, label in form.fields.backup_existente.choices %}
+                            <option value="{{ value }}" {% if form.data.backup_existente == value %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                    {% if backups_disponiveis %}
+                        <p class="text-[11px] text-gray-500 font-bold ml-2">
+                            {{ backups_disponiveis|length }} backup(s) disponivel(is) no servidor.
+                        </p>
+                    {% else %}
+                        <p class="text-[11px] text-amber-600 font-bold ml-2">
+                            Nenhum backup encontrado em media/backups.
+                        </p>
+                    {% endif %}
+                </div>
+
+                <div class="rounded-2xl border border-dashed border-gray-200 px-4 py-4 space-y-2">
+                    <label class="text-[10px] font-black uppercase text-gray-400 ml-2">Ou envie um arquivo .zip manualmente</label>
+                    <input type="file" name="file" accept=".zip" class="w-full p-4 bg-gray-50 border border-gray-100 rounded-2xl file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-black file:bg-ageis-yellow file:text-black">
                 </div>
 
                 <label class="flex items-start gap-3 p-4 rounded-2xl border border-gray-100 bg-gray-50">

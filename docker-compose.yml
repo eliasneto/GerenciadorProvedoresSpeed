@@ -85,19 +85,19 @@ services:
         DATA_HOJE=$$(date +%Y%m%d);
         AGORA_SEC=$$(date +%s);
         
-        # 1. INCREMENTAL (A cada 1 hora)
+        # 1. INCREMENTAL (A cada 5 minutos)
         echo ' ['$$(date +%H:%M)'] Iniciando sincronização incremental...';
         python scripts/integracoes/ixc_api_incremental.py;
 
-        # 2. CARGA TOTAL (Roda apenas às 23h se não rodou hoje)
-        if [ \"$$HORA_AGORA\" -eq \"23\" ] && [ \"$$DATA_HOJE\" != \"$$ULTIMA_DATA_TOTAL\" ]; then
-          echo ' ['$$(date +%H:%M)'] Iniciando Carga Total Programada (23h)...';
+        # 2. CARGA TOTAL (Roda 1x por dia a partir das 02h, se ainda nao rodou)
+        if [ \"$$HORA_AGORA\" -ge \"02\" ] && [ \"$$DATA_HOJE\" != \"$$ULTIMA_DATA_TOTAL\" ]; then
+          echo ' ['$$(date +%H:%M)'] Iniciando Carga Total Programada (02h)...';
           python scripts/integracoes/ixc_api.py;
           ULTIMA_DATA_TOTAL=$$DATA_HOJE;
         fi
 
-        # 2.1. OS COMERCIAL | LASTMILE (Roda 1x por dia as 23h)
-        if [ \"$$HORA_AGORA\" -eq \"23\" ] && [ \"$$DATA_HOJE\" != \"$$ULTIMA_DATA_OS_LASTMILE\" ]; then
+        # 2.1. OS COMERCIAL | LASTMILE (Roda 1x por dia a partir das 23h)
+        if [ \"$$HORA_AGORA\" -ge \"23\" ] && [ \"$$DATA_HOJE\" != \"$$ULTIMA_DATA_OS_LASTMILE\" ]; then
           echo ' ['$$(date +%H:%M)'] Iniciando atualizacao diaria de OS Comercial | Lastmile (ultimos 10 dias)...';
           python scripts/integracoes/ixc_os_comercial_lastmile.py --os-alterada-nos-ultimos-dias=10;
           ULTIMA_DATA_OS_LASTMILE=$$DATA_HOJE;
@@ -112,7 +112,7 @@ services:
         fi
 
         echo ' Ciclo finalizado. Próximo incremental em 5 minutos...';
-        sleep 3600;
+        sleep 300;
       done"
 
   speed_backup:
@@ -146,12 +146,14 @@ services:
         if [ \"$$HORA\" = \"02\" ] && [ \"$$MINUTO\" = \"00\" ]; then
           DATA=$$(date +%Y-%m-%d_%H-%M);
           echo \"[$$DATA] Iniciando backup automático...\";
+          mkdir -p /app/media/backups;
           
           # 1. Extrai o banco usando ROOT e desabilitando tablespaces
           mysqldump -h speed_db -u root -p$$MYSQL_ROOT_PASSWORD --no-tablespaces $$MYSQL_DATABASE > /tmp/banco_$$DATA.sql;
           
           # 2. Compacta LOCALMENTE no Linux primeiro (Evita arquivo de 0 KB na rede)
           zip -r /tmp/backup_speed_$$DATA.zip /app/media /tmp/banco_$$DATA.sql > /dev/null;
+          cp /tmp/backup_speed_$$DATA.zip /app/media/backups/backup_speed_$$DATA.zip;
           
           # 3. Copia o arquivo pronto para a pasta de homolog no Windows
           mkdir -p /mnt/windows/$$BACKUP_WINDOWS_SUBDIR;
@@ -162,6 +164,7 @@ services:
           
           # 5. Faxina: Apaga backups com mais de 10 dias da pasta de homolog
           find /mnt/windows/$$BACKUP_WINDOWS_SUBDIR -name 'backup_speed_*.zip' -mtime +10 -delete;
+          find /app/media/backups -name 'backup_speed_*.zip' -mtime +10 -delete;
           
           echo \"[$$DATA] Backup finalizado e salvo no Windows com sucesso!\";
           sleep 60; # Dorme 1 minuto para não correr o risco de rodar duas vezes
