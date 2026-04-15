@@ -97,7 +97,39 @@ def _valor_limpo(row, key, default=""):
     return str(row.get(key, default) or default).strip()
 
 
-def _obter_ou_criar_empresa(dados_empresa):
+def _buscar_empresa_duplicada_por_endereco(dados_empresa, dados_endereco):
+    filtros_endereco = {
+        "enderecos__endereco__iexact": dados_endereco["endereco"],
+        "enderecos__numero__iexact": dados_endereco["numero"],
+        "enderecos__bairro__iexact": dados_endereco["bairro"],
+        "enderecos__cidade__iexact": dados_endereco["cidade"],
+        "enderecos__estado__iexact": dados_endereco["estado"],
+        "enderecos__cep__iexact": dados_endereco["cep"],
+    }
+
+    cnpj_cpf = dados_empresa["cnpj_cpf"]
+    razao_social = dados_empresa["razao_social"]
+
+    if cnpj_cpf:
+        empresa = LeadEmpresa.objects.filter(
+            cnpj_cpf__iexact=cnpj_cpf,
+            **filtros_endereco,
+        ).order_by("id").first()
+        if empresa:
+            return empresa
+
+    if razao_social:
+        empresa = LeadEmpresa.objects.filter(
+            razao_social__iexact=razao_social,
+            **filtros_endereco,
+        ).order_by("id").first()
+        if empresa:
+            return empresa
+
+    return None
+
+
+def _obter_ou_criar_empresa(dados_empresa, dados_endereco=None):
     cnpj_cpf = dados_empresa["cnpj_cpf"]
     razao_social = dados_empresa["razao_social"]
     email = dados_empresa["email"]
@@ -105,7 +137,10 @@ def _obter_ou_criar_empresa(dados_empresa):
 
     empresa = None
 
-    if cnpj_cpf:
+    if dados_endereco:
+        empresa = _buscar_empresa_duplicada_por_endereco(dados_empresa, dados_endereco)
+
+    if empresa is None and cnpj_cpf:
         empresa = LeadEmpresa.objects.filter(cnpj_cpf=cnpj_cpf).order_by("id").first()
 
     if empresa is None and razao_social and email:
@@ -243,7 +278,7 @@ def import_prospects(request):
                         "estado": _valor_limpo(row, "ESTADO"),
                     }
 
-                    empresa, empresa_created = _obter_ou_criar_empresa(dados_empresa)
+                    empresa, empresa_created = _obter_ou_criar_empresa(dados_empresa, dados_endereco=dados_endereco)
                     endereco, endereco_created = _obter_ou_criar_endereco(empresa, dados_endereco)
 
                     dados_lead = {

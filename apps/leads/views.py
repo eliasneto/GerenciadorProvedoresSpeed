@@ -1021,8 +1021,14 @@ def lead_empresa_list(request):
         empresas = empresas.filter(
             Q(nome_fantasia__icontains=busca_empresa) |
             Q(razao_social__icontains=busca_empresa) |
-            Q(cnpj_cpf__icontains=busca_empresa)
-        )
+            Q(cnpj_cpf__icontains=busca_empresa) |
+            Q(enderecos__endereco__icontains=busca_empresa) |
+            Q(enderecos__numero__icontains=busca_empresa) |
+            Q(enderecos__bairro__icontains=busca_empresa) |
+            Q(enderecos__cidade__icontains=busca_empresa) |
+            Q(enderecos__estado__icontains=busca_empresa) |
+            Q(enderecos__cep__icontains=busca_empresa)
+        ).distinct()
 
     if busca_cidade:
         empresas = empresas.filter(enderecos__cidade__icontains=busca_cidade).distinct()
