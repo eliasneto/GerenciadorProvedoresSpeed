@@ -1,3 +1,6 @@
+import logging
+
+from django.apps import apps
 from django.contrib import admin, messages
 from django.db import transaction
 from django.db.models import Count, Q
@@ -6,6 +9,8 @@ from django.template.response import TemplateResponse
 from django.urls import path, reverse
 
 from .models import Lead, LeadEmpresa, LeadEndereco
+
+logger = logging.getLogger(__name__)
 
 
 def _normalizar_merge(valor):
@@ -40,6 +45,17 @@ def _campos_empresa_merge():
         "observacao_ia",
         "status",
     ]
+
+
+def _reapontar_propostas_endereco(endereco_origem, endereco_destino):
+    try:
+        Proposal = apps.get_model("partners", "Proposal")
+    except LookupError:
+        return 0
+
+    return Proposal.objects.filter(lead_endereco=endereco_origem).update(
+        lead_endereco=endereco_destino
+    )
 
 
 def _buscar_candidatas_duplicadas(empresa):
@@ -105,7 +121,7 @@ def _consolidar_empresa_raiz(empresa_raiz):
             endereco_canonico = assinaturas_raiz.get(assinatura)
 
             if endereco_canonico:
-                qtd_proposals = endereco.proposals.update(lead_endereco=endereco_canonico)
+                qtd_proposals = _reapontar_propostas_endereco(endereco, endereco_canonico)
                 qtd = endereco.leads_legados.update(
                     empresa_estruturada=canonica,
                     endereco_estruturado=endereco_canonico,
@@ -176,19 +192,28 @@ class LeadEmpresaAdmin(admin.ModelAdmin):
         leads_reapontados = 0
         ids_ignorados = set()
 
-        with transaction.atomic():
-            for empresa in queryset.order_by("id"):
-                if empresa.pk in ids_ignorados:
-                    continue
+        try:
+            with transaction.atomic():
+                for empresa in list(queryset.order_by("id")):
+                    if empresa.pk in ids_ignorados:
+                        continue
 
-                resultado = _consolidar_empresa_raiz(empresa)
-                empresas_removidas += resultado["empresas_removidas"]
-                enderecos_movidos += resultado["enderecos_movidos"]
-                enderecos_fundidos += resultado["enderecos_fundidos"]
-                leads_reapontados += resultado["leads_reapontados"]
+                    resultado = _consolidar_empresa_raiz(empresa)
+                    empresas_removidas += resultado["empresas_removidas"]
+                    enderecos_movidos += resultado["enderecos_movidos"]
+                    enderecos_fundidos += resultado["enderecos_fundidos"]
+                    leads_reapontados += resultado["leads_reapontados"]
 
-                for candidata in _buscar_candidatas_duplicadas(empresa):
-                    ids_ignorados.add(candidata.pk)
+                    for candidata in _buscar_candidatas_duplicadas(empresa):
+                        ids_ignorados.add(candidata.pk)
+        except Exception as exc:
+            logger.exception("Falha ao consolidar empresas duplicadas no admin.")
+            self.message_user(
+                request,
+                f"Erro ao consolidar duplicadas: {exc}",
+                level=messages.ERROR,
+            )
+            return False
 
         if empresas_removidas == 0:
             self.message_user(
@@ -196,7 +221,7 @@ class LeadEmpresaAdmin(admin.ModelAdmin):
                 "Nenhuma empresa duplicada foi encontrada dentro da selecao.",
                 level=messages.INFO,
             )
-            return
+            return True
 
         self.message_user(
             request,
@@ -207,6 +232,7 @@ class LeadEmpresaAdmin(admin.ModelAdmin):
             ),
             level=messages.SUCCESS,
         )
+        return True
 
     def consolidar_duplicadas_view(self, request):
         termo = (request.GET.get("q") or request.POST.get("q") or "").strip()
@@ -233,9 +259,10 @@ class LeadEmpresaAdmin(admin.ModelAdmin):
                     level=messages.WARNING,
                 )
             else:
-                self._executar_consolidacao_queryset(request, queryset)
-                redirect_url = f"{reverse('admin:leads_leadempresa_consolidar_duplicadas')}?q={termo}"
-                return HttpResponseRedirect(redirect_url)
+                sucesso = self._executar_consolidacao_queryset(request, queryset)
+                if sucesso:
+                    redirect_url = f"{reverse('admin:leads_leadempresa_consolidar_duplicadas')}?q={termo}"
+                    return HttpResponseRedirect(redirect_url)
 
         context = {
             **self.admin_site.each_context(request),
