@@ -1040,6 +1040,38 @@ def lead_empresa_list(request):
     page_number = request.GET.get('page')
     page_obj = paginator.get_page(page_number)
 
+    filtros_endereco = Q()
+    possui_filtro_endereco = False
+
+    if busca_empresa:
+        filtros_endereco &= (
+            Q(endereco__icontains=busca_empresa) |
+            Q(numero__icontains=busca_empresa) |
+            Q(bairro__icontains=busca_empresa) |
+            Q(cidade__icontains=busca_empresa) |
+            Q(estado__icontains=busca_empresa) |
+            Q(cep__icontains=busca_empresa)
+        )
+        possui_filtro_endereco = True
+
+    if busca_cidade:
+        filtros_endereco &= Q(cidade__icontains=busca_cidade)
+        possui_filtro_endereco = True
+
+    if busca_estado:
+        filtros_endereco &= Q(estado__iexact=busca_estado)
+        possui_filtro_endereco = True
+
+    for empresa in page_obj.object_list:
+        enderecos_qs = empresa.enderecos.all().order_by('cidade', 'bairro', 'endereco', 'id')
+        if possui_filtro_endereco:
+            enderecos_qs = enderecos_qs.filter(filtros_endereco)
+            empresa.total_enderecos_filtrados = enderecos_qs.count()
+            empresa.enderecos_filtrados_preview = list(enderecos_qs[:3])
+        else:
+            empresa.total_enderecos_filtrados = empresa.total_enderecos
+            empresa.enderecos_filtrados_preview = []
+
     return render(request, 'leads/lead_empresa_list.html', {
         'page_obj': page_obj,
         'busca_empresa': busca_empresa,

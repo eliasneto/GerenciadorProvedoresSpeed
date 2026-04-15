@@ -27,6 +27,7 @@ import django
 django.setup()
 
 from clientes.models import Cliente, Endereco, HistoricoSincronizacao, LogAlteracaoIXC
+from clientes.sync_utils import descrever_rotina_em_execucao, iniciar_historico_com_trava
 from django.utils import timezone
 
 # ==========================================
@@ -357,12 +358,14 @@ if __name__ == "__main__":
 
     print(f"Incremental detectado como: {origem_detectada.upper()}")
 
-    historico = HistoricoSincronizacao.objects.create(
+    historico, rotina_ativa = iniciar_historico_com_trava(
         tipo='incremental',
-        status='rodando',
         origem=origem_detectada,
-        executado_por=usuario_executor
+        executado_por=usuario_executor,
     )
+    if rotina_ativa:
+        print(descrever_rotina_em_execucao('incremental', rotina_ativa))
+        raise SystemExit(0)
 
     try:
         mapa_f = buscar_mapa_filiais()

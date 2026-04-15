@@ -79,6 +79,22 @@
                         <td class="px-6 py-4">
                             <p class="font-semibold text-gray-900">{{ empresa.nome_fantasia|default:empresa.razao_social }}</p>
                             <p class="text-[10px] font-normal text-gray-400">{{ empresa.razao_social }}</p>
+                            {% if empresa.enderecos_filtrados_preview %}
+                            <div class="mt-2 space-y-1">
+                                {% for endereco in empresa.enderecos_filtrados_preview %}
+                                <p class="text-[10px] font-bold text-gray-500 uppercase tracking-wide">
+                                    {{ endereco.cidade|default:"Cidade não informada" }}{% if endereco.estado %} - {{ endereco.estado }}{% endif %}
+                                    • {{ endereco.bairro|default:"Sem bairro" }}
+                                    • {{ endereco.endereco|default:"Endereço não informado" }}{% if endereco.numero %}, {{ endereco.numero }}{% endif %}
+                                </p>
+                                {% endfor %}
+                                {% if empresa.total_enderecos_filtrados > empresa.enderecos_filtrados_preview|length %}
+                                <p class="text-[10px] font-black text-ageis-yellow uppercase tracking-widest">
+                                    + {{ empresa.total_enderecos_filtrados|add:"-3" }} endereço(s) encontrado(s)
+                                </p>
+                                {% endif %}
+                            </div>
+                            {% endif %}
                         </td>
                         <td class="px-6 py-4 text-gray-600">
                             <div class="text-sm">{% if empresa.contato_nome %}{{ empresa.contato_nome }}{% else %}<span class="text-gray-400 italic text-xs">Sem nome</span>{% endif %}</div>
@@ -91,6 +107,19 @@
                             <span class="inline-flex items-center px-3 py-1 rounded-full bg-gray-100 text-gray-700 text-[10px] font-black uppercase tracking-widest">
                                 {{ empresa.total_enderecos }} endereço(s)
                             </span>
+                            {% if empresa.total_enderecos_filtrados != empresa.total_enderecos %}
+                            <div class="mt-2">
+                                <span class="inline-flex items-center px-3 py-1 rounded-full bg-ageis-yellow/15 text-ageis-yellow text-[10px] font-black uppercase tracking-widest">
+                                    {{ empresa.total_enderecos_filtrados }} encontrado(s) no filtro
+                                </span>
+                            </div>
+                            {% elif empresa.enderecos_filtrados_preview %}
+                            <div class="mt-2">
+                                <span class="inline-flex items-center px-3 py-1 rounded-full bg-ageis-yellow/15 text-ageis-yellow text-[10px] font-black uppercase tracking-widest">
+                                    {{ empresa.total_enderecos_filtrados }} endereço(s) compatíveis
+                                </span>
+                            </div>
+                            {% endif %}
                         </td>
                         <td class="px-6 py-4 text-right">
                             <a href="{% url 'lead_empresa_detail' empresa.pk %}" class="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-ageis-black text-ageis-yellow text-[10px] font-black uppercase tracking-widest hover:bg-gray-800 transition">

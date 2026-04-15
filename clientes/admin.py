@@ -5,6 +5,7 @@ from django.http import HttpResponseRedirect
 from django.urls import path
 from django.utils.http import urlencode
 
+from .sync_utils import buscar_rotina_em_execucao, descrever_rotina_em_execucao
 from .models import (
     Cliente,
     ClienteExcluido,
@@ -66,21 +67,42 @@ class HistoricoSincronizacaoAdmin(admin.ModelAdmin):
         return custom_urls + urls
 
     def btn_rodar_carga_total(self, request):
+        rotina_ativa = buscar_rotina_em_execucao('total')
+        if rotina_ativa:
+            self.message_user(request, descrever_rotina_em_execucao('total', rotina_ativa), messages.WARNING)
+            return HttpResponseRedirect("../")
         subprocess.Popen(["python", "scripts/integracoes/ixc_api.py", "manual", request.user.username])
         self.message_user(request, "Carga total iniciada em segundo plano.", messages.SUCCESS)
         return HttpResponseRedirect("../")
 
     def btn_rodar_incremental(self, request):
+        rotina_ativa = buscar_rotina_em_execucao('incremental')
+        if rotina_ativa:
+            self.message_user(request, descrever_rotina_em_execucao('incremental', rotina_ativa), messages.WARNING)
+            return HttpResponseRedirect("../")
         subprocess.Popen(["python", "scripts/integracoes/ixc_api_incremental.py", "manual", request.user.username])
         self.message_user(request, "Sincronizacao incremental iniciada.", messages.SUCCESS)
         return HttpResponseRedirect("../")
 
     def btn_rodar_faxina(self, request):
+        rotina_ativa = buscar_rotina_em_execucao('faxina')
+        if rotina_ativa:
+            self.message_user(request, descrever_rotina_em_execucao('faxina', rotina_ativa), messages.WARNING)
+            return HttpResponseRedirect("../")
         subprocess.Popen(["python", "scripts/integracoes/ixc_faxina.py", "manual", request.user.username])
         self.message_user(request, "Rotina de faxina iniciada.", messages.SUCCESS)
         return HttpResponseRedirect("../")
 
     def btn_rodar_os_comercial_lastmile(self, request):
+        rotina_ativa = buscar_rotina_em_execucao('os_comercial_lastmile')
+        if rotina_ativa:
+            self.message_user(
+                request,
+                descrever_rotina_em_execucao('os_comercial_lastmile', rotina_ativa),
+                messages.WARNING,
+            )
+            return HttpResponseRedirect("../?" + urlencode({"tipo__exact": "os_comercial_lastmile"}))
+
         comando = ["python", "scripts/integracoes/ixc_os_comercial_lastmile.py", "manual", request.user.username]
 
         cliente_local_id = (request.GET.get("cliente_local_id") or "").strip()
@@ -117,6 +139,10 @@ class HistoricoSincronizacaoAdmin(admin.ModelAdmin):
         return HttpResponseRedirect("../?" + urlencode({"tipo__exact": "os_comercial_lastmile"}))
 
     def btn_rodar_backup(self, request):
+        rotina_ativa = buscar_rotina_em_execucao('backup')
+        if rotina_ativa:
+            self.message_user(request, descrever_rotina_em_execucao('backup', rotina_ativa), messages.WARNING)
+            return HttpResponseRedirect("../?" + urlencode({"tipo__exact": "backup"}))
         subprocess.Popen(["python", "scripts/integracoes/backup_manual.py", "manual", request.user.username])
         self.message_user(request, "Backup manual iniciado em segundo plano.", messages.SUCCESS)
         return HttpResponseRedirect("../?" + urlencode({"tipo__exact": "backup"}))

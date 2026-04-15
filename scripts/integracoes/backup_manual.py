@@ -27,6 +27,7 @@ from django.utils import timezone
 from django.contrib.auth import get_user_model
 
 from clientes.models import HistoricoSincronizacao
+from clientes.sync_utils import descrever_rotina_em_execucao, iniciar_historico_com_trava
 
 
 def _resolver_usuario_executor():
@@ -132,12 +133,14 @@ def executar_backup():
 if __name__ == "__main__":
     usuario_executor, origem = _resolver_usuario_executor()
 
-    historico = HistoricoSincronizacao.objects.create(
+    historico, rotina_ativa = iniciar_historico_com_trava(
         tipo="backup",
-        status="rodando",
         origem=origem,
         executado_por=usuario_executor,
     )
+    if rotina_ativa:
+        print(descrever_rotina_em_execucao("backup", rotina_ativa))
+        raise SystemExit(0)
 
     try:
         zip_local, zip_windows = executar_backup()

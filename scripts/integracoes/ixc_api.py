@@ -27,6 +27,7 @@ import django
 django.setup()
 
 from clientes.models import Cliente, Endereco, LogAlteracaoIXC, HistoricoSincronizacao
+from clientes.sync_utils import descrever_rotina_em_execucao, iniciar_historico_com_trava
 
 # ==========================================
 # CONFIGURACOES DA API DO IXC
@@ -358,12 +359,14 @@ if __name__ == "__main__":
 
     print(f"Carga Total detectada como: {origem_detectada.upper()}")
 
-    historico = HistoricoSincronizacao.objects.create(
+    historico, rotina_ativa = iniciar_historico_com_trava(
         tipo='total',
-        status='rodando',
         origem=origem_detectada,
-        executado_por=usuario_executor
+        executado_por=usuario_executor,
     )
+    if rotina_ativa:
+        print(descrever_rotina_em_execucao('total', rotina_ativa))
+        raise SystemExit(0)
 
     try:
         mapa_f = buscar_mapa_filiais()

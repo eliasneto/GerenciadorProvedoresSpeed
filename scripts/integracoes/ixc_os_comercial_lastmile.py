@@ -36,6 +36,7 @@ from django.utils import timezone
 from django.db.models import Count
 
 from clientes.models import Endereco, HistoricoSincronizacao
+from clientes.sync_utils import descrever_rotina_em_execucao, iniciar_historico_com_trava
 
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
@@ -764,9 +765,8 @@ if __name__ == "__main__":
         User = get_user_model()
         usuario_executor = User.objects.filter(is_superuser=True).first()
 
-    historico = HistoricoSincronizacao.objects.create(
+    historico, rotina_ativa = iniciar_historico_com_trava(
         tipo='os_comercial_lastmile',
-        status='rodando',
         origem=origem_detectada,
         executado_por=usuario_executor,
         detalhes=(
@@ -785,6 +785,9 @@ if __name__ == "__main__":
             )
         ),
     )
+    if rotina_ativa:
+        print(descrever_rotina_em_execucao('os_comercial_lastmile', rotina_ativa))
+        raise SystemExit(0)
 
     try:
         total_processado = sincronizar_os_comercial_lastmile(historico)
