@@ -289,11 +289,12 @@ def buscar_os_atual_por_ticket(ticket_id):
     return None
 
 
-def buscar_id_setor_alvo(mapa_setores):
+def buscar_ids_setor_alvo(mapa_setores):
+    ids = []
     for setor_id, setor_nome in mapa_setores.items():
         if normalizar_texto(setor_nome).lower() == ALVO_SETOR_NOME:
-            return setor_id
-    return None
+            ids.append(setor_id)
+    return ids
 
 
 def consultar_todos_registros(tabela, payload_base, limite_paginas=100):
@@ -348,11 +349,11 @@ def extrair_ids_vinculo_os(registro):
 def buscar_os_lastmile_em_lote(mapa_setores, alterado_desde=None):
     inicio = time.perf_counter()
     log_etapa(inicio, "Iniciando busca em lote das O.S. de Comercial | Lastmile...")
-    setor_alvo_id = buscar_id_setor_alvo(mapa_setores)
-    if not setor_alvo_id:
+    setor_alvo_ids = buscar_ids_setor_alvo(mapa_setores)
+    if not setor_alvo_ids:
         log_etapa(inicio, "Setor alvo Comercial | Lastmile nao encontrado no mapa de setores.")
         return {}
-    log_etapa(inicio, f"Setor alvo encontrado no IXC: id={setor_alvo_id}.")
+    log_etapa(inicio, f"Setor alvo encontrado no IXC: ids={', '.join(setor_alvo_ids)}.")
 
     candidatos = [
         ("su_os", ["id_setor", "setor_id", "id_ticket_setor", "departamento_id"]),
@@ -362,81 +363,93 @@ def buscar_os_lastmile_em_lote(mapa_setores, alterado_desde=None):
         ("su_oss", ["id_setor", "setor_id", "id_ticket_setor", "departamento_id"]),
     ]
 
-    melhor_mapa = {}
+    snapshots_consolidados = {}
 
     for tabela, qtypes in candidatos:
         for qtype in qtypes:
-            log_etapa(inicio, f"Buscando O.S. em lote pela tabela '{tabela}' e qtype '{qtype}'...")
-            registros = consultar_todos_registros(tabela, {
-                "qtype": qtype,
-                "query": str(setor_alvo_id),
-                "oper": "=",
-                "rp": "1000",
-                "sortname": "id",
-                "sortorder": "desc",
-            })
-            if not registros:
-                log_etapa(inicio, f"Nenhum registro encontrado em '{tabela}' com qtype '{qtype}'.")
-                continue
-
-            agrupado_por_login = {}
-            pendentes_por_ticket = defaultdict(list)
-
-            for registro in registros:
-                if alterado_desde:
-                    data_registro = (
-                        parse_data_ixc(registro.get('data_ultima_alteracao'))
-                        or parse_data_ixc(registro.get('ultima_atualizacao'))
-                        or parse_data_ixc(registro.get('data_abertura'))
-                        or parse_data_ixc(registro.get('data_criacao'))
-                    )
-                    if not data_registro or data_registro < alterado_desde:
-                        continue
-
-                ids = extrair_ids_vinculo_os(registro)
-                setor_id, setor_nome = extrair_setor_registro(registro, mapa_setores)
-                snapshot = {
-                    "ticket_os_atual_ixc": ids["os_id"] or ids["ticket_id"],
-                    "setor_os_atual_id_ixc": setor_id,
-                    "setor_os_atual_nome": setor_nome,
-                    "status_os_atual_nome": extrair_status_registro(registro) or None,
-                    "os_atual_aberta": status_indica_os_ativa(registro),
-                    "em_os_comercial_lastmile": (
-                        normalizar_texto(setor_nome).lower() == ALVO_SETOR_NOME
-                    ),
-                }
-
-                if ids["login_id"]:
-                    agrupado_por_login[ids["login_id"]] = snapshot
-                elif ids["ticket_id"]:
-                    pendentes_por_ticket[ids["ticket_id"]].append(snapshot)
-
-            if pendentes_por_ticket:
-                for ticket_id, snapshots in pendentes_por_ticket.items():
-                    resposta_ticket = consultar_ixc("su_ticket", {
-                        "qtype": "id",
-                        "query": str(ticket_id),
-                        "oper": "=",
-                        "page": "1",
-                        "rp": "1",
-                        "sortname": "id",
-                        "sortorder": "desc",
-                    })
-                    registros_ticket = resposta_ticket.get('registros', []) if resposta_ticket else []
-                    login_id = normalizar_texto(registros_ticket[0].get("id_login")) if registros_ticket else ''
-                    if not login_id:
-                        continue
-                    agrupado_por_login[login_id] = snapshots[0]
-
-            if len(agrupado_por_login) > len(melhor_mapa):
-                melhor_mapa = agrupado_por_login
+            for setor_alvo_id in setor_alvo_ids:
                 log_etapa(
                     inicio,
-                    f"Melhor retorno ate agora: {len(melhor_mapa)} login(s) mapeado(s) via '{tabela}'/'{qtype}'."
+                    f"Buscando O.S. em lote pela tabela '{tabela}', qtype '{qtype}' e setor '{setor_alvo_id}'..."
                 )
+                registros = consultar_todos_registros(tabela, {
+                    "qtype": qtype,
+                    "query": str(setor_alvo_id),
+                    "oper": "=",
+                    "rp": "1000",
+                    "sortname": "id",
+                    "sortorder": "desc",
+                })
+                if not registros:
+                    log_etapa(
+                        inicio,
+                        f"Nenhum registro encontrado em '{tabela}' com qtype '{qtype}' para setor '{setor_alvo_id}'."
+                    )
+                    continue
 
-    log_etapa(inicio, f"Busca em lote finalizada com {len(melhor_mapa)} login(s) encontrados.")
-    return melhor_mapa
+                agrupado_por_login = {}
+                pendentes_por_ticket = defaultdict(list)
+
+                for registro in registros:
+                    if alterado_desde:
+                        data_registro = (
+                            parse_data_ixc(registro.get('data_ultima_alteracao'))
+                            or parse_data_ixc(registro.get('ultima_atualizacao'))
+                            or parse_data_ixc(registro.get('data_abertura'))
+                            or parse_data_ixc(registro.get('data_criacao'))
+                        )
+                        if not data_registro or data_registro < alterado_desde:
+                            continue
+
+                    ids = extrair_ids_vinculo_os(registro)
+                    setor_id, setor_nome = extrair_setor_registro(registro, mapa_setores)
+                    snapshot = {
+                        "ticket_os_atual_ixc": ids["os_id"] or ids["ticket_id"],
+                        "setor_os_atual_id_ixc": setor_id,
+                        "setor_os_atual_nome": setor_nome,
+                        "status_os_atual_nome": extrair_status_registro(registro) or None,
+                        "os_atual_aberta": status_indica_os_ativa(registro),
+                        "em_os_comercial_lastmile": (
+                            normalizar_texto(setor_nome).lower() == ALVO_SETOR_NOME
+                        ),
+                    }
+
+                    if ids["login_id"]:
+                        agrupado_por_login[ids["login_id"]] = snapshot
+                    elif ids["ticket_id"]:
+                        pendentes_por_ticket[ids["ticket_id"]].append(snapshot)
+
+                if pendentes_por_ticket:
+                    for ticket_id, snapshots in pendentes_por_ticket.items():
+                        resposta_ticket = consultar_ixc("su_ticket", {
+                            "qtype": "id",
+                            "query": str(ticket_id),
+                            "oper": "=",
+                            "page": "1",
+                            "rp": "1",
+                            "sortname": "id",
+                            "sortorder": "desc",
+                        })
+                        registros_ticket = resposta_ticket.get('registros', []) if resposta_ticket else []
+                        login_id = normalizar_texto(registros_ticket[0].get("id_login")) if registros_ticket else ''
+                        if not login_id:
+                            continue
+                        agrupado_por_login[login_id] = snapshots[0]
+
+                novos_logins = 0
+                for login_id, snapshot in agrupado_por_login.items():
+                    if login_id not in snapshots_consolidados:
+                        novos_logins += 1
+                    snapshots_consolidados[login_id] = snapshot
+
+                if novos_logins:
+                    log_etapa(
+                        inicio,
+                        f"Acumulado consolidado: {len(snapshots_consolidados)} login(s) apos '{tabela}'/'{qtype}' no setor '{setor_alvo_id}'."
+                    )
+
+    log_etapa(inicio, f"Busca em lote finalizada com {len(snapshots_consolidados)} login(s) encontrados.")
+    return snapshots_consolidados
 
 
 def buscar_os_lastmile_por_cliente(cliente_ixc_id, mapa_setores, alterado_desde=None, logins_permitidos=None):
@@ -456,6 +469,7 @@ def buscar_os_lastmile_por_cliente(cliente_ixc_id, mapa_setores, alterado_desde=
     log_etapa(inicio, f"Foram carregados {len(resposta_tickets)} ticket(s) do cliente {cliente_ixc_id}.")
 
     snapshots = {}
+    logins_processados = set()
     total_tickets = len(resposta_tickets)
     pbar_tickets = tqdm(total=total_tickets, desc="Resolvendo tickets do cliente", unit="ticket")
 
@@ -467,6 +481,9 @@ def buscar_os_lastmile_por_cliente(cliente_ixc_id, mapa_setores, alterado_desde=
         if logins_permitidos and login_id not in logins_permitidos:
             pbar_tickets.update(1)
             continue
+        if login_id in logins_processados:
+            pbar_tickets.update(1)
+            continue
 
         ticket_id = normalizar_texto(ticket.get("id"))
         if not ticket_id:
@@ -475,6 +492,7 @@ def buscar_os_lastmile_por_cliente(cliente_ixc_id, mapa_setores, alterado_desde=
 
         os_atual = buscar_os_atual_por_ticket(ticket_id)
         if not os_atual:
+            logins_processados.add(login_id)
             pbar_tickets.update(1)
             continue
         if alterado_desde:
@@ -485,11 +503,13 @@ def buscar_os_lastmile_por_cliente(cliente_ixc_id, mapa_setores, alterado_desde=
                 or parse_data_ixc(os_atual.get('data_criacao'))
             )
             if not data_registro or data_registro < alterado_desde:
+                logins_processados.add(login_id)
                 pbar_tickets.update(1)
                 continue
 
         setor_id, setor_nome = extrair_setor_registro(os_atual, mapa_setores)
         if normalizar_texto(setor_nome).lower() != ALVO_SETOR_NOME:
+            logins_processados.add(login_id)
             pbar_tickets.update(1)
             continue
 
@@ -502,6 +522,7 @@ def buscar_os_lastmile_por_cliente(cliente_ixc_id, mapa_setores, alterado_desde=
             "os_atual_aberta": os_aberta,
             "em_os_comercial_lastmile": True,
         }
+        logins_processados.add(login_id)
         pbar_tickets.update(1)
 
     pbar_tickets.close()

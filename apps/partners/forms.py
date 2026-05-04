@@ -77,7 +77,7 @@ class ProposalForm(forms.ModelForm):
         # ter acesso a todos os endereços no backend para validar o ID enviado.
         self.fields['client_address'].queryset = Endereco.objects.all()
         self.fields['client_address'].required = False
-        self.fields['nome_proposta'].required = True
+        self.fields['nome_proposta'].required = False
         self.fields['partner_cnpj_cpf'].initial = (
             self.instance.partner.cnpj_cpf if self.instance and self.instance.partner_id else ''
         )

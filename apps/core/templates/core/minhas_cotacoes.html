@@ -7,26 +7,11 @@
     <div class="flex flex-col lg:flex-row lg:items-end justify-between gap-4 mb-6">
         <div>
             <h1 class="text-3xl font-black text-gray-900 italic uppercase tracking-tighter">Minhas Cotacoes</h1>
-            <p class="text-[10px] text-gray-500 font-bold uppercase tracking-widest mt-1">Cotacoes vinculadas ao usuario logado</p>
+            <p class="text-[10px] text-gray-500 font-bold uppercase tracking-widest mt-1">Exibindo apenas cotacoes em negociacao vinculadas ao usuario logado</p>
         </div>
         <div class="flex flex-wrap items-center gap-3">
-            <span class="bg-ageis-yellow text-black px-4 py-2.5 rounded-full text-[10px] font-black uppercase tracking-widest shadow-sm">
-                {{ total_resultados }} Resultados
-            </span>
             <span class="bg-yellow-50 text-yellow-700 px-4 py-2.5 rounded-full text-[10px] font-black uppercase tracking-widest border border-yellow-100">
-                {{ totais_por_status.analise }} Em negociacao
-            </span>
-            <span class="bg-blue-50 text-blue-700 px-4 py-2.5 rounded-full text-[10px] font-black uppercase tracking-widest border border-blue-100">
-                {{ totais_por_status.aguardando_contratacao }} Aguardando contratacao
-            </span>
-            <span class="bg-emerald-50 text-emerald-700 px-4 py-2.5 rounded-full text-[10px] font-black uppercase tracking-widest border border-emerald-100">
-                {{ totais_por_status.contratado }} Contratado
-            </span>
-            <span class="bg-orange-50 text-orange-700 px-4 py-2.5 rounded-full text-[10px] font-black uppercase tracking-widest border border-orange-100">
-                {{ totais_por_status.declinado }} Declinado
-            </span>
-            <span class="bg-red-50 text-red-700 px-4 py-2.5 rounded-full text-[10px] font-black uppercase tracking-widest border border-red-100">
-                {{ totais_por_status.encerrada }} Inviavel
+                {{ totais_por_status.analise }} Cotacoes em negociacao
             </span>
         </div>
     </div>
@@ -56,15 +41,15 @@
 
     <div class="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
         <div class="overflow-x-auto">
-            <table class="w-full text-left min-w-[980px]">
+            <table class="w-full text-left min-w-[920px]">
                 <thead class="bg-gray-50 border-b border-gray-100">
                     <tr>
                         <th class="px-6 py-4 text-xs font-bold uppercase text-gray-400"><a href="?{{ sort_links.empresa }}" class="hover:text-gray-700">Parceiro</a></th>
                         <th class="px-6 py-4 text-xs font-bold uppercase text-gray-400"><a href="?{{ sort_links.cotacao }}" class="hover:text-gray-700">Cotacao</a></th>
                         <th class="px-6 py-4 text-xs font-bold uppercase text-gray-400"><a href="?{{ sort_links.cliente }}" class="hover:text-gray-700">Cliente</a></th>
                         <th class="px-6 py-4 text-xs font-bold uppercase text-gray-400"><a href="?{{ sort_links.endereco }}" class="hover:text-gray-700">Endereco</a></th>
-                        <th class="px-6 py-4 text-xs font-bold uppercase text-gray-400"><a href="?{{ sort_links.ultimo_comentario }}" class="hover:text-gray-700">Ultimo Comentario</a></th>
-                        <th class="px-6 py-4 text-xs font-bold uppercase text-gray-400"><a href="?{{ sort_links.status }}" class="hover:text-gray-700">Status</a></th>
+                        <th class="px-6 py-4 text-xs font-bold uppercase text-gray-400"><a href="?{{ sort_links.ultimo_comentario }}" class="hover:text-gray-700">Atualizacao</a></th>
+                        <th class="px-6 py-4 text-xs font-bold uppercase text-gray-400 text-center whitespace-nowrap">E-mail</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-gray-50">
@@ -77,7 +62,6 @@
                                     #{{ item.codigo_exibicao }}
                                 </a>
                             </div>
-                            <div class="text-sm text-gray-700 mt-1">{{ item.nome_proposta|default:"Cotacao sem nome" }}</div>
                         </td>
                         <td class="px-6 py-5"><div class="font-semibold text-gray-900">{{ item.cliente|default:"--" }}</div></td>
                         <td class="px-6 py-5">
@@ -93,28 +77,26 @@
                             <div class="font-semibold text-gray-400">-</div>
                             {% endif %}
                         </td>
-                        <td class="px-6 py-5">
-                            {% if item.status == 'analise' or item.status == 'ativa' %}
-                            <span title="Em negociacao" class="inline-flex items-center justify-center w-10 h-10 rounded-full bg-yellow-50 text-yellow-700 border border-yellow-100">
-                                <i data-lucide="clock-3" class="w-4 h-4"></i>
-                            </span>
-                            {% elif item.status == 'aguardando_contratacao' %}
-                            <span title="Aguardando contratacao" class="inline-flex items-center justify-center w-10 h-10 rounded-full bg-blue-50 text-blue-700 border border-blue-100">
-                                <i data-lucide="file-clock" class="w-4 h-4"></i>
-                            </span>
-                            {% elif item.status == 'contratado' %}
-                            <span title="Contratado" class="inline-flex items-center justify-center w-10 h-10 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-100">
-                                <i data-lucide="badge-check" class="w-4 h-4"></i>
-                            </span>
-                            {% elif item.status == 'declinado' %}
-                            <span title="Declinado" class="inline-flex items-center justify-center w-10 h-10 rounded-full bg-orange-50 text-orange-700 border border-orange-100">
-                                <i data-lucide="ban" class="w-4 h-4"></i>
-                            </span>
-                            {% else %}
-                            <span title="Inviavel" class="inline-flex items-center justify-center w-10 h-10 rounded-full bg-red-50 text-red-600 border border-red-100">
-                                <i data-lucide="alert-circle" class="w-4 h-4"></i>
-                            </span>
-                            {% endif %}
+                        <td class="px-6 py-5 text-center">
+                            <button
+                                type="button"
+                                class="inline-flex items-center justify-center w-10 h-10 rounded-full bg-sky-50 text-sky-700 border border-sky-100 hover:bg-sky-100 hover:text-sky-900 transition"
+                                title="Escrever e-mail"
+                                onclick="openEmailComposer({
+                                    proposalPk: '{{ item.pk }}',
+                                    proposalCode: '{{ item.codigo_exibicao|escapejs }}',
+                                    proposalName: '',
+                                    partnerName: '{{ item.partner.nome_fantasia|default:item.partner.razao_social|default:"Parceiro nao informado"|escapejs }}',
+                                    partnerEmail: '{{ item.partner.email|default:""|escapejs }}',
+                                    billingEmail: '{{ item.email_faturamento|default:""|escapejs }}',
+                                    clientName: '{{ item.cliente|default:"Cliente nao informado"|escapejs }}',
+                                    addressLogin: '{{ item.client_address.login_ixc|default:"--"|escapejs }}',
+                                    addressLabel: '{{ item.client_address|default:"--"|escapejs }}',
+                                    statusLabel: '{% if item.status == "analise" or item.status == "ativa" %}Em negociacao{% elif item.status == "aguardando_contratacao" %}Aguardando contratacao{% elif item.status == "contratado" %}Contratado{% elif item.status == "declinado" %}Declinado{% else %}Inviavel{% endif %}'
+                                })"
+                            >
+                                <i data-lucide="mail" class="w-4 h-4"></i>
+                            </button>
                         </td>
                     </tr>
                     {% empty %}
@@ -122,7 +104,7 @@
                         <td colspan="6" class="px-6 py-20 text-center text-gray-400 font-medium">
                             <div class="flex flex-col items-center gap-2">
                                 <i data-lucide="inbox" class="w-8 h-8 opacity-50"></i>
-                                Voce ainda nao possui cotacoes vinculadas.
+                                Voce nao possui cotacoes em negociacao vinculadas.
                             </div>
                         </td>
                     </tr>
@@ -152,4 +134,501 @@
         {% endif %}
     </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<style>
+    #emailComposerModal .email-composer-shell {
+        width: min(100%, 760px);
+        max-height: calc(100vh - 2rem);
+        overflow: auto;
+        min-width: 520px;
+    }
+
+    #emailComposerModal.is-maximized {
+        inset: 1rem !important;
+        width: auto !important;
+    }
+
+    #emailComposerModal.is-maximized .email-composer-shell {
+        width: 100% !important;
+        max-width: none !important;
+        max-height: calc(100vh - 2rem) !important;
+        height: calc(100vh - 2rem) !important;
+        resize: none;
+    }
+
+    @media (max-width: 767px) {
+        #emailComposerModal {
+            inset: 0.75rem !important;
+            width: auto !important;
+            bottom: 0.75rem !important;
+        }
+
+        #emailComposerModal .email-composer-shell {
+            width: 100% !important;
+            max-height: calc(100vh - 1.5rem) !important;
+            resize: none;
+            min-width: 0;
+        }
+    }
+</style>
+
+<div id="emailComposerOverlay" class="hidden fixed inset-0 z-[80] bg-slate-950/45 backdrop-blur-[2px]" onclick="closeEmailComposer()"></div>
+
+<div id="emailComposerModal" class="hidden fixed inset-x-4 bottom-4 md:right-8 md:left-auto md:bottom-8 md:w-[760px] z-[90]">
+    <button
+        id="emailComposerResizeHandle"
+        type="button"
+        class="hidden md:block absolute left-0 top-0 h-full w-4 -translate-x-1/2 cursor-ew-resize"
+        title="Arraste para aumentar ou diminuir"
+        onmousedown="startEmailComposerResize(event)"
+    >
+        <span class="absolute left-1/2 top-1/2 h-24 w-1 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white/70 shadow-sm border border-slate-200"></span>
+    </button>
+    <div class="email-composer-shell overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-[0_30px_80px_rgba(15,23,42,0.24)]">
+        <div class="flex items-center justify-between gap-3 px-6 py-4 bg-gradient-to-r from-slate-950 via-slate-900 to-slate-800 text-white">
+            <div>
+                <p class="text-[10px] font-black uppercase tracking-[0.28em] text-ageis-yellow">Nova mensagem</p>
+                <h3 class="text-lg font-black italic uppercase tracking-tight">Envio de email da cotacao</h3>
+            </div>
+            <div class="flex items-center gap-2">
+                <button type="button" class="inline-flex items-center justify-center w-10 h-10 rounded-2xl bg-white/10 hover:bg-white/20 transition" onclick="toggleEmailComposerMaximize()" title="Expandir ou restaurar">
+                    <i id="emailComposerMaximizeIcon" data-lucide="maximize-2" class="w-5 h-5"></i>
+                </button>
+                <button type="button" class="inline-flex items-center justify-center w-10 h-10 rounded-2xl bg-white/10 hover:bg-white/20 transition" onclick="closeEmailComposer()" title="Fechar">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+        </div>
+
+        <div class="p-6 space-y-5 bg-gradient-to-b from-white to-slate-50/80 overflow-y-auto">
+            <input id="emailComposerProposalPk" type="hidden">
+            <div class="grid grid-cols-1 gap-4">
+                <label class="block">
+                    <span class="text-[10px] font-black uppercase tracking-[0.24em] text-slate-500">De</span>
+                    <input id="emailComposerFrom" type="email" readonly class="mt-2 w-full rounded-2xl border border-slate-200 bg-slate-100 px-4 py-3 text-sm font-semibold text-slate-600 outline-none cursor-not-allowed" placeholder="remetente@empresa.com">
+                </label>
+
+                <label class="block">
+                    <span class="text-[10px] font-black uppercase tracking-[0.24em] text-slate-500">Para</span>
+                    <input id="emailComposerTo" type="text" class="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-800 outline-none focus:border-ageis-yellow focus:ring-2 focus:ring-yellow-100" placeholder="destinatario@empresa.com">
+                </label>
+
+                <label class="block">
+                    <span class="text-[10px] font-black uppercase tracking-[0.24em] text-slate-500">Cc</span>
+                    <input id="emailComposerCc" type="text" class="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-800 outline-none focus:border-ageis-yellow focus:ring-2 focus:ring-yellow-100" placeholder="copia@empresa.com">
+                </label>
+
+                <label class="block">
+                    <span class="text-[10px] font-black uppercase tracking-[0.24em] text-slate-500">Assunto</span>
+                    <input id="emailComposerSubject" type="text" class="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-800 outline-none focus:border-ageis-yellow focus:ring-2 focus:ring-yellow-100">
+                </label>
+
+                <label class="block">
+                    <span class="text-[10px] font-black uppercase tracking-[0.24em] text-slate-500">Mensagem</span>
+                    <textarea id="emailComposerBody" rows="12" class="mt-2 w-full rounded-[1.75rem] border border-slate-200 bg-white px-4 py-4 text-sm leading-6 text-slate-700 outline-none focus:border-ageis-yellow focus:ring-2 focus:ring-yellow-100 resize-y" placeholder="Escreva sua mensagem aqui..."></textarea>
+                </label>
+
+                <div class="block">
+                    <span class="text-[10px] font-black uppercase tracking-[0.24em] text-slate-500">Anexos</span>
+                    <label for="emailComposerAttachments" class="mt-2 flex cursor-pointer items-center justify-between gap-3 rounded-[1.75rem] border border-dashed border-slate-300 bg-white px-4 py-4 transition hover:border-ageis-yellow hover:bg-yellow-50/40">
+                        <div class="flex items-center gap-3">
+                            <span class="inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-slate-100 text-slate-600">
+                                <i data-lucide="paperclip" class="w-5 h-5"></i>
+                            </span>
+                            <div>
+                                <div class="text-sm font-bold text-slate-800">Selecionar arquivos</div>
+                                <div class="text-xs text-slate-500">Os arquivos enviados aqui seguem junto no e-mail disparado pelo backend. Limite total: {{ email_attachment_limit_mb }} MB.</div>
+                            </div>
+                        </div>
+                        <span class="rounded-2xl bg-ageis-black px-4 py-2 text-[10px] font-black uppercase tracking-[0.22em] text-ageis-yellow">Escolher</span>
+                    </label>
+                    <input id="emailComposerAttachments" type="file" class="hidden" multiple onchange="updateEmailComposerAttachments()">
+                    <div id="emailComposerAttachmentHint" class="mt-2 text-xs text-emerald-700 bg-emerald-50 border border-emerald-100 rounded-2xl px-4 py-3">
+                        O campo <strong>De</strong> utiliza o remetente padrao configurado no sistema.
+                    </div>
+                    <div id="emailComposerAttachmentList" class="mt-3 hidden rounded-[1.5rem] border border-slate-200 bg-white px-4 py-3"></div>
+                </div>
+            </div>
+
+            <div class="flex flex-col gap-3 rounded-[1.75rem] border border-slate-200 bg-white/80 p-4 md:flex-row md:items-center md:justify-between">
+                <div id="emailComposerStatus" class="text-xs text-slate-500">
+                    Preencha os dados para enviar o e-mail.
+                </div>
+                <div class="flex flex-col-reverse gap-2 sm:flex-row">
+                    <button type="button" class="inline-flex items-center justify-center gap-2 rounded-2xl border border-slate-200 px-5 py-3 text-[11px] font-black uppercase tracking-[0.22em] text-slate-600 hover:bg-slate-50 transition" onclick="closeEmailComposer()">
+                        Cancelar
+                    </button>
+                    <button id="emailComposerSendButton" type="button" class="inline-flex items-center justify-center gap-2 rounded-2xl bg-ageis-black px-5 py-3 text-[11px] font-black uppercase tracking-[0.22em] text-ageis-yellow hover:bg-slate-900 transition" onclick="sendEmailComposer()">
+                        <i data-lucide="send" class="w-4 h-4"></i>
+                        Enviar e-mail
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    const emailComposerState = {
+        proposalPk: '',
+        fromEmail: '',
+        proposalCode: '',
+        proposalName: '',
+        partnerName: '',
+        partnerEmail: '',
+        billingEmail: '',
+        clientName: '',
+        addressLogin: '',
+        addressLabel: '',
+        statusLabel: ''
+    };
+    let emailComposerResizeState = null;
+
+    function buildEmailComposerBody(data) {
+        return [
+            'Ola,',
+            '',
+            'Segue o resumo da cotacao para acompanhamento:',
+            '',
+            `Cotacao: #${data.proposalCode}`,
+            `Parceiro: ${data.partnerName}`,
+            `Cliente: ${data.clientName}`,
+            `Login/Endereco: ${data.addressLogin}`,
+            `Detalhe do endereco: ${data.addressLabel}`,
+            `Status atual: ${data.statusLabel}`,
+            '',
+            'Fico a disposicao para alinhar os proximos passos.',
+            '',
+            'Atenciosamente,'
+        ].join('\n');
+    }
+
+    function openEmailComposer(data) {
+        Object.assign(emailComposerState, data || {});
+
+        const overlay = document.getElementById('emailComposerOverlay');
+        const modal = document.getElementById('emailComposerModal');
+        const proposalPkInput = document.getElementById('emailComposerProposalPk');
+        const fromInput = document.getElementById('emailComposerFrom');
+        const toInput = document.getElementById('emailComposerTo');
+        const ccInput = document.getElementById('emailComposerCc');
+        const subjectInput = document.getElementById('emailComposerSubject');
+        const bodyInput = document.getElementById('emailComposerBody');
+
+        const toValue = emailComposerState.billingEmail || emailComposerState.partnerEmail || '';
+        const ccValue = '{{ request.user.email|default:""|escapejs }}';
+        const fromValue = '{{ email_remetente_padrao|escapejs }}';
+
+        modal.classList.remove('is-maximized');
+        modal.style.width = '';
+        proposalPkInput.value = emailComposerState.proposalPk || '';
+        fromInput.value = fromValue || '';
+        toInput.value = toValue;
+        ccInput.value = ccValue;
+        subjectInput.value = `#${emailComposerState.proposalCode} - ${emailComposerState.partnerName}`;
+        bodyInput.value = buildEmailComposerBody(emailComposerState);
+        clearEmailComposerAttachments();
+        syncEmailComposerMaximizeIcon();
+        setEmailComposerStatus('Preencha os dados para enviar o e-mail.', 'neutral');
+        setEmailComposerSending(false);
+
+        overlay.classList.remove('hidden');
+        modal.classList.remove('hidden');
+        document.body.classList.add('overflow-hidden');
+
+        if (window.lucide) {
+            window.lucide.createIcons();
+        }
+
+        setTimeout(() => {
+            toInput.focus();
+            toInput.select();
+        }, 30);
+    }
+
+    function closeEmailComposer() {
+        document.getElementById('emailComposerOverlay').classList.add('hidden');
+        const modal = document.getElementById('emailComposerModal');
+        modal.classList.add('hidden');
+        modal.classList.remove('is-maximized');
+        modal.style.width = '';
+        clearEmailComposerAttachments();
+        syncEmailComposerMaximizeIcon();
+        document.body.classList.remove('overflow-hidden');
+    }
+
+    function toggleEmailComposerMaximize() {
+        const modal = document.getElementById('emailComposerModal');
+        modal.classList.toggle('is-maximized');
+        syncEmailComposerMaximizeIcon();
+    }
+
+    function syncEmailComposerMaximizeIcon() {
+        const modal = document.getElementById('emailComposerModal');
+        const icon = document.getElementById('emailComposerMaximizeIcon');
+        if (!icon) {
+            return;
+        }
+
+        icon.setAttribute('data-lucide', modal.classList.contains('is-maximized') ? 'minimize-2' : 'maximize-2');
+        if (window.lucide) {
+            window.lucide.createIcons();
+        }
+    }
+
+    function startEmailComposerResize(event) {
+        const modal = document.getElementById('emailComposerModal');
+        if (!modal || modal.classList.contains('is-maximized')) {
+            return;
+        }
+
+        const rect = modal.getBoundingClientRect();
+        emailComposerResizeState = {
+            startX: event.clientX,
+            startLeft: rect.left,
+            startWidth: rect.width,
+            right: window.innerWidth - rect.right,
+        };
+
+        document.body.classList.add('select-none');
+        document.body.style.cursor = 'ew-resize';
+        window.addEventListener('mousemove', onEmailComposerResize);
+        window.addEventListener('mouseup', stopEmailComposerResize);
+        event.preventDefault();
+    }
+
+    function onEmailComposerResize(event) {
+        if (!emailComposerResizeState) {
+            return;
+        }
+
+        const minWidth = window.innerWidth < 768 ? Math.min(window.innerWidth - 24, 360) : 520;
+        const maxWidth = Math.max(minWidth, window.innerWidth - emailComposerResizeState.right - 16);
+        const deltaX = emailComposerResizeState.startX - event.clientX;
+        const nextWidth = Math.min(maxWidth, Math.max(minWidth, emailComposerResizeState.startWidth + deltaX));
+
+        const modal = document.getElementById('emailComposerModal');
+        modal.style.width = `${nextWidth}px`;
+    }
+
+    function stopEmailComposerResize() {
+        emailComposerResizeState = null;
+        document.body.classList.remove('select-none');
+        document.body.style.cursor = '';
+        window.removeEventListener('mousemove', onEmailComposerResize);
+        window.removeEventListener('mouseup', stopEmailComposerResize);
+    }
+
+    function updateEmailComposerAttachments() {
+        const input = document.getElementById('emailComposerAttachments');
+        const list = document.getElementById('emailComposerAttachmentList');
+        const maxTotalBytes = {{ email_attachment_limit_mb|default:10 }} * 1024 * 1024;
+
+        if (!input || !list) {
+            return;
+        }
+
+        const files = Array.from(input.files || []);
+        const totalBytes = files.reduce((sum, file) => sum + (file.size || 0), 0);
+        if (!files.length) {
+            list.innerHTML = '';
+            list.classList.add('hidden');
+            return;
+        }
+
+        if (totalBytes > maxTotalBytes) {
+            setEmailComposerStatus(`O tamanho total dos anexos excede o limite permitido de {{ email_attachment_limit_mb|default:10 }} MB.`, 'error');
+            input.value = '';
+            list.innerHTML = '';
+            list.classList.add('hidden');
+            return;
+        }
+
+        list.innerHTML = files.map(file => `
+            <div class="flex items-center justify-between gap-3 py-2 border-b border-slate-100 last:border-b-0">
+                <div class="flex items-center gap-3 min-w-0">
+                    <span class="inline-flex h-9 w-9 items-center justify-center rounded-2xl bg-sky-50 text-sky-700 flex-shrink-0">
+                        <i data-lucide="file" class="w-4 h-4"></i>
+                    </span>
+                    <div class="min-w-0">
+                        <div class="text-sm font-bold text-slate-800 truncate">${escapeHtml(file.name)}</div>
+                        <div class="text-xs text-slate-500">${formatAttachmentSize(file.size)}</div>
+                    </div>
+                </div>
+            </div>
+        `).join('') + `
+            <div class="pt-3 mt-2 border-t border-slate-100 text-xs font-bold text-slate-500">
+                Total selecionado: ${formatAttachmentSize(totalBytes)} de {{ email_attachment_limit_mb|default:10 }} MB permitidos
+            </div>
+        `;
+        list.classList.remove('hidden');
+        setEmailComposerStatus('Preencha os dados para enviar o e-mail.', 'neutral');
+
+        if (window.lucide) {
+            window.lucide.createIcons();
+        }
+    }
+
+    function clearEmailComposerAttachments() {
+        const input = document.getElementById('emailComposerAttachments');
+        const list = document.getElementById('emailComposerAttachmentList');
+
+        if (input) {
+            input.value = '';
+        }
+
+        if (list) {
+            list.innerHTML = '';
+            list.classList.add('hidden');
+        }
+    }
+
+    function formatAttachmentSize(size) {
+        if (!size) {
+            return '0 KB';
+        }
+
+        const kb = size / 1024;
+        if (kb < 1024) {
+            return `${kb.toFixed(1)} KB`;
+        }
+
+        return `${(kb / 1024).toFixed(2)} MB`;
+    }
+
+    function escapeHtml(value) {
+        return String(value || '')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+    }
+
+    function sendEmailComposer() {
+        const proposalPk = document.getElementById('emailComposerProposalPk').value.trim();
+        const toValue = document.getElementById('emailComposerTo').value.trim();
+        const ccValue = document.getElementById('emailComposerCc').value.trim();
+        const subjectValue = document.getElementById('emailComposerSubject').value.trim();
+        const bodyValue = document.getElementById('emailComposerBody').value.trim();
+        const attachmentInput = document.getElementById('emailComposerAttachments');
+        const maxTotalBytes = {{ email_attachment_limit_mb|default:10 }} * 1024 * 1024;
+        const attachmentFiles = Array.from(attachmentInput.files || []);
+        const attachmentTotalBytes = attachmentFiles.reduce((sum, file) => sum + (file.size || 0), 0);
+
+        if (!proposalPk) {
+            setEmailComposerStatus('Nao foi possivel identificar a cotacao para envio.', 'error');
+            return;
+        }
+
+        if (!toValue || !subjectValue) {
+            setEmailComposerStatus('Preencha os campos Para e Assunto antes de enviar.', 'error');
+            return;
+        }
+
+        if (attachmentTotalBytes > maxTotalBytes) {
+            setEmailComposerStatus(`O tamanho total dos anexos excede o limite permitido de {{ email_attachment_limit_mb|default:10 }} MB.`, 'error');
+            return;
+        }
+
+        const formData = new FormData();
+        formData.append('proposal_pk', proposalPk);
+        formData.append('to', toValue);
+        formData.append('cc', ccValue);
+        formData.append('subject', subjectValue);
+        formData.append('body', bodyValue);
+
+        attachmentFiles.forEach(file => {
+            formData.append('attachments', file);
+        });
+
+        setEmailComposerSending(true);
+        setEmailComposerStatus('Enviando e-mail...', 'neutral');
+
+        fetch('{% url "minhas_cotacoes_enviar_email" %}', {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': getCookie('csrftoken'),
+            },
+            body: formData,
+        })
+            .then(async response => {
+                const data = await response.json().catch(() => ({}));
+                if (!response.ok || !data.ok) {
+                    throw new Error(data.message || 'Falha no envio do e-mail.');
+                }
+                return data;
+            })
+            .then(data => {
+                setEmailComposerStatus(data.message || 'E-mail enviado com sucesso.', 'success');
+                setTimeout(() => {
+                    closeEmailComposer();
+                    window.location.reload();
+                }, 900);
+            })
+            .catch(error => {
+                setEmailComposerStatus(error.message || 'Falha no envio do e-mail.', 'error');
+            })
+            .finally(() => {
+                setEmailComposerSending(false);
+            });
+    }
+
+    function setEmailComposerSending(isSending) {
+        const button = document.getElementById('emailComposerSendButton');
+        if (!button) {
+            return;
+        }
+
+        button.disabled = isSending;
+        button.classList.toggle('opacity-70', isSending);
+        button.classList.toggle('cursor-not-allowed', isSending);
+        button.innerHTML = isSending
+            ? '<i data-lucide="loader-circle" class="w-4 h-4 animate-spin"></i> Enviando...'
+            : '<i data-lucide="send" class="w-4 h-4"></i> Enviar e-mail';
+
+        if (window.lucide) {
+            window.lucide.createIcons();
+        }
+    }
+
+    function setEmailComposerStatus(message, tone) {
+        const status = document.getElementById('emailComposerStatus');
+        if (!status) {
+            return;
+        }
+
+        status.className = 'text-xs rounded-2xl px-4 py-3 border';
+
+        if (tone === 'success') {
+            status.classList.add('text-emerald-700', 'bg-emerald-50', 'border-emerald-100');
+        } else if (tone === 'error') {
+            status.classList.add('text-red-700', 'bg-red-50', 'border-red-100');
+        } else {
+            status.classList.add('text-slate-500', 'bg-slate-50', 'border-slate-200');
+        }
+
+        status.textContent = message;
+    }
+
+    function getCookie(name) {
+        const cookieValue = document.cookie
+            .split('; ')
+            .find(row => row.startsWith(`${name}=`));
+        return cookieValue ? decodeURIComponent(cookieValue.split('=')[1]) : '';
+    }
+
+    document.addEventListener('keydown', function(event) {
+        const modal = document.getElementById('emailComposerModal');
+        if (!modal || modal.classList.contains('hidden')) {
+            return;
+        }
+
+        if (event.key === 'Escape') {
+            closeEmailComposer();
+        }
+    });
+</script>
 {% endblock %}

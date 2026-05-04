@@ -85,6 +85,9 @@
                                     <span class="text-[10px] font-bold text-gray-400 uppercase bg-gray-100 px-2 py-0.5 rounded">
                                         ID: {{ endereco.id }}
                                     </span>
+                                    <span class="text-[10px] font-bold text-gray-400 uppercase bg-gray-100 px-2 py-0.5 rounded">
+                                        O.S.: {{ endereco.ticket_os_atual_ixc|default:"--" }}
+                                    </span>
                                     {% if endereco.principal %}
                                     <span class="text-[9px] font-black text-yellow-600 uppercase bg-yellow-50 px-2 py-0.5 rounded border border-yellow-100">
                                         Principal

@@ -1,14 +1,20 @@
 import csv
+import logging
 from datetime import datetime, time
+from email.utils import parseaddr
 
 from django.contrib import messages
 from django.contrib.auth import get_user_model
 from django.contrib.auth.decorators import login_required, user_passes_test
 from django.contrib.contenttypes.models import ContentType
+from django.conf import settings
 from django.core.exceptions import PermissionDenied
+from django.core.files.base import ContentFile
+from django.core.mail import EmailMessage, get_connection
 from django.core.paginator import Paginator
+from django.core.validators import validate_email
 from django.db.models import OuterRef, Q, Subquery
-from django.http import HttpResponse
+from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
@@ -16,8 +22,15 @@ from urllib.parse import urlparse, urlencode
 
 from leads.models import Lead
 from partners.models import Proposal
+from core_admin.models import ConfiguracaoEmailEnvio
 
 from .models import IntegrationAudit, RegistroHistorico
+
+logger = logging.getLogger(__name__)
+
+
+EMAIL_ATTACHMENT_TOTAL_LIMIT_BYTES = 10 * 1024 * 1024
+EMAIL_ATTACHMENT_TOTAL_LIMIT_MB = EMAIL_ATTACHMENT_TOTAL_LIMIT_BYTES // (1024 * 1024)
 
 
 def _resolve_sort(request, allowed_fields, default_field):
@@ -270,6 +283,70 @@ def _resolver_back_url(request, fallback_url='/'):
     return fallback_url, ''
 
 
+def _split_email_values(raw_value):
+    return [
+        item.strip()
+        for bloco in str(raw_value or '').replace(';', ',').split(',')
+        for item in [bloco.strip()]
+        if item
+    ]
+
+
+def _validate_email_values(raw_value, field_label, required=False):
+    values = _split_email_values(raw_value)
+
+    if required and not values:
+        raise ValueError(f"Informe ao menos um destinatario em {field_label}.")
+
+    for value in values:
+        _, email = parseaddr(value)
+        validate_email(email or value)
+
+    return values
+
+
+def _configured_from_email():
+    configuracao_email = ConfiguracaoEmailEnvio.objects.order_by('id').first()
+    remetente = (
+        configuracao_email.email_remetente_padrao
+        if configuracao_email and configuracao_email.email_remetente_padrao
+        else settings.DEFAULT_FROM_EMAIL
+    )
+    remetente = str(remetente or '').strip()
+    if not remetente:
+        raise ValueError('Nao ha um remetente padrao configurado para envio.')
+    validate_email(remetente)
+    return remetente
+
+
+def _build_quote_email_subject(codigo_exibicao, subject):
+    codigo = str(codigo_exibicao or '').strip()
+    assunto = str(subject or '').strip()
+
+    if not codigo:
+        return assunto
+
+    prefixo_direto = f"#{codigo}"
+    prefixo_cotacao = f"Cotacao #{codigo}"
+
+    if assunto.startswith(prefixo_direto) or assunto.lower().startswith(prefixo_cotacao.lower()):
+        return assunto
+
+    return f"{prefixo_direto} - {assunto}" if assunto else prefixo_direto
+
+
+def _validate_email_attachments(files):
+    anexos = list(files or [])
+    total_size = sum(int(getattr(arquivo, 'size', 0) or 0) for arquivo in anexos)
+
+    if total_size > EMAIL_ATTACHMENT_TOTAL_LIMIT_BYTES:
+        raise ValueError(
+            f"O tamanho total dos anexos excede o limite permitido de {EMAIL_ATTACHMENT_TOTAL_LIMIT_MB} MB."
+        )
+
+    return anexos
+
+
 @login_required
 def home(request):
     context = {
@@ -281,10 +358,11 @@ def home(request):
 @user_passes_test(grupo_Operacao_required)
 @login_required
 def minhas_cotacoes(request):
+    page_size = 20
     busca = (request.GET.get('busca') or '').strip()
     sort_by, direction = _resolve_sort(
         request,
-        {'empresa', 'cotacao', 'cliente', 'endereco', 'ultimo_comentario', 'status'},
+        {'empresa', 'cotacao', 'cliente', 'endereco', 'ultimo_comentario'},
         'empresa',
     )
     proposal_content_type = ContentType.objects.get_for_model(Proposal)
@@ -293,7 +371,7 @@ def minhas_cotacoes(request):
         object_id=OuterRef('pk'),
     ).order_by('-data').values('data')[:1]
 
-    queryset = Proposal.objects.filter(responsavel=request.user).select_related(
+    queryset = Proposal.objects.filter(responsavel=request.user, status='analise').select_related(
         'partner',
         'cliente',
         'client_address',
@@ -319,24 +397,16 @@ def minhas_cotacoes(request):
         'cliente': ['cliente__nome_fantasia', 'cliente__razao_social', 'id'],
         'endereco': ['client_address__login_ixc', 'id'],
         'ultimo_comentario': ['ultima_interacao', 'id'],
-        'status': ['status', 'id'],
     }
     ordering = order_map[sort_by]
     if direction == 'desc':
         ordering = [f"-{field}" for field in ordering]
     queryset = queryset.order_by(*ordering)
 
-    totais_por_status = _report_totais_vazios()
-    totais_por_status['analise'] = queryset.filter(status__in=['analise', 'ativa']).count()
-    totais_por_status['aguardando_contratacao'] = queryset.filter(status='aguardando_contratacao').count()
-    totais_por_status['contratado'] = queryset.filter(status='contratado').count()
-    totais_por_status['declinado'] = queryset.filter(status='declinado').count()
-    totais_por_status['encerrada'] = queryset.filter(status='encerrada').count()
-
     if request.GET.get('export') == 'csv':
         return _csv_response(
             'minhas_cotacoes.csv',
-            ['Parceiro', 'Cotação', 'Cliente', 'Endereço', 'Último comentário', 'Status'],
+            ['Parceiro', 'Cotação', 'Cliente', 'Endereço', 'Último comentário'],
             [
                 [
                     _proposal_partner_nome(item),
@@ -344,15 +414,22 @@ def minhas_cotacoes(request):
                     _proposal_cliente_nome(item),
                     _proposal_endereco_nome(item),
                     item.ultima_interacao.strftime('%d/%m/%Y %H:%M') if item.ultima_interacao else '-',
-                    _report_status_display(item),
                 ]
                 for item in queryset
             ],
         )
 
-    paginator = Paginator(queryset, 20)
+    paginator = Paginator(queryset, page_size)
     page_number = request.GET.get('page')
     page_obj = paginator.get_page(page_number)
+    email_remetente_padrao = _configured_from_email()
+    total_resultados = paginator.count
+    totais_por_status = _report_totais_vazios()
+    totais_por_status['analise'] = total_resultados
+    pagina_atual = page_obj.number
+    primeira_pagina = max(1, pagina_atual - 2)
+    ultima_pagina = min(paginator.num_pages, pagina_atual + 2)
+    paginas_visiveis = list(range(primeira_pagina, ultima_pagina + 1))
 
     return render(request, 'core/minhas_cotacoes.html', {
         'page_obj': page_obj,
@@ -363,10 +440,16 @@ def minhas_cotacoes(request):
             {'busca': busca},
             sort_by,
             direction,
-            ['empresa', 'cotacao', 'cliente', 'endereco', 'ultimo_comentario', 'status'],
+            ['empresa', 'cotacao', 'cliente', 'endereco', 'ultimo_comentario'],
         ),
         'totais_por_status': totais_por_status,
-        'total_resultados': queryset.count(),
+        'total_resultados': total_resultados,
+        'page_size': page_size,
+        'page_start': ((pagina_atual - 1) * page_size) + 1 if total_resultados else 0,
+        'page_end': min(pagina_atual * page_size, total_resultados) if total_resultados else 0,
+        'paginas_visiveis': paginas_visiveis,
+        'email_remetente_padrao': email_remetente_padrao,
+        'email_attachment_limit_mb': EMAIL_ATTACHMENT_TOTAL_LIMIT_MB,
         'csv_query': urlencode({
             **{k: v for k, v in {
                 'busca': busca,
@@ -376,6 +459,119 @@ def minhas_cotacoes(request):
             'export': 'csv',
         }),
     })
+
+
+@user_passes_test(grupo_Operacao_required)
+@login_required
+def minhas_cotacoes_enviar_email(request):
+    if request.method != 'POST':
+        return JsonResponse({'ok': False, 'message': 'Metodo nao permitido.'}, status=405)
+
+    if not settings.EMAIL_HOST:
+        return JsonResponse({
+            'ok': False,
+            'message': 'O SMTP ainda nao foi configurado no backend. Preencha as variaveis de e-mail no ambiente do sistema.',
+        }, status=400)
+
+    proposal_pk = (request.POST.get('proposal_pk') or '').strip()
+    to_raw = (request.POST.get('to') or '').strip()
+    cc_raw = (request.POST.get('cc') or '').strip()
+    subject = (request.POST.get('subject') or '').strip()
+    body = request.POST.get('body') or ''
+
+    if not proposal_pk.isdigit():
+        return JsonResponse({'ok': False, 'message': 'Cotacao invalida para envio.'}, status=400)
+
+    proposal = get_object_or_404(
+        Proposal.objects.select_related('partner', 'cliente', 'client_address', 'responsavel'),
+        pk=int(proposal_pk),
+    )
+
+    if not (
+        request.user.is_superuser
+        or proposal.responsavel_id == request.user.id
+        or request.user.groups.filter(name__in=['Administrador', 'Gestao', 'Gestão']).exists()
+    ):
+        return JsonResponse({'ok': False, 'message': 'Voce nao tem permissao para enviar e-mail desta cotacao.'}, status=403)
+
+    try:
+        remetente = _configured_from_email()
+        destinatarios = _validate_email_values(to_raw, 'Para', required=True)
+        copia = _validate_email_values(cc_raw, 'Cc', required=False)
+        anexos = _validate_email_attachments(request.FILES.getlist('attachments'))
+    except Exception as exc:
+        return JsonResponse({'ok': False, 'message': str(exc)}, status=400)
+
+    subject_final = _build_quote_email_subject(proposal.codigo_exibicao, subject)
+
+    try:
+        connection = get_connection(fail_silently=False)
+        email = EmailMessage(
+            subject=subject_final,
+            body=body,
+            from_email=remetente,
+            to=destinatarios,
+            cc=copia,
+            reply_to=[remetente],
+            connection=connection,
+        )
+
+        for arquivo in anexos:
+            email.attach(arquivo.name, arquivo.read(), arquivo.content_type or 'application/octet-stream')
+
+        quantidade_enviada = email.send(fail_silently=False)
+        email_eml = email.message().as_bytes()
+        historico_email = RegistroHistorico(
+            tipo='sistema',
+            acao=(
+                "E-mail enviado pela tela Minhas Cotacoes.\n\n"
+                f"ID da proposta: #{proposal.codigo_exibicao}\n"
+                f"De: {remetente}\n"
+                f"Para: {', '.join(destinatarios)}\n"
+                f"Cc: {', '.join(copia) if copia else '--'}\n"
+                f"Assunto: {subject_final}\n"
+                f"Anexos no e-mail: {len(anexos)}\n"
+                f"Arquivo salvo no historico: sim\n"
+                f"Status de envio: {'Sucesso' if quantidade_enviada else 'Sem confirmacao do backend'}"
+            ),
+            usuario=request.user,
+            content_type=ContentType.objects.get_for_model(Proposal),
+            object_id=proposal.id,
+        )
+        nome_arquivo_eml = f"cotacao_{proposal.codigo_exibicao}_email_{timezone.now().strftime('%Y%m%d_%H%M%S')}.eml"
+        historico_email.arquivo.save(nome_arquivo_eml, ContentFile(email_eml), save=False)
+        historico_email.save()
+
+        return JsonResponse({
+            'ok': True,
+            'message': 'E-mail enviado com sucesso.',
+            'subject': subject_final,
+        })
+    except Exception as exc:
+        logger.exception(
+            "Falha ao enviar e-mail da cotacao #%s para %s",
+            proposal.codigo_exibicao,
+            ", ".join(destinatarios) if 'destinatarios' in locals() else "--",
+        )
+        RegistroHistorico.objects.create(
+            tipo='sistema',
+            acao=(
+                "Falha no envio de e-mail pela tela Minhas Cotacoes.\n\n"
+                f"ID da proposta: #{proposal.codigo_exibicao}\n"
+                f"De: {remetente if 'remetente' in locals() else '--'}\n"
+                f"Para: {to_raw or '--'}\n"
+                f"Cc: {cc_raw or '--'}\n"
+                f"Assunto informado: {subject or '--'}\n"
+                f"Erro: {exc}"
+            ),
+            usuario=request.user,
+            content_type=ContentType.objects.get_for_model(Proposal),
+            object_id=proposal.id,
+        )
+        return JsonResponse({
+            'ok': False,
+            'message': f'Nao foi possivel enviar o e-mail: {exc}',
+        }, status=500)
 
 
 @user_passes_test(grupo_Gestao_required)

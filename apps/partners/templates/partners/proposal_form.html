@@ -84,7 +84,7 @@
             {% endfor %}
         {% endif %}
 
-        <form method="POST" id="proposalForm" class="space-y-8">
+        <form method="POST" id="proposalForm" enctype="multipart/form-data" class="space-y-8">
             {% csrf_token %}
             {% if is_conversion_completion %}
             <input type="hidden" name="modo" value="convertida">
@@ -127,10 +127,6 @@
                             {% else %}
                             {{ form.status }}
                             {% endif %}
-                        </div>
-                        <div class="md:col-span-2 space-y-2">
-                            <label class="text-[10px] font-black uppercase text-gray-500 ml-1 tracking-widest italic">Nome da Cotação</label>
-                            {{ form.nome_proposta }}
                         </div>
                         {% if is_conversion_completion %}
                         <div class="md:col-span-2 space-y-2">
@@ -335,6 +331,76 @@
                 </div>
             </div>
 
+            {% if is_conversion_completion %}
+            <input type="hidden" name="alterar_os_ixc" id="alterarOsIxcInput" value="{{ request.POST.alterar_os_ixc|default:'' }}">
+            <div class="bg-white rounded-[2.5rem] shadow-xl border border-gray-200 overflow-hidden">
+                <div class="bg-gray-100/80 px-8 py-5 border-b border-gray-200 flex items-center gap-3">
+                    <div class="p-2.5 bg-ageis-black text-ageis-yellow rounded-xl shadow-lg">
+                        <i data-lucide="message-square" class="w-5 h-5"></i>
+                    </div>
+                    <h2 class="font-black text-sm uppercase italic text-gray-900 tracking-tight">Finalização da O.S. no IXC</h2>
+                </div>
+                <div class="p-8 space-y-3">
+                    <input type="hidden" id="observacaoContratacaoFluxo" value="{{ request.POST.observacao_contratacao|default:'' }}">
+                    <p class="text-[11px] font-bold text-gray-400">Ao clicar em salvar dados da conversão, o sistema pergunta se deseja finalizar a O.S. no IXC. Se você escolher <span class="text-ageis-black">Sim</span>, o preenchimento obrigatório acontece dentro do modal.</p>
+                </div>
+            </div>
+            {% endif %}
+
+            {% if is_conversion_completion and possui_os_lastmile %}
+            <div id="confirmarAlteracaoOsModal" class="fixed inset-0 bg-black/55 z-50 hidden items-center justify-center p-4">
+                <div class="w-full max-w-lg bg-white rounded-[2rem] shadow-2xl border border-gray-100 overflow-hidden">
+                    <div class="px-6 py-5 border-b border-gray-100 bg-gray-50/60 flex items-start justify-between gap-4">
+                        <div>
+                            <h3 class="text-lg font-black uppercase tracking-widest text-gray-900">Alterar O.S. no IXC?</h3>
+                            <p class="text-sm text-gray-500 font-bold mt-2">Este lote possui O.S. aberta em Lastmile. Deseja alterar a O.S. no IXC antes de mover a cotação para aguardando contratação?</p>
+                        </div>
+                        <button type="button" id="closeAlteracaoOsModal" class="text-gray-400 hover:text-gray-700 transition">
+                            <i data-lucide="x" class="w-5 h-5"></i>
+                        </button>
+                    </div>
+                    <div class="p-6 space-y-4">
+                        <div id="alteracaoOsChoiceStep" class="space-y-4">
+                            <div class="rounded-2xl border border-yellow-100 bg-yellow-50/70 px-4 py-4">
+                                <p class="text-xs font-black uppercase tracking-widest text-yellow-700">Escolha como continuar</p>
+                                <p class="text-sm text-gray-600 font-bold mt-2">Se você escolher <span class="text-ageis-black">Sim</span>, o sistema vai exigir comentário e anexo antes de salvar a conversão.</p>
+                            </div>
+                            <div class="flex flex-col-reverse sm:flex-row sm:items-center sm:justify-end gap-3 pt-2">
+                                <button type="button" id="skipAlteracaoOsBtn" class="px-4 py-3 rounded-xl border border-gray-200 text-sm font-black text-gray-500 hover:text-gray-800 hover:border-gray-300 transition">
+                                    Não alterar no IXC
+                                </button>
+                                <button type="button" id="confirmAlteracaoOsBtn" class="px-5 py-3 bg-ageis-black text-ageis-yellow rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-gray-800 transition">
+                                    Sim, finalizar no IXC
+                                </button>
+                            </div>
+                        </div>
+
+                        <div id="alteracaoOsDetailsStep" class="hidden space-y-4">
+                            <div class="space-y-2">
+                                <label for="observacaoContratacaoModal" class="block text-[10px] font-black uppercase tracking-widest text-gray-400">Comentário para o IXC</label>
+                                <textarea id="observacaoContratacaoModal" name="observacao_contratacao" rows="4" class="w-full p-4 bg-gray-50 border border-gray-200 rounded-2xl outline-none focus:ring-2 focus:ring-ageis-yellow transition-all font-bold text-gray-700" placeholder="Descreva a finalização que será enviada ao IXC...">{{ request.POST.observacao_contratacao|default:'' }}</textarea>
+                                <p id="observacaoContratacaoModalErro" class="hidden text-[11px] font-black text-red-500 uppercase tracking-wide">Preencha o comentário para continuar.</p>
+                            </div>
+                            <div class="space-y-2">
+                                <label for="arquivoIxcModal" class="block text-[10px] font-black uppercase tracking-widest text-gray-400">Anexo do Atendimento</label>
+                                <input id="arquivoIxcModal" type="file" name="arquivo_ixc" class="block w-full text-sm text-gray-500 file:mr-4 file:py-3 file:px-4 file:rounded-xl file:border-0 file:bg-gray-100 file:text-gray-700 file:font-black hover:file:bg-gray-200">
+                                <p id="arquivoIxcModalErro" class="hidden text-[11px] font-black text-red-500 uppercase tracking-wide">Selecione um anexo para continuar.</p>
+                                <p class="text-[11px] font-bold text-gray-400">O arquivo será enviado para a aba Arquivos do atendimento no IXC antes do fechamento da O.S.</p>
+                            </div>
+                            <div class="flex flex-col-reverse sm:flex-row sm:items-center sm:justify-between gap-3 pt-2">
+                                <button type="button" id="backAlteracaoOsBtn" class="px-4 py-3 rounded-xl border border-gray-200 text-sm font-black text-gray-500 hover:text-gray-800 hover:border-gray-300 transition">
+                                    Voltar
+                                </button>
+                                <button type="button" id="submitAlteracaoOsBtn" class="px-5 py-3 bg-ageis-black text-ageis-yellow rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-gray-800 transition">
+                                    Salvar e finalizar O.S.
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+
             <div class="flex items-center justify-end gap-4 pb-12">
                 <button type="submit" class="bg-ageis-black text-ageis-yellow font-black px-16 py-5 rounded-2xl shadow-2xl hover:bg-gray-800 hover:scale-[1.03] active:scale-95 transition-all uppercase italic tracking-tighter">
                     {% if is_conversion_completion %}Salvar Dados da Conversão{% else %}
@@ -372,10 +438,26 @@
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+    const proposalForm = document.getElementById('proposalForm');
     const toggleProposalUnitsBtn = document.getElementById('toggleProposalUnitsBtn');
     const proposalUnitsPanel = document.getElementById('proposalUnitsPanel');
     const toggleProposalUnitsIcon = document.getElementById('toggleProposalUnitsIcon');
     const clientSelect = document.querySelector('select[name="cliente"]');
+    const alterarOsIxcInput = document.getElementById('alterarOsIxcInput');
+    const observacaoContratacaoFluxo = document.getElementById('observacaoContratacaoFluxo');
+    const confirmarAlteracaoOsModal = document.getElementById('confirmarAlteracaoOsModal');
+    const closeAlteracaoOsModal = document.getElementById('closeAlteracaoOsModal');
+    const skipAlteracaoOsBtn = document.getElementById('skipAlteracaoOsBtn');
+    const confirmAlteracaoOsBtn = document.getElementById('confirmAlteracaoOsBtn');
+    const backAlteracaoOsBtn = document.getElementById('backAlteracaoOsBtn');
+    const submitAlteracaoOsBtn = document.getElementById('submitAlteracaoOsBtn');
+    const alteracaoOsChoiceStep = document.getElementById('alteracaoOsChoiceStep');
+    const alteracaoOsDetailsStep = document.getElementById('alteracaoOsDetailsStep');
+    const observacaoContratacaoModal = document.getElementById('observacaoContratacaoModal');
+    const arquivoIxcModal = document.getElementById('arquivoIxcModal');
+    const observacaoContratacaoModalErro = document.getElementById('observacaoContratacaoModalErro');
+    const arquivoIxcModalErro = document.getElementById('arquivoIxcModalErro');
+    const possuiOsLastmile = {{ possui_os_lastmile|yesno:"true,false" }};
 
     if (toggleProposalUnitsBtn && proposalUnitsPanel && toggleProposalUnitsIcon) {
         toggleProposalUnitsBtn.addEventListener('click', function() {
@@ -383,6 +465,118 @@ document.addEventListener('DOMContentLoaded', function() {
             toggleProposalUnitsIcon.classList.toggle('rotate-180');
         });
     }
+
+    if (observacaoContratacaoFluxo) {
+        const blocoInfoIxc = observacaoContratacaoFluxo.parentElement;
+        if (blocoInfoIxc && !blocoInfoIxc.querySelector('[data-ixc-info]')) {
+            const info = document.createElement('p');
+            info.setAttribute('data-ixc-info', 'true');
+            info.className = 'text-[11px] font-bold text-gray-400';
+            info.textContent = possuiOsLastmile
+                ? 'Ao clicar em salvar, o sistema vai perguntar se deseja alterar a O.S. no IXC antes de mover a cotação para aguardando contratação.'
+                : 'Este lote não possui O.S. aberta em Lastmile. A cotação seguirá sem alterar O.S. no IXC.';
+            blocoInfoIxc.appendChild(info);
+        }
+    }
+
+    function abrirConfirmacaoAlteracaoOs() {
+        if (!confirmarAlteracaoOsModal) return;
+        mostrarEscolhaAlteracaoOs();
+        confirmarAlteracaoOsModal.classList.remove('hidden');
+        confirmarAlteracaoOsModal.classList.add('flex');
+    }
+
+    function fecharConfirmacaoAlteracaoOs() {
+        if (!confirmarAlteracaoOsModal) return;
+        confirmarAlteracaoOsModal.classList.add('hidden');
+        confirmarAlteracaoOsModal.classList.remove('flex');
+    }
+
+    function modalAlteracaoOsEstaAberto() {
+        return !!confirmarAlteracaoOsModal && !confirmarAlteracaoOsModal.classList.contains('hidden');
+    }
+
+    function marcarErroCampo(campo, erro, possuiErro) {
+        if (campo) {
+            campo.classList.toggle('border-red-400', possuiErro);
+            campo.classList.toggle('bg-red-50', possuiErro);
+        }
+        if (erro) {
+            erro.classList.toggle('hidden', !possuiErro);
+        }
+    }
+
+    function limparErrosAlteracaoOs() {
+        marcarErroCampo(observacaoContratacaoModal, observacaoContratacaoModalErro, false);
+        marcarErroCampo(arquivoIxcModal, arquivoIxcModalErro, false);
+    }
+
+    function mostrarEscolhaAlteracaoOs() {
+        limparErrosAlteracaoOs();
+        alteracaoOsChoiceStep?.classList.remove('hidden');
+        alteracaoOsDetailsStep?.classList.add('hidden');
+    }
+
+    function mostrarDetalhesAlteracaoOs() {
+        limparErrosAlteracaoOs();
+        alteracaoOsChoiceStep?.classList.add('hidden');
+        alteracaoOsDetailsStep?.classList.remove('hidden');
+        observacaoContratacaoModal?.focus();
+    }
+
+    function validarDetalhesAlteracaoOs() {
+        const observacaoVazia = !(observacaoContratacaoModal?.value || '').trim();
+        const arquivoVazio = !arquivoIxcModal?.files?.length;
+
+        marcarErroCampo(observacaoContratacaoModal, observacaoContratacaoModalErro, observacaoVazia);
+        marcarErroCampo(arquivoIxcModal, arquivoIxcModalErro, arquivoVazio);
+
+        return !(observacaoVazia || arquivoVazio);
+    }
+
+    function submeterConversaoComOpcao(alterarNoIxc) {
+        if (alterarOsIxcInput) {
+            alterarOsIxcInput.value = alterarNoIxc ? 'sim' : 'nao';
+        }
+        if (observacaoContratacaoFluxo) {
+            observacaoContratacaoFluxo.value = alterarNoIxc ? (observacaoContratacaoModal?.value || '') : '';
+        }
+        fecharConfirmacaoAlteracaoOs();
+        proposalForm?.submit();
+    }
+
+    if (proposalForm && possuiOsLastmile && alterarOsIxcInput && !alterarOsIxcInput.value) {
+        proposalForm.addEventListener('submit', function(event) {
+            event.preventDefault();
+            if (modalAlteracaoOsEstaAberto()) {
+                return;
+            }
+            abrirConfirmacaoAlteracaoOs();
+        });
+    }
+
+    closeAlteracaoOsModal?.addEventListener('click', fecharConfirmacaoAlteracaoOs);
+    skipAlteracaoOsBtn?.addEventListener('click', function() {
+        submeterConversaoComOpcao(false);
+    });
+    confirmAlteracaoOsBtn?.addEventListener('click', function() {
+        mostrarDetalhesAlteracaoOs();
+    });
+    backAlteracaoOsBtn?.addEventListener('click', function() {
+        mostrarEscolhaAlteracaoOs();
+    });
+    submitAlteracaoOsBtn?.addEventListener('click', function() {
+        if (!validarDetalhesAlteracaoOs()) {
+            return;
+        }
+        submeterConversaoComOpcao(true);
+    });
+
+    if (alterarOsIxcInput?.value === 'sim' && confirmarAlteracaoOsModal) {
+        abrirConfirmacaoAlteracaoOs();
+        mostrarDetalhesAlteracaoOs();
+    }
+
     
     // VARIÁVEIS DAS NOVAS FERRAMENTAS
     const searchUnidadesInput = document.getElementById('searchUnidades');

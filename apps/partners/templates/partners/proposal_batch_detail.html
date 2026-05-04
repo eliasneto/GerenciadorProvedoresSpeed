@@ -187,7 +187,7 @@
                 <i data-lucide="x" class="w-5 h-5"></i>
             </button>
         </div>
-        <form method="POST" action="{% url 'proposal_batch_status_update' proposal.pk %}" class="p-6 space-y-4">
+        <form method="POST" action="{% url 'proposal_batch_status_update' proposal.pk %}" enctype="multipart/form-data" class="p-6 space-y-4">
             {% csrf_token %}
             <input type="hidden" name="status" value="encerrada">
             <div class="space-y-2">
@@ -204,12 +204,55 @@
                 <textarea id="observacaoInviavel" name="observacao_inviavel" maxlength="150" required rows="4" placeholder="Descreva a observação em até 150 caracteres..." class="w-full p-4 bg-gray-50 border border-gray-200 rounded-2xl outline-none focus:ring-2 focus:ring-ageis-yellow transition-all font-bold text-gray-700"></textarea>
                 <p class="text-[11px] font-bold text-gray-400">Campo obrigatório com até 150 caracteres.</p>
             </div>
+            <div class="space-y-2">
+                <label for="arquivoIxcContratacao" class="block text-[10px] font-black uppercase tracking-widest text-gray-400">Anexo para o Atendimento no IXC</label>
+                <input id="arquivoIxcContratacao" type="file" name="arquivo_ixc" class="block w-full text-sm text-gray-500 file:mr-4 file:py-3 file:px-4 file:rounded-xl file:border-0 file:bg-gray-100 file:text-gray-700 file:font-black hover:file:bg-gray-200">
+                <p class="text-[11px] font-bold text-gray-400">Opcional. Se enviado, o arquivo será anexado ao atendimento vinculado antes do fechamento da O.S.</p>
+            </div>
+            <div class="space-y-2">
+                <label for="arquivoIxcContratacao" class="block text-[10px] font-black uppercase tracking-widest text-gray-400">Anexo para o Atendimento no IXC</label>
+                <input id="arquivoIxcContratacao" type="file" name="arquivo_ixc" class="block w-full text-sm text-gray-500 file:mr-4 file:py-3 file:px-4 file:rounded-xl file:border-0 file:bg-gray-100 file:text-gray-700 file:font-black hover:file:bg-gray-200">
+                <p class="text-[11px] font-bold text-gray-400">Opcional. Se enviado, o arquivo será anexado ao atendimento vinculado antes do fechamento da O.S.</p>
+            </div>
             <div class="flex items-center justify-end gap-3 pt-2">
                 <button type="button" id="cancelInviavelStatusModal" class="px-4 py-3 rounded-xl border border-gray-200 text-sm font-black text-gray-500 hover:text-gray-800 hover:border-gray-300 transition">
                     Cancelar
                 </button>
                 <button type="submit" class="px-5 py-3 bg-ageis-black text-ageis-yellow rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-gray-800 transition">
                     Confirmar Inviavel
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div id="contratacaoStatusModal" class="fixed inset-0 bg-black/55 z-50 hidden items-center justify-center p-4">
+    <div class="w-full max-w-lg bg-white rounded-[2rem] shadow-2xl border border-gray-100 overflow-hidden">
+        <div class="px-6 py-5 border-b border-gray-100 bg-gray-50/60 flex items-start justify-between gap-4">
+            <div>
+                <h3 class="text-lg font-black uppercase tracking-widest text-gray-900">Enviar para Aguardando Contratação</h3>
+                <p class="text-sm text-gray-500 font-bold mt-2">A observação será usada para finalizar a O.S. atual no IXC antes de mover a cotação.</p>
+            </div>
+            <button type="button" id="closeContratacaoStatusModal" class="text-gray-400 hover:text-gray-700 transition">
+                <i data-lucide="x" class="w-5 h-5"></i>
+            </button>
+        </div>
+        <form method="POST" action="{% url 'proposal_batch_status_update' proposal.pk %}" enctype="multipart/form-data" class="p-6 space-y-4">
+            {% csrf_token %}
+            <input type="hidden" name="status" value="aguardando_contratacao">
+            <input type="hidden" name="next" value="{{ next_param }}">
+            <input type="hidden" name="alterar_os_ixc" value="sim">
+            <div class="space-y-2">
+                <label for="observacaoContratacao" class="block text-[10px] font-black uppercase tracking-widest text-gray-400">Observação</label>
+                <textarea id="observacaoContratacao" name="observacao_contratacao" required rows="4" placeholder="Descreva a observação que será registrada no fechamento da O.S. no IXC..." class="w-full p-4 bg-gray-50 border border-gray-200 rounded-2xl outline-none focus:ring-2 focus:ring-ageis-yellow transition-all font-bold text-gray-700"></textarea>
+                <p class="text-[11px] font-bold text-gray-400">Esse texto será enviado para a finalização da O.S. atual no IXC.</p>
+            </div>
+            <div class="flex items-center justify-end gap-3 pt-2">
+                <button type="button" id="cancelContratacaoStatusModal" class="px-4 py-3 rounded-xl border border-gray-200 text-sm font-black text-gray-500 hover:text-gray-800 hover:border-gray-300 transition">
+                    Cancelar
+                </button>
+                <button type="submit" class="px-5 py-3 bg-ageis-black text-ageis-yellow rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-gray-800 transition">
+                    Confirmar Envio
                 </button>
             </div>
         </form>
@@ -227,6 +270,10 @@
     const cancelInviavelStatusModal = document.getElementById('cancelInviavelStatusModal');
     const motivoInviavelSelect = document.getElementById('motivoInviavelSelect');
     const observacaoInviavel = document.getElementById('observacaoInviavel');
+    const contratacaoStatusModal = document.getElementById('contratacaoStatusModal');
+    const closeContratacaoStatusModal = document.getElementById('closeContratacaoStatusModal');
+    const cancelContratacaoStatusModal = document.getElementById('cancelContratacaoStatusModal');
+    const observacaoContratacao = document.getElementById('observacaoContratacao');
     const batchLoginsContent = document.getElementById('batchLoginsContent');
     const batchLoginsLoading = document.getElementById('batchLoginsLoading');
     const batchLoginsIcon = document.getElementById('batchLoginsIcon');
@@ -245,9 +292,25 @@
         if (observacaoInviavel) observacaoInviavel.value = '';
     }
 
+    function openContratacaoStatusModal() {
+        contratacaoStatusModal?.classList.remove('hidden');
+        contratacaoStatusModal?.classList.add('flex');
+        observacaoContratacao?.focus();
+    }
+
+    function closeContratacaoModal() {
+        contratacaoStatusModal?.classList.add('hidden');
+        contratacaoStatusModal?.classList.remove('flex');
+        if (observacaoContratacao) observacaoContratacao.value = '';
+    }
+
     proposalBatchStatusSubmit?.addEventListener('click', () => {
         if (proposalBatchStatusSelect?.value === 'encerrada') {
             openInviavelStatusModal();
+            return;
+        }
+        if (proposalBatchStatusSelect?.value === 'aguardando_contratacao') {
+            openContratacaoStatusModal();
             return;
         }
         proposalBatchStatusForm?.submit();
@@ -258,6 +321,13 @@
     inviavelStatusModal?.addEventListener('click', (event) => {
         if (event.target === inviavelStatusModal) {
             closeInviavelModal();
+        }
+    });
+    closeContratacaoStatusModal?.addEventListener('click', closeContratacaoModal);
+    cancelContratacaoStatusModal?.addEventListener('click', closeContratacaoModal);
+    contratacaoStatusModal?.addEventListener('click', (event) => {
+        if (event.target === contratacaoStatusModal) {
+            closeContratacaoModal();
         }
     });
 

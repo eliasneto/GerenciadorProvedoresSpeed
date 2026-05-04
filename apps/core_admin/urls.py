@@ -8,5 +8,6 @@ from . import views
 urlpatterns = [
     path('importar/', views.import_prospects, name='import_prospects'),
     path('restaurar-backup/', views.restore_backup, name='restore_backup'),
+    path('teste-smtp/', views.smtp_test, name='smtp_test'),
     path('modelo/', views.download_template, name='download_template'),
 ]

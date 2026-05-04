@@ -47,9 +47,9 @@ services:
     volumes:
       - ./media:/app/media
     command: >
-      sh -c "mkdir -p /app/media && 
-             chmod -R 777 /app/media && 
-             python setup_speed.py && 
+      sh -c "mkdir -p /app/media &&
+             chmod -R 777 /app/media &&
+             python setup_speed.py &&
              gunicorn --bind 0.0.0.0:8000 --timeout 1200 --workers 3 --log-level debug --access-logfile - config.wsgi:application"
     depends_on:
       - speed_db
@@ -68,51 +68,67 @@ services:
       - DB_PASSWORD=${DB_PASSWORD}
       - DB_HOST=${DB_HOST}
       - DB_PORT=${DB_PORT}
+    volumes:
+      - ./media:/app/media
     depends_on:
       - speed_db
     command: >
       sh -c "
       echo ' Aguardando banco de dados estabilizar...';
       sleep 25;
-      
-      # Inicializa os marcadores
+
+      ULTIMO_SLOT_INCREMENTAL='0';
       ULTIMA_DATA_TOTAL='0';
       ULTIMA_DATA_OS_LASTMILE='0';
-      ULTIMA_FAXINA=0;
-      
+      ULTIMA_DATA_FAXINA='0';
+      ULTIMO_SLOT_EMAIL_RESPOSTAS='0';
+
       while true; do
         HORA_AGORA=$$(date +%H);
+        MINUTO_AGORA=$$(date +%M);
         DATA_HOJE=$$(date +%Y%m%d);
-        AGORA_SEC=$$(date +%s);
-        
-        # 1. INCREMENTAL (A cada 5 minutos)
-        echo ' ['$$(date +%H:%M)'] Iniciando sincronização incremental...';
-        python scripts/integracoes/ixc_api_incremental.py;
+        SLOT_ATUAL=$$(date +%Y%m%d%H);
 
-        # 2. CARGA TOTAL (Roda 1x por dia a partir das 02h, se ainda nao rodou)
-        if [ \"$$HORA_AGORA\" -ge \"02\" ] && [ \"$$DATA_HOJE\" != \"$$ULTIMA_DATA_TOTAL\" ]; then
-          echo ' ['$$(date +%H:%M)'] Iniciando Carga Total Programada (02h)...';
+        if [ \"$$MINUTO_AGORA\" = \"00\" ] && [ \"$$SLOT_ATUAL\" != \"$$ULTIMO_SLOT_INCREMENTAL\" ]; then
+          case \"$$HORA_AGORA\" in
+            00|04|08|12|16|20)
+              echo ' ['$$(date +%H:%M)'] Iniciando sincronizacao incremental programada (4h)...';
+              python scripts/integracoes/ixc_api_incremental.py;
+              ULTIMO_SLOT_INCREMENTAL=$$SLOT_ATUAL;
+              ;;
+          esac
+        fi
+
+        if [ \"$$HORA_AGORA\" = \"23\" ] && [ \"$$MINUTO_AGORA\" = \"00\" ] && [ \"$$DATA_HOJE\" != \"$$ULTIMA_DATA_TOTAL\" ]; then
+          echo ' ['$$(date +%H:%M)'] Iniciando Carga Total Programada (23h)...';
           python scripts/integracoes/ixc_api.py;
           ULTIMA_DATA_TOTAL=$$DATA_HOJE;
         fi
 
-        # 2.1. OS COMERCIAL | LASTMILE (Roda 1x por dia a partir das 23h)
-        if [ \"$$HORA_AGORA\" -ge \"23\" ] && [ \"$$DATA_HOJE\" != \"$$ULTIMA_DATA_OS_LASTMILE\" ]; then
-          echo ' ['$$(date +%H:%M)'] Iniciando atualizacao diaria de OS Comercial | Lastmile (ultimos 10 dias)...';
+        if [ \"$$HORA_AGORA\" = \"03\" ] && [ \"$$MINUTO_AGORA\" = \"00\" ] && [ \"$$DATA_HOJE\" != \"$$ULTIMA_DATA_OS_LASTMILE\" ]; then
+          echo ' ['$$(date +%H:%M)'] Iniciando atualizacao diaria de OS Comercial | Lastmile (03h)...';
           python scripts/integracoes/ixc_os_comercial_lastmile.py --os-alterada-nos-ultimos-dias=10;
           ULTIMA_DATA_OS_LASTMILE=$$DATA_HOJE;
         fi
 
-        # 3. FAXINA/LIXO (A cada 24 horas)
-        DIFERENCA_FAXINA=$$((AGORA_SEC - ULTIMA_FAXINA));
-        if [ $$DIFERENCA_FAXINA -ge 86400 ]; then
-          echo '🧹 ['$$(date +%H:%M)'] Iniciando Faxina Diária...';
+        if [ \"$$HORA_AGORA\" = \"22\" ] && [ \"$$MINUTO_AGORA\" = \"00\" ] && [ \"$$DATA_HOJE\" != \"$$ULTIMA_DATA_FAXINA\" ]; then
+          echo ' ['$$(date +%H:%M)'] Iniciando Faxina Diaria (22h)...';
           python scripts/integracoes/ixc_faxina.py;
-          ULTIMA_FAXINA=$$AGORA_SEC;
+          ULTIMA_DATA_FAXINA=$$DATA_HOJE;
         fi
 
-        echo ' Ciclo finalizado. Próximo incremental em 5 minutos...';
-        sleep 300;
+        if [ \"$$SLOT_ATUAL$${MINUTO_AGORA}\" != \"$$ULTIMO_SLOT_EMAIL_RESPOSTAS\" ]; then
+          case \"$$MINUTO_AGORA\" in
+            00|05|10|15|20|25|30|35|40|45|50|55)
+              echo ' ['$$(date +%H:%M)'] Sincronizando respostas de e-mail das cotacoes...';
+              python scripts/integracoes/sincronizar_respostas_email_cotacao.py;
+              ULTIMO_SLOT_EMAIL_RESPOSTAS=$$SLOT_ATUAL$${MINUTO_AGORA};
+              ;;
+          esac
+        fi
+
+        echo ' Ciclo finalizado. Proxima verificacao em 1 minuto...';
+        sleep 60;
       done"
 
   speed_backup:
@@ -136,45 +152,39 @@ services:
       sh -c "
       echo 'Configurando ferramentas de backup...';
       apt-get update && apt-get install -y mysql-client zip tzdata;
-      
-      echo 'Serviço de backup iniciado. Aguardando 02h00 da manhã...';
+
+      echo 'Servico de backup iniciado. Aguardando 00h00...';
       while true; do
         HORA=$$(date +%H);
         MINUTO=$$(date +%M);
-        
-        # Roda todo dia exatamente às 02h00
-        if [ \"$$HORA\" = \"02\" ] && [ \"$$MINUTO\" = \"00\" ]; then
+
+        if [ \"$$HORA\" = \"00\" ] && [ \"$$MINUTO\" = \"00\" ]; then
           DATA=$$(date +%Y-%m-%d_%H-%M);
-          echo \"[$$DATA] Iniciando backup automático...\";
+          echo \"[$$DATA] Iniciando backup automatico...\";
           mkdir -p /app/media/backups;
-          
-          # 1. Extrai o banco usando ROOT e desabilitando tablespaces
+
           mysqldump -h speed_db -u root -p$$MYSQL_ROOT_PASSWORD --no-tablespaces $$MYSQL_DATABASE > /tmp/banco_$$DATA.sql;
-          
-          # 2. Compacta LOCALMENTE no Linux primeiro (Evita arquivo de 0 KB na rede)
+
           zip -r /tmp/backup_speed_$$DATA.zip /app/media /tmp/banco_$$DATA.sql > /dev/null;
           cp /tmp/backup_speed_$$DATA.zip /app/media/backups/backup_speed_$$DATA.zip;
-          
-          # 3. Copia o arquivo pronto para a pasta de homolog no Windows
+
           mkdir -p /mnt/windows/$$BACKUP_WINDOWS_SUBDIR;
           cp /tmp/backup_speed_$$DATA.zip /mnt/windows/$$BACKUP_WINDOWS_SUBDIR/;
-          
-          # 4. Limpa todo o lixo local do Linux
+
           rm /tmp/banco_$$DATA.sql /tmp/backup_speed_$$DATA.zip;
-          
-          # 5. Faxina: Apaga backups com mais de 10 dias da pasta de homolog
+
           find /mnt/windows/$$BACKUP_WINDOWS_SUBDIR -name 'backup_speed_*.zip' -mtime +10 -delete;
           find /app/media/backups -name 'backup_speed_*.zip' -mtime +10 -delete;
-          
+
           echo \"[$$DATA] Backup finalizado e salvo no Windows com sucesso!\";
-          sleep 60; # Dorme 1 minuto para não correr o risco de rodar duas vezes
+          sleep 60;
         fi;
-        sleep 30; # Checa a hora a cada 30 segundos
+        sleep 30;
       done"
 
 volumes:
   speed_db_data:
-  
+
   backup_windows:
     driver_opts:
       type: cifs

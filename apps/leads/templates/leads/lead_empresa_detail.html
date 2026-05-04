@@ -77,9 +77,6 @@
                         <td class="px-6 py-4 text-right">
                             <div class="flex justify-end items-center gap-2">
                                 {% if endereco.lead_espelho %}
-                                <button type="button" onclick="openQuickProposalModal('{{ endereco.lead_espelho.pk }}', '{{ endereco.lead_espelho.nome_fantasia|default:endereco.lead_espelho.razao_social|escapejs }}', '{{ endereco.lead_espelho.cnpj_cpf|default:''|escapejs }}')" class="p-2 text-gray-400 hover:text-ageis-yellow hover:bg-yellow-50 rounded-lg transition" title="Abrir cotação rápida">
-                                    <i data-lucide="file-plus-2" class="w-5 h-5"></i>
-                                </button>
 
                                 {% if endereco.lead_espelho.partner_relacionado %}
                                 <a href="{% url 'partner_plan_manage' endereco.lead_espelho.partner_relacionado.pk %}?next={{ request.get_full_path|urlencode }}" class="p-2 text-gray-400 hover:text-violet-600 hover:bg-violet-50 rounded-lg transition" title="Cadastrar planos do parceiro">

@@ -1072,6 +1072,16 @@ def lead_empresa_list(request):
             empresa.total_enderecos_filtrados = empresa.total_enderecos
             empresa.enderecos_filtrados_preview = []
 
+        for endereco in empresa.enderecos_filtrados_preview:
+            endereco.lead_espelho = endereco.leads_legados.order_by('id').first()
+            if endereco.lead_espelho:
+                partner_relacionado = _buscar_parceiro_existente_para_lead(endereco.lead_espelho)
+                endereco.lead_espelho.partner_relacionado = partner_relacionado
+            else:
+                endereco.partner_relacionado = None
+
+        empresa.endereco_acao_rapida = empresa.enderecos_filtrados_preview[0] if empresa.enderecos_filtrados_preview else None
+
     return render(request, 'leads/lead_empresa_list.html', {
         'page_obj': page_obj,
         'busca_empresa': busca_empresa,

@@ -82,11 +82,46 @@
                             {% if empresa.enderecos_filtrados_preview %}
                             <div class="mt-2 space-y-1">
                                 {% for endereco in empresa.enderecos_filtrados_preview %}
-                                <p class="text-[10px] font-bold text-gray-500 uppercase tracking-wide">
-                                    {{ endereco.cidade|default:"Cidade não informada" }}{% if endereco.estado %} - {{ endereco.estado }}{% endif %}
-                                    • {{ endereco.bairro|default:"Sem bairro" }}
-                                    • {{ endereco.endereco|default:"Endereço não informado" }}{% if endereco.numero %}, {{ endereco.numero }}{% endif %}
-                                </p>
+                                <div class="rounded-2xl border border-gray-100 bg-gray-50/70 px-3 py-2">
+                                    <p class="text-[10px] font-bold text-gray-500 uppercase tracking-wide">
+                                        {{ endereco.cidade|default:"Cidade não informada" }}{% if endereco.estado %} - {{ endereco.estado }}{% endif %}
+                                        • {{ endereco.bairro|default:"Sem bairro" }}
+                                        • {{ endereco.endereco|default:"Endereço não informado" }}{% if endereco.numero %}, {{ endereco.numero }}{% endif %}
+                                    </p>
+                                    <div class="mt-2 flex flex-wrap items-center gap-1">
+                                        {% if endereco.lead_espelho %}
+                                        <button type="button" onclick="openQuickProposalModal('{{ endereco.lead_espelho.pk }}', '{{ endereco.lead_espelho.nome_fantasia|default:endereco.lead_espelho.razao_social|escapejs }}', '{{ endereco.lead_espelho.cnpj_cpf|default:''|escapejs }}')" class="p-2 text-gray-400 hover:text-ageis-yellow hover:bg-yellow-50 rounded-lg transition" title="Abrir cotação rápida neste endereço">
+                                            <i data-lucide="file-plus-2" class="w-4 h-4"></i>
+                                        </button>
+
+                                        {% if endereco.lead_espelho.partner_relacionado %}
+                                        <a href="{% url 'partner_plan_manage' endereco.lead_espelho.partner_relacionado.pk %}?next={{ request.get_full_path|urlencode }}" class="p-2 text-gray-400 hover:text-violet-600 hover:bg-violet-50 rounded-lg transition" title="Cadastrar planos do parceiro neste endereço">
+                                            <i data-lucide="waypoints" class="w-4 h-4"></i>
+                                        </a>
+                                        <a href="{% url 'partner_detail' endereco.lead_espelho.partner_relacionado.pk %}?next={{ request.get_full_path|urlencode }}" class="p-2 text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition" title="Ver detalhes do parceiro neste endereço">
+                                            <i data-lucide="folder-open" class="w-4 h-4"></i>
+                                        </a>
+                                        {% else %}
+                                        <button type="button" class="p-2 text-gray-300 bg-white rounded-lg cursor-not-allowed" title="Cadastre ou vincule um parceiro para gerenciar os planos">
+                                            <i data-lucide="waypoints" class="w-4 h-4"></i>
+                                        </button>
+                                        <button type="button" class="p-2 text-gray-300 bg-white rounded-lg cursor-not-allowed" title="Este prospecto ainda não possui cotação aberta">
+                                            <i data-lucide="folder-open" class="w-4 h-4"></i>
+                                        </button>
+                                        {% endif %}
+
+                                        <a href="{% url 'timeline_global' 'leads' 'lead' endereco.lead_espelho.pk %}" class="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition" title="Ver histórico deste endereço">
+                                            <i data-lucide="history" class="w-4 h-4"></i>
+                                        </a>
+
+                                        <a href="{% url 'lead_update' endereco.lead_espelho.pk %}" class="p-2 text-gray-400 hover:text-ageis-black hover:bg-gray-100 rounded-lg transition" title="Editar lead deste endereço">
+                                            <i data-lucide="edit-3" class="w-4 h-4"></i>
+                                        </a>
+                                        {% else %}
+                                        <span class="text-[10px] font-black uppercase tracking-widest text-gray-300">Sem lead espelho</span>
+                                        {% endif %}
+                                    </div>
+                                </div>
                                 {% endfor %}
                                 {% if empresa.total_enderecos_filtrados > empresa.enderecos_filtrados_preview|length %}
                                 <p class="text-[10px] font-black text-ageis-yellow uppercase tracking-widest">
@@ -122,9 +157,11 @@
                             {% endif %}
                         </td>
                         <td class="px-6 py-4 text-right">
-                            <a href="{% url 'lead_empresa_detail' empresa.pk %}" class="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-ageis-black text-ageis-yellow text-[10px] font-black uppercase tracking-widest hover:bg-gray-800 transition">
-                                <i data-lucide="building-2" class="w-4 h-4"></i> Ver endereços
-                            </a>
+                            <div class="flex justify-end items-center gap-2">
+                                <a href="{% url 'lead_empresa_detail' empresa.pk %}" class="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-ageis-black text-ageis-yellow text-[10px] font-black uppercase tracking-widest hover:bg-gray-800 transition">
+                                    <i data-lucide="building-2" class="w-4 h-4"></i> Ver endereços
+                                </a>
+                            </div>
                         </td>
                     </tr>
                     {% empty %}
@@ -162,4 +199,6 @@
         {% endif %}
     </div>
 </div>
+{% include "leads/partials/quick_proposal_modal.html" %}
+{% include "leads/partials/quick_proposal_modal_script.html" %}
 {% endblock %}

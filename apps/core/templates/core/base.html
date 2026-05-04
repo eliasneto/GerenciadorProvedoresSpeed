@@ -223,6 +223,10 @@
                 <i data-lucide="database-backup" class="w-5 h-5 group-hover:scale-110 transition-transform"></i>
                 <span class="text-sm font-semibold">Importar Dados</span>
             </a>
+            <a href="{% url 'smtp_test' %}" class="flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 text-gray-400 hover:bg-white/5 hover:text-white group">
+                <i data-lucide="mail-check" class="w-5 h-5 group-hover:scale-110 transition-transform"></i>
+                <span class="text-sm font-semibold">Teste SMTP</span>
+            </a>
             <a href="{% url 'restore_backup' %}" class="flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 text-gray-400 hover:bg-white/5 hover:text-white group">
                 <i data-lucide="rotate-ccw" class="w-5 h-5 group-hover:scale-110 transition-transform"></i>
                 <span class="text-sm font-semibold">Restaurar Backup</span>

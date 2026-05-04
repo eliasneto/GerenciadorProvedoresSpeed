@@ -1,0 +1,189 @@
+{% extends "core/base.html" %}
+
+{% block content %}
+<div class="min-h-screen bg-[#F8F9FA] -mx-6 -my-6 md:-mx-10 md:-my-10 px-6 md:px-10 py-10">
+    <div class="max-w-4xl mx-auto space-y-8">
+        <div class="mb-4 flex flex-col items-center">
+            <div class="w-20 h-20 bg-ageis-yellow rounded-[2rem] flex items-center justify-center shadow-2xl mb-6">
+                <i data-lucide="mail-check" class="text-black w-10 h-10"></i>
+            </div>
+            <h1 class="text-3xl font-black text-gray-900 uppercase italic text-center">Teste SMTP</h1>
+            <p class="text-gray-400 font-bold text-xs uppercase tracking-widest mt-2">Administracao • Validacao de envio real</p>
+        </div>
+
+        <div class="grid grid-cols-1 xl:grid-cols-[1.1fr_0.9fr] gap-8">
+            <div class="bg-white p-8 rounded-[3rem] border border-gray-100 shadow-sm space-y-6">
+                <div class="rounded-[2rem] border border-slate-200 bg-slate-50 px-5 py-4">
+                    <p class="text-[10px] font-black uppercase tracking-widest text-slate-500">Como funciona</p>
+                    <p class="mt-2 text-sm text-slate-600 font-medium leading-relaxed">
+                        Esta tela usa exatamente a configuracao SMTP carregada no backend do Django. Assim voce consegue validar autenticacao, remetente exibido ao destinatario e entrega antes de usar o envio nas cotacoes.
+                    </p>
+                    <p class="mt-3 text-xs text-slate-500 font-bold leading-relaxed">
+                        Cenário recomendado para Microsoft 365: autenticar com a conta SMTP do sistema e enviar com o e-mail da caixa compartilhada no campo <strong>De</strong>, desde que essa conta tenha permissao <strong>Enviar como</strong>.
+                    </p>
+                </div>
+
+                <form method="POST" class="space-y-5">
+                    {% csrf_token %}
+
+                    <div>
+                        <label for="{{ form.from_email.id_for_label }}" class="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-2">De</label>
+                        <input
+                            id="{{ form.from_email.id_for_label }}"
+                            name="{{ form.from_email.html_name }}"
+                            type="email"
+                            value="{{ form.from_email.value|default:'' }}"
+                            class="mt-2 w-full p-4 bg-gray-50 border border-gray-100 rounded-2xl text-sm font-semibold text-gray-800 outline-none focus:ring-2 focus:ring-ageis-yellow"
+                            placeholder="remetente@empresa.com"
+                        >
+                        <p class="mt-2 ml-2 text-[11px] text-gray-500 font-bold">{{ form.from_email.help_text }}</p>
+                        {% for error in form.from_email.errors %}
+                            <p class="mt-2 ml-2 text-[11px] text-red-600 font-bold">{{ error }}</p>
+                        {% endfor %}
+                    </div>
+
+                    <div>
+                        <label for="{{ form.to_email.id_for_label }}" class="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-2">Para</label>
+                        <input
+                            id="{{ form.to_email.id_for_label }}"
+                            name="{{ form.to_email.html_name }}"
+                            type="text"
+                            value="{{ form.to_email.value|default:'' }}"
+                            class="mt-2 w-full p-4 bg-gray-50 border border-gray-100 rounded-2xl text-sm font-semibold text-gray-800 outline-none focus:ring-2 focus:ring-ageis-yellow"
+                            placeholder="destino@empresa.com.br"
+                        >
+                        <p class="mt-2 ml-2 text-[11px] text-gray-500 font-bold">{{ form.to_email.help_text }}</p>
+                        {% for error in form.to_email.errors %}
+                            <p class="mt-2 ml-2 text-[11px] text-red-600 font-bold">{{ error }}</p>
+                        {% endfor %}
+                    </div>
+
+                    <div>
+                        <label for="{{ form.cc_email.id_for_label }}" class="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-2">Cc</label>
+                        <input
+                            id="{{ form.cc_email.id_for_label }}"
+                            name="{{ form.cc_email.html_name }}"
+                            type="text"
+                            value="{{ form.cc_email.value|default:'' }}"
+                            class="mt-2 w-full p-4 bg-gray-50 border border-gray-100 rounded-2xl text-sm font-semibold text-gray-800 outline-none focus:ring-2 focus:ring-ageis-yellow"
+                            placeholder="copia@empresa.com.br"
+                        >
+                        <p class="mt-2 ml-2 text-[11px] text-gray-500 font-bold">{{ form.cc_email.help_text }}</p>
+                        {% for error in form.cc_email.errors %}
+                            <p class="mt-2 ml-2 text-[11px] text-red-600 font-bold">{{ error }}</p>
+                        {% endfor %}
+                    </div>
+
+                    <div>
+                        <label for="{{ form.subject.id_for_label }}" class="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-2">Assunto</label>
+                        <input
+                            id="{{ form.subject.id_for_label }}"
+                            name="{{ form.subject.html_name }}"
+                            type="text"
+                            value="{{ form.subject.value|default:'' }}"
+                            class="mt-2 w-full p-4 bg-gray-50 border border-gray-100 rounded-2xl text-sm font-semibold text-gray-800 outline-none focus:ring-2 focus:ring-ageis-yellow"
+                        >
+                        {% for error in form.subject.errors %}
+                            <p class="mt-2 ml-2 text-[11px] text-red-600 font-bold">{{ error }}</p>
+                        {% endfor %}
+                    </div>
+
+                    <div>
+                        <label for="{{ form.body.id_for_label }}" class="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-2">Mensagem</label>
+                        <textarea
+                            id="{{ form.body.id_for_label }}"
+                            name="{{ form.body.html_name }}"
+                            rows="10"
+                            class="mt-2 w-full p-4 bg-gray-50 border border-gray-100 rounded-[2rem] text-sm text-gray-800 outline-none focus:ring-2 focus:ring-ageis-yellow resize-y"
+                        >{{ form.body.value|default:'' }}</textarea>
+                        {% for error in form.body.errors %}
+                            <p class="mt-2 ml-2 text-[11px] text-red-600 font-bold">{{ error }}</p>
+                        {% endfor %}
+                    </div>
+
+                    {% if form.non_field_errors %}
+                        <div class="rounded-2xl border border-red-100 bg-red-50 px-4 py-3">
+                            {% for error in form.non_field_errors %}
+                                <p class="text-[11px] text-red-700 font-bold">{{ error }}</p>
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+
+                    <button type="submit" class="w-full bg-ageis-black text-ageis-yellow py-5 rounded-3xl font-black uppercase italic shadow-xl hover:bg-gray-800 transition-all flex items-center justify-center gap-3">
+                        <i data-lucide="send" class="w-5 h-5"></i> Executar Teste SMTP
+                    </button>
+                </form>
+            </div>
+
+            <div class="space-y-6">
+                <div class="bg-white p-8 rounded-[3rem] border border-gray-100 shadow-sm space-y-5">
+                    <div>
+                        <p class="text-[10px] font-black uppercase tracking-widest text-gray-400">Configuracao ativa</p>
+                        <h2 class="mt-2 text-xl font-black italic text-gray-900">Backend de e-mail atual</h2>
+                    </div>
+
+                    <div class="grid grid-cols-1 gap-3">
+                        <div class="rounded-2xl bg-gray-50 border border-gray-100 px-4 py-3">
+                            <p class="text-[10px] font-black uppercase tracking-widest text-gray-400">Backend</p>
+                            <p class="mt-1 text-sm font-bold text-gray-900 break-all">{{ smtp_config.email_backend }}</p>
+                        </div>
+                        <div class="rounded-2xl bg-gray-50 border border-gray-100 px-4 py-3">
+                            <p class="text-[10px] font-black uppercase tracking-widest text-gray-400">Host / Porta</p>
+                            <p class="mt-1 text-sm font-bold text-gray-900">{{ smtp_config.email_host }} : {{ smtp_config.email_port }}</p>
+                        </div>
+                        <div class="rounded-2xl bg-gray-50 border border-gray-100 px-4 py-3">
+                            <p class="text-[10px] font-black uppercase tracking-widest text-gray-400">Usuario SMTP</p>
+                            <p class="mt-1 text-sm font-bold text-gray-900 break-all">{{ smtp_config.email_host_user }}</p>
+                        </div>
+                        <div class="rounded-2xl bg-gray-50 border border-gray-100 px-4 py-3">
+                            <p class="text-[10px] font-black uppercase tracking-widest text-gray-400">TLS / SSL</p>
+                            <p class="mt-1 text-sm font-bold text-gray-900">TLS: {{ smtp_config.email_use_tls|yesno:"Sim,Nao" }} • SSL: {{ smtp_config.email_use_ssl|yesno:"Sim,Nao" }}</p>
+                        </div>
+                        <div class="rounded-2xl bg-gray-50 border border-gray-100 px-4 py-3">
+                            <p class="text-[10px] font-black uppercase tracking-widest text-gray-400">Default From</p>
+                            <p class="mt-1 text-sm font-bold text-gray-900 break-all">{{ smtp_config.default_from_email }}</p>
+                        </div>
+                        <div class="rounded-2xl bg-gray-50 border border-gray-100 px-4 py-3">
+                            <p class="text-[10px] font-black uppercase tracking-widest text-gray-400">Remetente padrao do admin</p>
+                            <p class="mt-1 text-sm font-bold text-gray-900 break-all">{{ smtp_config.remetente_padrao_admin }}</p>
+                        </div>
+                        <div class="rounded-2xl bg-gray-50 border border-gray-100 px-4 py-3">
+                            <p class="text-[10px] font-black uppercase tracking-widest text-gray-400">Modo "Enviar como"</p>
+                            <p class="mt-1 text-sm font-bold text-gray-900">{{ smtp_config.send_as_mode }}</p>
+                        </div>
+                    </div>
+                </div>
+
+                {% if resultado_envio %}
+                <div class="p-8 rounded-[3rem] border shadow-sm space-y-4 {% if resultado_envio.ok %}bg-emerald-50 border-emerald-200{% else %}bg-red-50 border-red-200{% endif %}">
+                    <div class="flex items-start gap-3">
+                        <div class="w-12 h-12 rounded-2xl flex items-center justify-center {% if resultado_envio.ok %}bg-emerald-600 text-white{% else %}bg-red-600 text-white{% endif %}">
+                            <i data-lucide="{% if resultado_envio.ok %}badge-check{% else %}alert-triangle{% endif %}" class="w-6 h-6"></i>
+                        </div>
+                        <div>
+                            <p class="text-[10px] font-black uppercase tracking-widest {% if resultado_envio.ok %}text-emerald-700{% else %}text-red-700{% endif %}">Resultado do teste</p>
+                            <h3 class="mt-2 text-lg font-black text-gray-900">{{ resultado_envio.message }}</h3>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 gap-3">
+                        <div class="rounded-2xl bg-white/80 border border-white px-4 py-3">
+                            <p class="text-[10px] font-black uppercase tracking-widest text-gray-400">De</p>
+                            <p class="mt-1 text-sm font-bold text-gray-900 break-all">{{ resultado_envio.from_email }}</p>
+                        </div>
+                        <div class="rounded-2xl bg-white/80 border border-white px-4 py-3">
+                            <p class="text-[10px] font-black uppercase tracking-widest text-gray-400">Para</p>
+                            <p class="mt-1 text-sm font-bold text-gray-900 break-all">{{ resultado_envio.to_email }}</p>
+                        </div>
+                        <div class="rounded-2xl bg-white/80 border border-white px-4 py-3">
+                            <p class="text-[10px] font-black uppercase tracking-widest text-gray-400">Cc</p>
+                            <p class="mt-1 text-sm font-bold text-gray-900 break-all">{{ resultado_envio.cc_email }}</p>
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

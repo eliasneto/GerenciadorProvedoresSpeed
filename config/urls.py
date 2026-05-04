@@ -1,5 +1,6 @@
 from django.contrib import admin
 from django.urls import path, include
+from django.views.static import serve
 
 # IMPORTAÇÕES NECESSÁRIAS PARA DOWNLOADS (MÍDIA)
 from django.conf import settings
@@ -13,6 +14,7 @@ urlpatterns = [
     path('parceiros/', include('partners.urls')), 
     path('clientes/', include('clientes.urls')),
     path('ferramentas/', include('apps.core_admin.urls')),
+    path('media/<path:path>', serve, {'document_root': settings.MEDIA_ROOT}),
 ]
 
 # ==========================================

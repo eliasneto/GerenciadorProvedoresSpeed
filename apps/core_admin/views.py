@@ -3,14 +3,18 @@ import logging
 import os
 import shutil
 import subprocess
+import sys
 import tempfile
 import zipfile
+from email.utils import parseaddr
 from pathlib import Path
 
 import pandas as pd
-from django.contrib import messages
 from django.conf import settings
-from django.db import transaction
+from django.contrib import messages
+from django.contrib.auth.decorators import login_required, user_passes_test
+from django.core.mail import EmailMessage, get_connection
+from django.core.validators import validate_email
 from django.core.exceptions import (
     RequestDataTooBig,
     SuspiciousOperation,
@@ -22,303 +26,140 @@ from django.http.multipartparser import MultiPartParserError
 from django.shortcuts import redirect, render
 from django.utils.datastructures import MultiValueDictKeyError
 
-from leads.models import Lead, LeadEmpresa, LeadEndereco
 from core.views import grupo_Administrador_required
-from django.contrib.auth.decorators import login_required, user_passes_test
+from core_admin.models import ConfiguracaoEmailEnvio
 
-from .forms import BackupRestoreForm, ExcelUploadForm
+from .forms import BackupRestoreForm, ExcelUploadForm, SMTPTestForm
+from .import_services import (
+    IMPORT_STATUS_ERROR,
+    IMPORT_STATUS_RUNNING,
+    IMPORT_STATUS_SUCCESS,
+    LEAD_IMPORT_COLUMNS,
+    buscar_importacao_em_andamento,
+    buscar_ultima_importacao,
+    criar_auditoria_importacao,
+    salvar_arquivo_importacao,
+)
 
 
 logger = logging.getLogger(__name__)
 
 
-LEAD_IMPORT_COLUMNS = [
-    "CNPJ_CPF",
-    "RAZAO_SOCIAL",
-    "NOME_FANTASIA",
-    "SITE",
-    "CEP",
-    "ENDERECO",
-    "NUMERO",
-    "BAIRRO",
-    "CIDADE",
-    "ESTADO",
-    "CONTATO_NOME",
-    "EMAIL",
-    "TELEFONE",
-    "INSTAGRAM_USERNAME",
-    "INSTAGRAM_URL",
-]
-
-LEAD_COLUMN_ALIASES = {
-    "CNPJ": "CNPJ_CPF",
-    "CPF": "CNPJ_CPF",
-    "CNPJ/CPF": "CNPJ_CPF",
-    "DOCUMENTO": "CNPJ_CPF",
-    "RAZAO SOCIAL": "RAZAO_SOCIAL",
-    "NOME": "RAZAO_SOCIAL",
-    "NOME FANTASIA": "NOME_FANTASIA",
-    "FANTASIA": "NOME_FANTASIA",
-    "URL": "SITE",
-    "SITE_URL": "SITE",
-    "ENDERECO_COMPLETO": "ENDERECO",
-    "ENDEREÇO": "ENDERECO",
-    "NÚMERO": "NUMERO",
-    "MUNICIPIO": "CIDADE",
-    "MUNICÍPIO": "CIDADE",
-    "UF": "ESTADO",
-    "CONTATO": "CONTATO_NOME",
-    "CONTATO PRINCIPAL": "CONTATO_NOME",
-    "E-MAIL": "EMAIL",
-    "MAIL": "EMAIL",
-    "CELULAR": "TELEFONE",
-    "FONE": "TELEFONE",
-    "INSTAGRAM": "INSTAGRAM_URL",
-    "INSTAGRAM_USER": "INSTAGRAM_USERNAME",
-    "ARROBA_INSTAGRAM": "INSTAGRAM_USERNAME",
-}
+def _split_email_values(raw_value):
+    return [
+        item.strip()
+        for bloco in str(raw_value or "").replace(";", ",").split(",")
+        for item in [bloco.strip()]
+        if item
+    ]
 
 
-def _normalizar_coluna(nome):
-    return str(nome or "").strip().upper().replace("-", "_").replace(" ", "_")
+def _validate_email_list(raw_value, field_label, required=False):
+    valores = _split_email_values(raw_value)
+    if required and not valores:
+        raise ValueError(f"Informe ao menos um e-mail em {field_label}.")
+
+    for valor in valores:
+        _, email = parseaddr(valor)
+        validate_email(email or valor)
+
+    return valores
 
 
-def _normalizar_dataframe(df):
-    colunas = []
-    for coluna in df.columns:
-        normalizada = _normalizar_coluna(coluna)
-        normalizada = LEAD_COLUMN_ALIASES.get(normalizada, normalizada)
-        colunas.append(normalizada)
-    df.columns = colunas
-    return df.fillna("")
+def _serializar_importacao(audit):
+    if not audit:
+        return None
 
-
-def _valor_limpo(row, key, default=""):
-    return str(row.get(key, default) or default).strip()
-
-
-def _buscar_empresa_duplicada_por_endereco(dados_empresa, dados_endereco):
-    filtros_endereco = {
-        "enderecos__endereco__iexact": dados_endereco["endereco"],
-        "enderecos__numero__iexact": dados_endereco["numero"],
-        "enderecos__bairro__iexact": dados_endereco["bairro"],
-        "enderecos__cidade__iexact": dados_endereco["cidade"],
-        "enderecos__estado__iexact": dados_endereco["estado"],
-        "enderecos__cep__iexact": dados_endereco["cep"],
+    detalhes = dict(audit.detalhes_json or {})
+    return {
+        "id": audit.id,
+        "arquivo_nome": audit.arquivo_nome or detalhes.get("arquivo_nome") or "-",
+        "status_execucao": detalhes.get("status_execucao") or "-",
+        "mensagem": detalhes.get("mensagem") or "",
+        "processadas": detalhes.get("processadas") or 0,
+        "total_previsto": detalhes.get("total_previsto") or 0,
+        "ignorados": detalhes.get("ignorados") or 0,
+        "empresas_novas": detalhes.get("empresas_novas") or 0,
+        "enderecos_novos": detalhes.get("enderecos_novos") or 0,
+        "leads_novos": detalhes.get("leads_novos") or 0,
+        "empresas_atualizadas": detalhes.get("empresas_atualizadas") or 0,
+        "enderecos_atualizados": detalhes.get("enderecos_atualizados") or 0,
+        "leads_atualizados": detalhes.get("leads_atualizados") or 0,
+        "criado_em": audit.criado_em,
+        "atualizado_em": detalhes.get("atualizado_em") or "",
+        "finalizado_em": detalhes.get("finalizado_em") or "",
+        "total_registros": audit.total_registros,
+        "total_sucessos": audit.total_sucessos,
+        "total_erros": audit.total_erros,
     }
 
-    cnpj_cpf = dados_empresa["cnpj_cpf"]
-    razao_social = dados_empresa["razao_social"]
 
-    if cnpj_cpf:
-        empresa = LeadEmpresa.objects.filter(
-            cnpj_cpf__iexact=cnpj_cpf,
-            **filtros_endereco,
-        ).order_by("id").first()
-        if empresa:
-            return empresa
+def _render_importacao(request, form):
+    importacao_em_andamento = buscar_importacao_em_andamento()
+    ultima_importacao = buscar_ultima_importacao()
 
-    if razao_social:
-        empresa = LeadEmpresa.objects.filter(
-            razao_social__iexact=razao_social,
-            **filtros_endereco,
-        ).order_by("id").first()
-        if empresa:
-            return empresa
-
-    return None
-
-
-def _obter_ou_criar_empresa(dados_empresa, dados_endereco=None):
-    cnpj_cpf = dados_empresa["cnpj_cpf"]
-    razao_social = dados_empresa["razao_social"]
-    email = dados_empresa["email"]
-    telefone = dados_empresa["telefone"]
-
-    empresa = None
-
-    if dados_endereco:
-        empresa = _buscar_empresa_duplicada_por_endereco(dados_empresa, dados_endereco)
-
-    if empresa is None and cnpj_cpf:
-        empresa = LeadEmpresa.objects.filter(cnpj_cpf=cnpj_cpf).order_by("id").first()
-
-    if empresa is None and razao_social and email:
-        empresa = LeadEmpresa.objects.filter(
-            razao_social__iexact=razao_social,
-            email__iexact=email,
-        ).order_by("id").first()
-
-    if empresa is None and razao_social and telefone:
-        empresa = LeadEmpresa.objects.filter(
-            razao_social__iexact=razao_social,
-            telefone=telefone,
-        ).order_by("id").first()
-
-    if empresa is None:
-        empresa = LeadEmpresa.objects.create(**dados_empresa)
-        created = True
-    else:
-        for campo, valor in dados_empresa.items():
-            setattr(empresa, campo, valor)
-        empresa.save()
-        created = False
-
-    return empresa, created
-
-
-def _obter_ou_criar_endereco(empresa, dados_endereco):
-    endereco = LeadEndereco.objects.filter(
-        empresa=empresa,
-        endereco=dados_endereco["endereco"],
-        numero=dados_endereco["numero"],
-        bairro=dados_endereco["bairro"],
-        cidade=dados_endereco["cidade"],
-        estado=dados_endereco["estado"],
-        cep=dados_endereco["cep"],
-    ).order_by("id").first()
-
-    if endereco is None:
-        endereco = LeadEndereco.objects.create(empresa=empresa, **dados_endereco)
-        created = True
-    else:
-        for campo, valor in dados_endereco.items():
-            setattr(endereco, campo, valor)
-        endereco.empresa = empresa
-        endereco.save()
-        created = False
-
-    return endereco, created
-
-
-def _obter_ou_criar_lead_espelho(empresa, endereco, dados_lead):
-    lead = Lead.objects.filter(endereco_estruturado=endereco).order_by("id").first()
-
-    if lead is None:
-        lead = Lead.objects.filter(
-            empresa_estruturada=empresa,
-            endereco__iexact=dados_lead["endereco"],
-            numero=dados_lead["numero"],
-            bairro__iexact=dados_lead["bairro"],
-            cidade__iexact=dados_lead["cidade"],
-            estado__iexact=dados_lead["estado"],
-            cep=dados_lead["cep"],
-        ).order_by("id").first()
-
-    if lead is None:
-        lead = Lead.objects.create(**dados_lead)
-        created = True
-    else:
-        for campo, valor in dados_lead.items():
-            setattr(lead, campo, valor)
-        lead.save()
-        created = False
-
-    return lead, created
+    return render(
+        request,
+        "core_admin/import_form.html",
+        {
+            "form": form,
+            "importacao_em_andamento": _serializar_importacao(importacao_em_andamento),
+            "ultima_importacao": _serializar_importacao(ultima_importacao),
+            "import_status_running": IMPORT_STATUS_RUNNING,
+            "import_status_success": IMPORT_STATUS_SUCCESS,
+            "import_status_error": IMPORT_STATUS_ERROR,
+        },
+    )
 
 
 def import_prospects(request):
     form = ExcelUploadForm(request.POST or None, request.FILES or None)
 
-    if request.method == "POST" and form.is_valid():
-        arquivo = form.cleaned_data["file"]
-
-        try:
-            if arquivo.name.lower().endswith(".csv"):
-                df = pd.read_csv(arquivo)
-            else:
-                df = pd.read_excel(arquivo)
-
-            df = _normalizar_dataframe(df)
-
-            if "RAZAO_SOCIAL" not in df.columns:
-                messages.error(
-                    request,
-                    "A planilha precisa ter pelo menos a coluna RAZAO_SOCIAL.",
-                )
-                return render(request, "core_admin/import_form.html", {"form": form})
-
-            empresas_novas = 0
-            empresas_atualizadas = 0
-            enderecos_novos = 0
-            enderecos_atualizados = 0
-            leads_novos = 0
-            leads_atualizados = 0
-            ignorados = 0
-
-            with transaction.atomic():
-                for _, row in df.iterrows():
-                    razao_social = _valor_limpo(row, "RAZAO_SOCIAL")
-                    if not razao_social:
-                        ignorados += 1
-                        continue
-
-                    email = _valor_limpo(row, "EMAIL")
-                    telefone = _valor_limpo(row, "TELEFONE")
-
-                    dados_empresa = {
-                        "razao_social": razao_social,
-                        "cnpj_cpf": _valor_limpo(row, "CNPJ_CPF"),
-                        "nome_fantasia": _valor_limpo(row, "NOME_FANTASIA"),
-                        "site": _valor_limpo(row, "SITE"),
-                        "contato_nome": _valor_limpo(row, "CONTATO_NOME"),
-                        "email": email,
-                        "telefone": telefone,
-                        "instagram_username": _valor_limpo(row, "INSTAGRAM_USERNAME"),
-                        "instagram_url": _valor_limpo(row, "INSTAGRAM_URL"),
-                        "status": "novo",
-                    }
-
-                    dados_endereco = {
-                        "cep": _valor_limpo(row, "CEP"),
-                        "endereco": _valor_limpo(row, "ENDERECO"),
-                        "numero": _valor_limpo(row, "NUMERO"),
-                        "bairro": _valor_limpo(row, "BAIRRO"),
-                        "cidade": _valor_limpo(row, "CIDADE"),
-                        "estado": _valor_limpo(row, "ESTADO"),
-                    }
-
-                    empresa, empresa_created = _obter_ou_criar_empresa(dados_empresa, dados_endereco=dados_endereco)
-                    endereco, endereco_created = _obter_ou_criar_endereco(empresa, dados_endereco)
-
-                    dados_lead = {
-                        **dados_empresa,
-                        **dados_endereco,
-                        "empresa_estruturada": empresa,
-                        "endereco_estruturado": endereco,
-                    }
-
-                    lead, lead_created = _obter_ou_criar_lead_espelho(empresa, endereco, dados_lead)
-
-                    if empresa_created:
-                        empresas_novas += 1
-                    else:
-                        empresas_atualizadas += 1
-
-                    if endereco_created:
-                        enderecos_novos += 1
-                    else:
-                        enderecos_atualizados += 1
-
-                    if lead_created:
-                        leads_novos += 1
-                    else:
-                        leads_atualizados += 1
-
-            messages.success(
+    if request.method == "POST":
+        importacao_em_andamento = buscar_importacao_em_andamento()
+        if importacao_em_andamento:
+            messages.warning(
                 request,
-                (
-                    "Processamento concluido: "
-                    f"{empresas_novas} empresa(s) nova(s), {enderecos_novos} endereco(s) novo(s), "
-                    f"{leads_novos} lead(s) espelho novo(s), {ignorados} linha(s) ignorada(s). "
-                    f"Atualizados: {empresas_atualizadas} empresa(s), {enderecos_atualizados} endereco(s) e {leads_atualizados} lead(s)."
-                ),
+                f"Ja existe uma importacao em andamento para o arquivo {importacao_em_andamento.arquivo_nome or 'selecionado'}. Aguarde a conclusao antes de iniciar outra.",
             )
-            return redirect("lead_list")
-        except Exception as exc:
-            messages.error(request, f"Erro critico na planilha: {exc}")
+            return redirect("import_prospects")
 
-    return render(request, "core_admin/import_form.html", {"form": form})
+        if form.is_valid():
+            arquivo = form.cleaned_data["file"]
+            audit = None
+            try:
+                caminho_salvo = salvar_arquivo_importacao(arquivo, settings.MEDIA_ROOT)
+                audit = criar_auditoria_importacao(
+                    usuario_id=request.user.id if request.user.is_authenticated else None,
+                    arquivo_nome=arquivo.name,
+                    arquivo_caminho=str(caminho_salvo),
+                )
+
+                subprocess.Popen(
+                    [
+                        sys.executable,
+                        str(Path(settings.BASE_DIR) / "scripts" / "integracoes" / "importar_leads_planilha.py"),
+                        str(audit.id),
+                        str(caminho_salvo),
+                    ]
+                )
+
+                messages.success(
+                    request,
+                    "Importacao iniciada em segundo plano. Esta tela agora mostra o andamento e bloqueia nova execucao paralela.",
+                )
+                return redirect("import_prospects")
+            except Exception as exc:
+                if audit:
+                    detalhes = dict(audit.detalhes_json or {})
+                    detalhes["status_execucao"] = IMPORT_STATUS_ERROR
+                    detalhes["mensagem"] = f"Nao foi possivel iniciar o processo em segundo plano: {exc}"
+                    audit.detalhes_json = detalhes
+                    audit.total_erros = 1
+                    audit.save(update_fields=["detalhes_json", "total_erros"])
+                messages.error(request, f"Nao foi possivel iniciar a importacao: {exc}")
+
+    return _render_importacao(request, form)
 
 
 def _is_within_directory(base_dir, target_path):
@@ -336,7 +177,7 @@ def _extract_zip_safely(zip_path, target_dir):
         for member in archive.infolist():
             extracted_path = Path(target_dir) / member.filename
             if not _is_within_directory(target_dir, extracted_path):
-                raise ValueError(f"Arquivo inválido dentro do ZIP: {member.filename}")
+                raise ValueError(f"Arquivo invÃ¡lido dentro do ZIP: {member.filename}")
         archive.extractall(target_dir)
 
 
@@ -572,3 +413,88 @@ def download_template(request):
     )
     response["Content-Disposition"] = "attachment; filename=modelo_importacao_leads.xlsx"
     return response
+
+
+@user_passes_test(grupo_Administrador_required)
+@login_required
+def smtp_test(request):
+    configuracao_email = ConfiguracaoEmailEnvio.objects.order_by("id").first()
+    remetente_padrao = (
+        configuracao_email.email_remetente_padrao
+        if configuracao_email and configuracao_email.email_remetente_padrao
+        else settings.DEFAULT_FROM_EMAIL
+    )
+
+    initial = {
+        "from_email": remetente_padrao or "",
+        "subject": "Teste SMTP - Gerenciador Parceiros",
+        "body": (
+            "Ola,\n\n"
+            "Este e um teste de envio SMTP disparado pela area administrativa do sistema.\n\n"
+            "Se voce recebeu esta mensagem, a configuracao atual do backend conseguiu enviar o e-mail com sucesso.\n"
+            "Neste teste, o sistema autentica com o usuario SMTP configurado no ambiente e envia usando o endereco informado no campo De.\n"
+        ),
+    }
+    form = SMTPTestForm(request.POST or None, initial=initial)
+    resultado_envio = None
+
+    if request.method == "POST" and form.is_valid():
+        try:
+            if not settings.EMAIL_HOST:
+                raise ValueError("O EMAIL_HOST nao esta configurado no ambiente.")
+
+            remetente = form.cleaned_data.get("from_email") or remetente_padrao or settings.DEFAULT_FROM_EMAIL
+            remetente_validado = _validate_email_list(remetente, "Remetente", required=True)[0]
+            destinatarios = _validate_email_list(form.cleaned_data["to_email"], "Destinatario", required=True)
+            copia = _validate_email_list(form.cleaned_data.get("cc_email"), "Cc", required=False)
+
+            email = EmailMessage(
+                subject=form.cleaned_data["subject"],
+                body=form.cleaned_data["body"],
+                from_email=remetente_validado,
+                to=destinatarios,
+                cc=copia,
+                reply_to=[remetente_validado],
+                connection=get_connection(fail_silently=False),
+            )
+
+            quantidade = email.send(fail_silently=False)
+            resultado_envio = {
+                "ok": True,
+                "message": f"Teste concluido com sucesso. Backend reportou {quantidade} envio(s).",
+                "from_email": remetente_validado,
+                "to_email": ", ".join(destinatarios),
+                "cc_email": ", ".join(copia) if copia else "--",
+            }
+            messages.success(request, resultado_envio["message"])
+        except Exception as exc:
+            resultado_envio = {
+                "ok": False,
+                "message": f"Falha no teste SMTP: {exc}",
+                "from_email": form.cleaned_data.get("from_email") or remetente_padrao or "--",
+                "to_email": form.cleaned_data.get("to_email") or "--",
+                "cc_email": form.cleaned_data.get("cc_email") or "--",
+            }
+            messages.error(request, resultado_envio["message"])
+
+    contexto_config = {
+        "email_backend": settings.EMAIL_BACKEND,
+        "email_host": settings.EMAIL_HOST or "--",
+        "email_port": settings.EMAIL_PORT,
+        "email_host_user": settings.EMAIL_HOST_USER or "--",
+        "email_use_tls": settings.EMAIL_USE_TLS,
+        "email_use_ssl": settings.EMAIL_USE_SSL,
+        "default_from_email": settings.DEFAULT_FROM_EMAIL or "--",
+        "remetente_padrao_admin": remetente_padrao or "--",
+        "send_as_mode": "Sim" if (settings.EMAIL_HOST_USER or "").strip().lower() != (remetente_padrao or settings.DEFAULT_FROM_EMAIL or "").strip().lower() else "Nao",
+    }
+
+    return render(
+        request,
+        "core_admin/smtp_test_form.html",
+        {
+            "form": form,
+            "smtp_config": contexto_config,
+            "resultado_envio": resultado_envio,
+        },
+    )

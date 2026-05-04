@@ -87,6 +87,9 @@
                                     <span class="text-[10px] font-bold text-gray-400 uppercase bg-gray-100 px-2 py-0.5 rounded">
                                         ID: {{ endereco.id }}
                                     </span>
+                                    <span class="text-[10px] font-bold text-gray-400 uppercase bg-gray-100 px-2 py-0.5 rounded">
+                                        O.S.: {{ endereco.ticket_os_atual_ixc|default:"--" }}
+                                    </span>
                                     {% if endereco.principal %}
                                     <span class="text-[9px] font-black text-yellow-600 uppercase bg-yellow-50 px-2 py-0.5 rounded border border-yellow-100">
                                         Principal
@@ -449,11 +452,15 @@ async function loadPartnerProposalOptions() {
     const data = await response.json();
     const resultados = data.resultados || [];
     const parceirosDisponiveis = resultados.filter((partner) => !partner.ja_possui_cotacao_aberta);
+    const parceirosBloqueados = resultados.filter((partner) => partner.ja_possui_cotacao_aberta);
+    const nomesBloqueados = parceirosBloqueados.map((partner) => partner.nome).join(', ');
 
     summary.innerText = `${parceirosDisponiveis.length} parceiro(s) elegível(is) serão usados automaticamente.`;
 
     if (!parceirosDisponiveis.length) {
-        summary.innerText = 'Nenhum parceiro elegível encontrado para esse endereço.';
+        summary.innerText = nomesBloqueados
+            ? `Regra atual: o sistema não abre nova cotação para parceiro que já tenha cotação em aberto neste mesmo endereço. Bloqueados agora: ${nomesBloqueados}.`
+            : 'Regra atual: o sistema só abre cotação para parceiros sem outra cotação em aberto neste mesmo endereço.';
         return;
     }
 
@@ -496,7 +503,10 @@ document.getElementById('partnerProposalCreateForm').addEventListener('submit', 
     }
     if (!document.querySelector('#selectedPartnerInputs input[name="partner_ids"]')) {
         event.preventDefault();
-        alert('Nenhum parceiro elegível foi encontrado para criar as cotações.');
+        const summary = document.getElementById('partnerProposalSummary');
+        const detalheRegra = summary?.innerText?.trim()
+            || 'Regra atual: o sistema bloqueia parceiro que já tenha cotação em aberto neste mesmo endereço.';
+        alert(`Nenhuma cotação foi criada.\n\n${detalheRegra}`);
     }
 });
 </script>

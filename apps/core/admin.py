@@ -1,7 +1,14 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 
-from .models import IntegrationAudit, IntegrationAuditItem, RegistroHistorico, User
+from .models import (
+    EmailCotacaoRespostaImportacao,
+    EmailCotacaoRespostaSync,
+    IntegrationAudit,
+    IntegrationAuditItem,
+    RegistroHistorico,
+    User,
+)
 
 
 @admin.register(User)
@@ -38,6 +45,29 @@ class RegistroHistoricoAdmin(admin.ModelAdmin):
     list_display = ("usuario", "tipo", "data")
     list_filter = ("tipo", "data")
     search_fields = ("usuario__username", "acao")
+
+
+@admin.register(EmailCotacaoRespostaSync)
+class EmailCotacaoRespostaSyncAdmin(admin.ModelAdmin):
+    list_display = ("mailbox_email", "ativo", "ultima_sincronizacao_em", "atualizado_em")
+    readonly_fields = ("atualizado_em", "ultima_sincronizacao_em", "ultimo_erro", "inbox_delta_link")
+
+
+@admin.register(EmailCotacaoRespostaImportacao)
+class EmailCotacaoRespostaImportacaoAdmin(admin.ModelAdmin):
+    list_display = ("proposal", "remetente", "assunto", "recebido_em", "importado_em")
+    list_filter = ("recebido_em", "importado_em")
+    search_fields = ("proposal__codigo_proposta", "assunto", "remetente", "graph_message_id", "internet_message_id")
+    readonly_fields = (
+        "proposal",
+        "historico",
+        "graph_message_id",
+        "internet_message_id",
+        "assunto",
+        "remetente",
+        "recebido_em",
+        "importado_em",
+    )
 
 
 class IntegrationAuditItemInline(admin.TabularInline):
