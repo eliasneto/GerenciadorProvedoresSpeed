@@ -485,8 +485,10 @@ async function loadPartnerProposalOptions() {
         if (requestId !== partnerProposalOptionsRequestId) return;
 
         const resultados = data.resultados || [];
+        const resultadosFallback = data.resultados_fallback || [];
         const parceirosDisponiveis = resultados.filter((partner) => !partner.ja_possui_cotacao_aberta);
         const parceirosBloqueados = resultados.filter((partner) => partner.ja_possui_cotacao_aberta);
+        const parceirosFallbackDisponiveis = resultadosFallback.filter((partner) => !partner.ja_possui_cotacao_aberta);
         const nomesBloqueados = parceirosBloqueados.map((partner) => partner.nome).join(', ');
         const cobertura = data.cobertura || {};
         const bairro = cobertura.bairro || {};
@@ -508,9 +510,17 @@ async function loadPartnerProposalOptions() {
         summary.innerText = `${parceirosDisponiveis.length} parceiro(s) elegível(is) serão usados automaticamente para os endereços do lead selecionados.`;
 
         if (!parceirosDisponiveis.length) {
+            if (parceirosFallbackDisponiveis.length) {
+                summary.innerText = `Nenhum provedor elegível foi encontrado pela cobertura conhecida para os endereços do lead selecionados. Se quiser prosseguir mesmo assim, clique em Criar Cotações para abrir com ${parceirosFallbackDisponiveis.length} provedor(es) disponíveis fora da cobertura conhecida.`;
+                selectedPartnerInputs.innerHTML = parceirosFallbackDisponiveis
+                    .map((partner) => `<input type="hidden" name="partner_ids" value="${partner.id}">`)
+                    .join('');
+                return;
+            }
+
             summary.innerText = nomesBloqueados
                 ? `Nenhuma cotação foi criada porque estes provedores já possuem cotação em Em negociação neste mesmo endereço operacional: ${nomesBloqueados}.`
-                : 'Nenhum provedor elegível foi encontrado para os endereços do lead selecionados.';
+                : 'Nenhum provedor elegível foi encontrado para os endereços do lead selecionados, e não há provedores disponíveis para prosseguir fora da cobertura conhecida.';
             return;
         }
 

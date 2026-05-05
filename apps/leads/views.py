@@ -1672,12 +1672,27 @@ def endereco_lastmile_partner_search(request, endereco_pk):
         .distinct()
         .order_by('nome_fantasia', 'razao_social', 'id')[:100]
     )
+    parceiros_fallback_queryset = Partner.objects.all()
+
+    if q:
+        parceiros_fallback_queryset = parceiros_fallback_queryset.filter(
+            Q(nome_fantasia__icontains=q) |
+            Q(razao_social__icontains=q) |
+            Q(cnpj_cpf__icontains=q)
+        )
+
+    parceiros_fallback = list(
+        parceiros_fallback_queryset
+        .distinct()
+        .order_by('nome_fantasia', 'razao_social', 'id')[:100]
+    )
 
     parceiros_ids = [partner.id for partner in parceiros]
+    parceiros_fallback_ids = [partner.id for partner in parceiros_fallback]
     parceiros_com_cotacao_aberta = set(
         Proposal.objects.filter(
             client_address=endereco,
-            partner_id__in=parceiros_ids,
+            partner_id__in=list(set(parceiros_ids + parceiros_fallback_ids)),
             status='analise',
         ).values_list('partner_id', flat=True)
     )
@@ -1693,6 +1708,17 @@ def endereco_lastmile_partner_search(request, endereco_pk):
         }
         for partner in parceiros
     ]
+    resultados_fallback = [
+        {
+            'id': partner.id,
+            'nome': partner.nome_fantasia or partner.razao_social or f'Parceiro #{partner.id}',
+            'razao_social': partner.razao_social or '',
+            'cnpj_cpf': partner.cnpj_cpf or '',
+            'status': partner.status or '',
+            'ja_possui_cotacao_aberta': partner.id in parceiros_com_cotacao_aberta,
+        }
+        for partner in parceiros_fallback
+    ]
 
     return JsonResponse({
         'endereco': {
@@ -1704,6 +1730,7 @@ def endereco_lastmile_partner_search(request, endereco_pk):
         },
         'cobertura': _montar_cobertura_parceiros_por_regiao(endereco),
         'resultados': resultados,
+        'resultados_fallback': resultados_fallback,
     })
 
 
