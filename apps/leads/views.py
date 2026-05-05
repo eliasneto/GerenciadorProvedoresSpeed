@@ -326,6 +326,92 @@ def _parse_google_maps_address(endereco_completo, cidade_padrao='', estado_padra
         'estado': estado[:2],
     }
 
+
+def _normalizar_texto_lead(valor):
+    return str(valor or '').strip()
+
+
+def _lead_tem_dados_endereco(lead):
+    return any([
+        _normalizar_texto_lead(lead.cep),
+        _normalizar_texto_lead(lead.endereco),
+        _normalizar_texto_lead(lead.numero),
+        _normalizar_texto_lead(lead.bairro),
+        _normalizar_texto_lead(lead.cidade),
+        _normalizar_texto_lead(lead.estado),
+    ])
+
+
+def _sync_lead_to_structured_models(lead):
+    empresa = lead.empresa_estruturada
+
+    if not empresa:
+        cnpj_cpf = _normalizar_texto_lead(lead.cnpj_cpf)
+        razao_social = _normalizar_texto_lead(lead.razao_social)
+        if cnpj_cpf:
+            empresa = LeadEmpresa.objects.filter(cnpj_cpf__iexact=cnpj_cpf).order_by('id').first()
+        elif razao_social:
+            empresa = LeadEmpresa.objects.filter(razao_social__iexact=razao_social).order_by('id').first()
+
+    if not empresa:
+        empresa = LeadEmpresa.objects.create()
+
+    empresa.razao_social = lead.razao_social
+    empresa.cnpj_cpf = lead.cnpj_cpf
+    empresa.nome_fantasia = lead.nome_fantasia
+    empresa.site = lead.site
+    empresa.contato_nome = lead.contato_nome
+    empresa.email = lead.email
+    empresa.telefone = lead.telefone
+    empresa.fonte = lead.fonte
+    empresa.confianca = lead.confianca
+    empresa.instagram_username = lead.instagram_username
+    empresa.instagram_url = lead.instagram_url
+    empresa.bio_instagram = lead.bio_instagram
+    empresa.observacao_ia = lead.observacao_ia
+    empresa.status = lead.status or 'novo'
+    empresa.save()
+
+    endereco = None
+    if _lead_tem_dados_endereco(lead):
+        endereco_existente = lead.endereco_estruturado
+        pode_reaproveitar_existente = bool(
+            endereco_existente
+            and endereco_existente.empresa_id == empresa.id
+            and endereco_existente.leads_legados.exclude(pk=lead.pk).count() == 0
+        )
+
+        if pode_reaproveitar_existente:
+            endereco = endereco_existente
+        else:
+            endereco = LeadEndereco.objects.filter(
+                empresa=empresa,
+                endereco__iexact=_normalizar_texto_lead(lead.endereco),
+                numero__iexact=_normalizar_texto_lead(lead.numero),
+                bairro__iexact=_normalizar_texto_lead(lead.bairro),
+                cidade__iexact=_normalizar_texto_lead(lead.cidade),
+                estado__iexact=_normalizar_texto_lead(lead.estado),
+                cep__iexact=_normalizar_texto_lead(lead.cep),
+            ).order_by('id').first()
+
+        if not endereco:
+            endereco = LeadEndereco(empresa=empresa)
+
+        endereco.empresa = empresa
+        endereco.cep = lead.cep
+        endereco.endereco = lead.endereco
+        endereco.numero = lead.numero
+        endereco.bairro = lead.bairro
+        endereco.cidade = lead.cidade
+        endereco.estado = lead.estado
+        endereco.save()
+
+    lead.empresa_estruturada = empresa
+    lead.endereco_estruturado = endereco
+    lead.save(update_fields=['empresa_estruturada', 'endereco_estruturado'])
+
+    return empresa, endereco
+
 @user_passes_test(grupo_LastMile_required)
 @login_required
 def lead_list(request):
@@ -404,7 +490,8 @@ def lead_create(request):
     if request.method == 'POST':
         form = LeadForm(request.POST)
         if form.is_valid():
-            form.save()
+            lead = form.save()
+            _sync_lead_to_structured_models(lead)
             messages.success(request, "Novo lead cadastrado com sucesso!")
             return redirect('lead_list')
     else:
@@ -424,7 +511,8 @@ def lead_update(request, pk):
     if request.method == 'POST':
         form = LeadForm(request.POST, instance=lead)
         if form.is_valid():
-            form.save()
+            lead = form.save()
+            _sync_lead_to_structured_models(lead)
             messages.success(request, "Dados do lead atualizados!")
             return redirect('lead_list')
     else:
@@ -1014,7 +1102,7 @@ def lead_empresa_list(request):
     empresas = (
         LeadEmpresa.objects
         .annotate(total_enderecos=Count('enderecos', distinct=True))
-        .order_by('nome_fantasia', 'razao_social', 'id')
+        .order_by('-data_criacao', '-id')
     )
 
     if busca_empresa:

@@ -85,7 +85,7 @@
                                 </span>
                                 <div class="flex items-center gap-2">
                                     <span class="text-[10px] font-bold text-gray-400 uppercase bg-gray-100 px-2 py-0.5 rounded">
-                                        ID: {{ endereco.id }}
+                                        Login IXC: {{ endereco.login_id_ixc|default:"--" }}
                                     </span>
                                     <span class="text-[10px] font-bold text-gray-400 uppercase bg-gray-100 px-2 py-0.5 rounded">
                                         O.S.: {{ endereco.ticket_os_atual_ixc|default:"--" }}

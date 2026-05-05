@@ -62,6 +62,7 @@ class HistoricoSincronizacaoAdmin(admin.ModelAdmin):
             path('rodar-incremental/', self.admin_site.admin_view(self.btn_rodar_incremental), name='rodar-incremental'),
             path('rodar-faxina/', self.admin_site.admin_view(self.btn_rodar_faxina), name='rodar-faxina'),
             path('rodar-os-comercial-lastmile/', self.admin_site.admin_view(self.btn_rodar_os_comercial_lastmile), name='rodar-os-comercial-lastmile'),
+            path('rodar-respostas-email-cotacao/', self.admin_site.admin_view(self.btn_rodar_respostas_email_cotacao), name='rodar-respostas-email-cotacao'),
             path('rodar-backup/', self.admin_site.admin_view(self.btn_rodar_backup), name='rodar-backup'),
         ]
         return custom_urls + urls
@@ -146,6 +147,25 @@ class HistoricoSincronizacaoAdmin(admin.ModelAdmin):
         subprocess.Popen(["python", "scripts/integracoes/backup_manual.py", "manual", request.user.username])
         self.message_user(request, "Backup manual iniciado em segundo plano.", messages.SUCCESS)
         return HttpResponseRedirect("../?" + urlencode({"tipo__exact": "backup"}))
+
+    def btn_rodar_respostas_email_cotacao(self, request):
+        rotina_ativa = buscar_rotina_em_execucao('email_respostas_cotacao')
+        if rotina_ativa:
+            self.message_user(
+                request,
+                descrever_rotina_em_execucao('email_respostas_cotacao', rotina_ativa),
+                messages.WARNING,
+            )
+            return HttpResponseRedirect("../?" + urlencode({"tipo__exact": "email_respostas_cotacao"}))
+
+        subprocess.Popen([
+            "python",
+            "scripts/integracoes/sincronizar_respostas_email_cotacao.py",
+            "manual",
+            request.user.username,
+        ])
+        self.message_user(request, "Sincronizacao manual das respostas de e-mail iniciada.", messages.SUCCESS)
+        return HttpResponseRedirect("../?" + urlencode({"tipo__exact": "email_respostas_cotacao"}))
 
     @admin.action(description="PARAR processos selecionados")
     def parar_sincronizacao(self, request, queryset):

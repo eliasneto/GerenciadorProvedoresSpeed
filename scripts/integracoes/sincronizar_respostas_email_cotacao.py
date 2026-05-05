@@ -345,7 +345,21 @@ def main():
         print("Sincronizacao de respostas de e-mail desabilitada. Defina as credenciais do Graph para ativar.")
         return
 
-    historico, rotina_ativa = iniciar_historico_com_trava("email_respostas_cotacao", origem="automatica")
+    eh_manual = 'manual' in sys.argv
+    origem_detectada = 'manual' if eh_manual else 'automatica'
+
+    usuario_executor = None
+    if eh_manual:
+        from django.contrib.auth import get_user_model  # noqa: E402
+        User = get_user_model()
+        username = sys.argv[2] if len(sys.argv) > 2 else ""
+        usuario_executor = User.objects.filter(username=username).first() or User.objects.filter(is_superuser=True).first()
+
+    historico, rotina_ativa = iniciar_historico_com_trava(
+        "email_respostas_cotacao",
+        origem=origem_detectada,
+        executado_por=usuario_executor,
+    )
     if rotina_ativa:
         print(descrever_rotina_em_execucao("email_respostas_cotacao", rotina_ativa))
         return
