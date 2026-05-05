@@ -55,7 +55,7 @@ docker-compose up -d
 docker-compose up -d --build
 
 # LOGS DO CONTAINER:
-docker logs -f speed_sistema
+http://127.0.0.1:8091/minhas-cotacoes/
 docker logs --tail 50 -f speed_sistema
 docker logs -f speed_backup_diario
 

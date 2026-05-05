@@ -150,6 +150,29 @@ def parse_data_ixc(valor):
     return None
 
 
+def extrair_data_referencia_registro(registro):
+    if not registro:
+        return None
+
+    campos_candidatos = [
+        'data_ultima_alteracao',
+        'ultima_atualizacao',
+        'data_abertura',
+        'data_criacao',
+        'data',
+        'data_cadastro',
+        'data_emissao',
+        'data_agendamento',
+        'abertura',
+    ]
+
+    for campo in campos_candidatos:
+        data_encontrada = parse_data_ixc(registro.get(campo))
+        if data_encontrada:
+            return data_encontrada
+    return None
+
+
 def buscar_mapa_setores():
     inicio = time.perf_counter()
     log_etapa(inicio, "Carregando mapa de setores do IXC...")
@@ -392,13 +415,8 @@ def buscar_os_lastmile_em_lote(mapa_setores, alterado_desde=None):
 
                 for registro in registros:
                     if alterado_desde:
-                        data_registro = (
-                            parse_data_ixc(registro.get('data_ultima_alteracao'))
-                            or parse_data_ixc(registro.get('ultima_atualizacao'))
-                            or parse_data_ixc(registro.get('data_abertura'))
-                            or parse_data_ixc(registro.get('data_criacao'))
-                        )
-                        if not data_registro or data_registro < alterado_desde:
+                        data_registro = extrair_data_referencia_registro(registro)
+                        if data_registro and data_registro < alterado_desde:
                             continue
 
                     ids = extrair_ids_vinculo_os(registro)
@@ -492,24 +510,16 @@ def buscar_os_lastmile_por_cliente(cliente_ixc_id, mapa_setores, alterado_desde=
 
         os_atual = buscar_os_atual_por_ticket(ticket_id)
         if not os_atual:
-            logins_processados.add(login_id)
             pbar_tickets.update(1)
             continue
         if alterado_desde:
-            data_registro = (
-                parse_data_ixc(os_atual.get('data_ultima_alteracao'))
-                or parse_data_ixc(os_atual.get('ultima_atualizacao'))
-                or parse_data_ixc(os_atual.get('data_abertura'))
-                or parse_data_ixc(os_atual.get('data_criacao'))
-            )
-            if not data_registro or data_registro < alterado_desde:
-                logins_processados.add(login_id)
+            data_registro = extrair_data_referencia_registro(os_atual)
+            if data_registro and data_registro < alterado_desde:
                 pbar_tickets.update(1)
                 continue
 
         setor_id, setor_nome = extrair_setor_registro(os_atual, mapa_setores)
         if normalizar_texto(setor_nome).lower() != ALVO_SETOR_NOME:
-            logins_processados.add(login_id)
             pbar_tickets.update(1)
             continue
 

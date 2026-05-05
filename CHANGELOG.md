@@ -16,6 +16,7 @@ Melhorado:
 - correção do armazenamento dos anexos `.eml` no diretório compartilhado `media`
 - ajuste na paginação de `Minhas Cotações` para trabalhar em blocos de 20 registros
 - padronização visual da paginação de `Minhas Cotações` com o restante do sistema
+- correção da rotina de O.S. Comercial | Lastmile para não descartar logins cedo demais e aceitar mais campos de data no recorte de O.S. alteradas
 
 ## v1.1.0
 
