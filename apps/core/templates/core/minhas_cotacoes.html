@@ -58,7 +58,7 @@
                         <td class="px-6 py-5"><div class="font-bold text-gray-900">{{ item.partner.nome_fantasia|default:item.partner.razao_social }}</div></td>
                         <td class="px-6 py-5">
                             <div class="font-bold text-ageis-yellow">
-                                <a href="{% url 'proposal_detail' item.pk %}?next={{ request.get_full_path|urlencode }}" class="hover:text-gray-900 transition-colors">
+                                <a href="{% url 'proposal_update' item.pk %}?next={{ request.get_full_path|urlencode }}" class="hover:text-gray-900 transition-colors">
                                     #{{ item.codigo_exibicao }}
                                 </a>
                             </div>
@@ -90,8 +90,7 @@
                                     partnerEmail: '{{ item.partner.email|default:""|escapejs }}',
                                     billingEmail: '{{ item.email_faturamento|default:""|escapejs }}',
                                     clientName: '{{ item.cliente|default:"Cliente nao informado"|escapejs }}',
-                                    addressLogin: '{{ item.client_address.login_ixc|default:"--"|escapejs }}',
-                                    addressLabel: '{{ item.client_address|default:"--"|escapejs }}',
+                                    addressLabel: '{{ item.client_address.logradouro|default:"Nao informado"|escapejs }}{% if item.client_address.numero %}, {{ item.client_address.numero|escapejs }}{% else %}, S/N{% endif %}',
                                     statusLabel: '{% if item.status == "analise" or item.status == "ativa" %}Em negociacao{% elif item.status == "aguardando_contratacao" %}Aguardando contratacao{% elif item.status == "contratado" %}Contratado{% elif item.status == "declinado" %}Declinado{% else %}Inviavel{% endif %}'
                                 })"
                             >
@@ -215,10 +214,15 @@
                     <input id="emailComposerTo" type="text" class="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-800 outline-none focus:border-ageis-yellow focus:ring-2 focus:ring-yellow-100" placeholder="destinatario@empresa.com">
                 </label>
 
-                <label class="block">
-                    <span class="text-[10px] font-black uppercase tracking-[0.24em] text-slate-500">Cc</span>
-                    <input id="emailComposerCc" type="text" class="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-800 outline-none focus:border-ageis-yellow focus:ring-2 focus:ring-yellow-100" placeholder="copia@empresa.com">
-                </label>
+                <div class="block">
+                    <button type="button" id="emailComposerCcToggle" class="inline-flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.24em] text-slate-500 hover:text-slate-700 transition" onclick="toggleEmailComposerCc()">
+                        <i id="emailComposerCcToggleIcon" data-lucide="chevron-down" class="w-4 h-4"></i>
+                        <span id="emailComposerCcToggleLabel">Adicionar Cc</span>
+                    </button>
+                    <div id="emailComposerCcWrapper" class="hidden mt-2">
+                        <input id="emailComposerCc" type="text" class="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-800 outline-none focus:border-ageis-yellow focus:ring-2 focus:ring-yellow-100" placeholder="copia@empresa.com">
+                    </div>
+                </div>
 
                 <label class="block">
                     <span class="text-[10px] font-black uppercase tracking-[0.24em] text-slate-500">Assunto</span>
@@ -239,7 +243,7 @@
                             </span>
                             <div>
                                 <div class="text-sm font-bold text-slate-800">Selecionar arquivos</div>
-                                <div class="text-xs text-slate-500">Os arquivos enviados aqui seguem junto no e-mail disparado pelo backend. Limite total: {{ email_attachment_limit_mb }} MB.</div>
+                                <div class="text-xs text-slate-500">Os arquivos enviados aqui seguem junto no e-mail. Limite total: {{ email_attachment_limit_mb }} MB.</div>
                             </div>
                         </div>
                         <span class="rounded-2xl bg-ageis-black px-4 py-2 text-[10px] font-black uppercase tracking-[0.22em] text-ageis-yellow">Escolher</span>
@@ -280,7 +284,6 @@
         partnerEmail: '',
         billingEmail: '',
         clientName: '',
-        addressLogin: '',
         addressLabel: '',
         statusLabel: ''
     };
@@ -295,8 +298,7 @@
             `Cotacao: #${data.proposalCode}`,
             `Parceiro: ${data.partnerName}`,
             `Cliente: ${data.clientName}`,
-            `Login/Endereco: ${data.addressLogin}`,
-            `Detalhe do endereco: ${data.addressLabel}`,
+            `Endereco para cotacao: ${data.addressLabel}`,
             `Status atual: ${data.statusLabel}`,
             '',
             'Fico a disposicao para alinhar os proximos passos.',
@@ -318,7 +320,6 @@
         const bodyInput = document.getElementById('emailComposerBody');
 
         const toValue = emailComposerState.billingEmail || emailComposerState.partnerEmail || '';
-        const ccValue = '{{ request.user.email|default:""|escapejs }}';
         const fromValue = '{{ email_remetente_padrao|escapejs }}';
 
         modal.classList.remove('is-maximized');
@@ -326,7 +327,8 @@
         proposalPkInput.value = emailComposerState.proposalPk || '';
         fromInput.value = fromValue || '';
         toInput.value = toValue;
-        ccInput.value = ccValue;
+        ccInput.value = '';
+        setEmailComposerCcVisible(false);
         subjectInput.value = `#${emailComposerState.proposalCode} - ${emailComposerState.partnerName}`;
         bodyInput.value = buildEmailComposerBody(emailComposerState);
         clearEmailComposerAttachments();
@@ -355,8 +357,51 @@
         modal.classList.remove('is-maximized');
         modal.style.width = '';
         clearEmailComposerAttachments();
+        setEmailComposerCcVisible(false);
         syncEmailComposerMaximizeIcon();
         document.body.classList.remove('overflow-hidden');
+    }
+
+    function setEmailComposerCcVisible(isVisible) {
+        const wrapper = document.getElementById('emailComposerCcWrapper');
+        const icon = document.getElementById('emailComposerCcToggleIcon');
+        const toggle = document.getElementById('emailComposerCcToggle');
+        const input = document.getElementById('emailComposerCc');
+
+        if (!wrapper || !icon || !toggle || !input) {
+            return;
+        }
+
+        wrapper.classList.toggle('hidden', !isVisible);
+        icon.setAttribute('data-lucide', isVisible ? 'chevron-up' : 'chevron-down');
+        const label = document.getElementById('emailComposerCcToggleLabel');
+        if (label) {
+            label.textContent = isVisible ? 'Ocultar Cc' : 'Adicionar Cc';
+        }
+
+        if (!isVisible) {
+            input.value = '';
+        }
+
+        if (window.lucide) {
+            window.lucide.createIcons();
+        }
+    }
+
+    function toggleEmailComposerCc() {
+        const wrapper = document.getElementById('emailComposerCcWrapper');
+        if (!wrapper) {
+            return;
+        }
+
+        const shouldShow = wrapper.classList.contains('hidden');
+        setEmailComposerCcVisible(shouldShow);
+
+        if (shouldShow) {
+            setTimeout(() => {
+                document.getElementById('emailComposerCc')?.focus();
+            }, 10);
+        }
     }
 
     function toggleEmailComposerMaximize() {
