@@ -283,16 +283,16 @@
                         </div>
                     </div>
 
-                    <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-[minmax(0,1.15fr)_minmax(0,1.55fr)_180px] gap-6 pt-2 border-t border-gray-50">
+                    <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-12 gap-6 pt-2 border-t border-gray-50">
                     <div class="hidden space-y-2 order-1">
                         <label class="text-[10px] font-black text-gray-500 uppercase italic tracking-widest">Valor Mensal (R$)</label>
                         {{ form.valor_mensal }}
                     </div>
-                    <div class="space-y-2 order-3 md:col-span-2 xl:col-span-1 xl:min-w-0">
+                    <div class="space-y-2 order-3 md:col-span-2 xl:col-span-4 [&>label]:min-h-[2.75rem] [&>label]:flex [&>label]:items-end">
                         <label class="text-[10px] font-black text-gray-500 uppercase italic tracking-widest">Taxa de Instalação Provedor Parceiro (Valor Único)</label>
                         {{ form.taxa_instalacao }}
                     </div>
-                    <div class="space-y-2 order-2 xl:min-w-0">
+                    <div class="space-y-2 order-2 xl:col-span-3 [&>label]:min-h-[2.75rem] [&>label]:flex [&>label]:items-end">
                         <label class="text-[10px] font-black text-blue-600 uppercase italic tracking-widest">Custo Provedor Parceiro (Mensal)</label>
                         {{ form.valor_parceiro }}
                     </div>
@@ -304,12 +304,12 @@
                             placeholder="R$ 0,00">
                     </div>
 
-                    <div class="space-y-2 order-5 xl:max-w-[180px]">
+                    <div class="space-y-2 order-5 xl:col-span-2 [&>label]:min-h-[2.75rem] [&>label]:flex [&>label]:items-end">
                         <label class="text-[10px] font-black text-gray-500 uppercase italic tracking-widest">Vigência (meses)</label>
                         {{ form.tempo_contrato }}
                     </div>
 
-                    <div class="space-y-2 order-6 xl:max-w-[280px]">
+                    <div class="space-y-2 order-6 xl:col-span-3 [&>label]:min-h-[2.75rem] [&>label]:flex [&>label]:items-end">
                         <label class="text-[10px] font-black text-gray-500 uppercase italic tracking-widest">Resultado Mensal</label>
                         <input type="text" id="id_resultado_mensal_calculado" readonly
                             class="w-full p-4 bg-gray-200 border border-gray-300 text-gray-900 font-black rounded-2xl outline-none cursor-not-allowed italic"
@@ -323,7 +323,7 @@
                             placeholder="R$ 0,00">
                     </div>
 
-                    <div class="order-8 md:col-span-2 xl:col-span-4 space-y-2 pt-4 border-t border-gray-50 mt-2">
+                    <div class="order-8 md:col-span-2 xl:col-span-12 space-y-2 pt-4 border-t border-gray-50 mt-2">
                         <label class="text-[10px] font-black text-gray-500 uppercase italic tracking-widest">E-mail para Faturamento</label>
                         {{ form.email_faturamento }}
                     </div>
