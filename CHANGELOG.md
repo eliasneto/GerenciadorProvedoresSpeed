@@ -22,6 +22,9 @@ Melhorado:
 - botao manual de "Respostas de E-mail" adicionado na tela de Historico de Sincronizacoes
 - sincronizacao automatica do cadastro/edicao de leads legados com a base estruturada de empresas e enderecos
 - ordenacao do grid de empresas de prospeccao ajustada para mostrar primeiro os leads mais recentes
+- resumo de cobertura de parceiros por bairro, cidade e estado adicionado no modal de abertura de cotacao por endereco
+- mensagem da regra de duplicidade no modal de abertura de cotacao por endereco reescrita para ficar mais clara
+- regra de elegibilidade do modal de abertura de cotacao por endereco ajustada para bloquear apenas o mesmo provedor quando ele ja possui cotacao em Em negociacao para os enderecos do lead selecionados
 
 ## v1.1.0
 

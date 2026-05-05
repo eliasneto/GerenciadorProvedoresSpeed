@@ -266,10 +266,11 @@
             <div id="selectedLeadAddressInputs"></div>
             <div id="selectedPartnerInputs"></div>
             <input type="hidden" name="lead_endereco_id" id="selectedLeadAddressId">
-            <div id="partnerProposalSummary" class="text-[11px] font-bold text-gray-500 mb-2">Carregando parceiros elegíveis...</div>
+            <div id="partnerCoverageSummary" class="text-[11px] font-bold text-gray-500 mb-2">Analisando cobertura regional dos parceiros...</div>
+            <div id="partnerProposalSummary" class="text-[11px] font-bold text-gray-500 mb-2">Selecione pelo menos um endereço do lead para calcular os parceiros elegíveis.</div>
 
             <div class="flex items-center justify-between gap-4 pt-5 mt-5">
-                <p class="text-[11px] font-bold text-gray-400">O sistema evita duplicidade para parceiro + endereço operacional com cotação em aberto.</p>
+                <p class="text-[11px] font-bold text-gray-400">Regra de bloqueio: o sistema só impede nova cotação quando o mesmo provedor já possui uma cotação em Em negociação para o mesmo endereço operacional e para o mesmo endereço do lead selecionado.</p>
                 <div class="flex items-center gap-3">
                     <button type="button" onclick="closePartnerProposalModal()" class="px-5 py-3 rounded-2xl font-bold text-gray-500 hover:bg-gray-50 transition">
                         Cancelar
@@ -338,6 +339,7 @@ function openPartnerProposalModal(button) {
 
 function closePartnerProposalModal() {
     document.getElementById('partnerProposalModal').classList.add('hidden');
+    document.getElementById('partnerCoverageSummary').innerText = '';
     document.getElementById('partnerProposalSummary').innerText = '';
     document.getElementById('leadAddressGridList').innerHTML = '';
     document.getElementById('leadAddressGridSummary').innerText = '';
@@ -408,6 +410,7 @@ function toggleLeadAddress(leadEnderecoId, checked) {
         selectedLeadAddressIds.delete(leadEnderecoId);
     }
     syncLeadAddressInputs();
+    loadPartnerProposalOptions();
 }
 
 function selectLeadAddress(leadEnderecoId) {
@@ -421,6 +424,7 @@ function selectAllVisibleLeadAddresses() {
         selectedLeadAddressIds.add(Number(checkbox.value));
     });
     syncLeadAddressInputs();
+    loadPartnerProposalOptions();
 }
 
 function clearLeadAddressSelection() {
@@ -429,6 +433,7 @@ function clearLeadAddressSelection() {
         checkbox.checked = false;
     });
     syncLeadAddressInputs();
+    loadPartnerProposalOptions();
 }
 
 async function loadPartnerProposalOptions() {
@@ -436,8 +441,17 @@ async function loadPartnerProposalOptions() {
 
     const estado = document.getElementById('leadAddressGridUf').value.trim().toUpperCase();
     const cidade = document.getElementById('leadAddressGridCidade').value.trim();
+    const leadEnderecoIds = Array.from(selectedLeadAddressIds);
+    const coverage = document.getElementById('partnerCoverageSummary');
     const summary = document.getElementById('partnerProposalSummary');
     const selectedPartnerInputs = document.getElementById('selectedPartnerInputs');
+
+    coverage.innerText = 'Analisando cobertura regional dos parceiros...';
+    if (!leadEnderecoIds.length) {
+        summary.innerText = 'Selecione pelo menos um endereço do lead para calcular os parceiros elegíveis.';
+        selectedPartnerInputs.innerHTML = '';
+        return;
+    }
 
     summary.innerText = 'Buscando parceiros...';
     selectedPartnerInputs.innerHTML = '';
@@ -445,6 +459,7 @@ async function loadPartnerProposalOptions() {
     const url = new URL(partnerSearchUrl(partnerProposalAddressId), window.location.origin);
     if (estado) url.searchParams.set('estado', estado);
     if (cidade) url.searchParams.set('cidade', cidade);
+    leadEnderecoIds.forEach((id) => url.searchParams.append('lead_endereco_ids', id));
 
     const response = await fetch(url.toString(), {
         headers: { 'X-Requested-With': 'XMLHttpRequest' }
@@ -454,13 +469,29 @@ async function loadPartnerProposalOptions() {
     const parceirosDisponiveis = resultados.filter((partner) => !partner.ja_possui_cotacao_aberta);
     const parceirosBloqueados = resultados.filter((partner) => partner.ja_possui_cotacao_aberta);
     const nomesBloqueados = parceirosBloqueados.map((partner) => partner.nome).join(', ');
+    const cobertura = data.cobertura || {};
+    const bairro = cobertura.bairro || {};
+    const cidadeCobertura = cobertura.cidade || {};
+    const estadoCobertura = cobertura.estado || {};
 
-    summary.innerText = `${parceirosDisponiveis.length} parceiro(s) elegível(is) serão usados automaticamente.`;
+    const bairroTexto = bairro.count === null || bairro.count === undefined
+        ? 'Bairro nao informado'
+        : `${bairro.nome || 'Bairro'}: ${bairro.count} parceiro(s)`;
+    const cidadeTexto = cidadeCobertura.count === null || cidadeCobertura.count === undefined
+        ? 'Cidade nao informada'
+        : `${cidadeCobertura.nome || 'Cidade'}: ${cidadeCobertura.count} parceiro(s)`;
+    const estadoTexto = estadoCobertura.count === null || estadoCobertura.count === undefined
+        ? 'Estado nao informado'
+        : `${estadoCobertura.nome || 'Estado'}: ${estadoCobertura.count} parceiro(s)`;
+
+    coverage.innerText = `Cobertura conhecida para este endereco - ${bairroTexto} | ${cidadeTexto} | ${estadoTexto}.`;
+
+    summary.innerText = `${parceirosDisponiveis.length} parceiro(s) elegível(is) serão usados automaticamente para os endereços do lead selecionados.`;
 
     if (!parceirosDisponiveis.length) {
         summary.innerText = nomesBloqueados
-            ? `Regra atual: o sistema não abre nova cotação para parceiro que já tenha cotação em aberto neste mesmo endereço. Bloqueados agora: ${nomesBloqueados}.`
-            : 'Regra atual: o sistema só abre cotação para parceiros sem outra cotação em aberto neste mesmo endereço.';
+            ? `Nenhuma cotação foi criada porque estes provedores já possuem cotação em Em negociação para o mesmo endereço operacional e para todos os endereços do lead selecionados: ${nomesBloqueados}.`
+            : 'Nenhum provedor elegível foi encontrado para os endereços do lead selecionados.';
         return;
     }
 
@@ -505,7 +536,7 @@ document.getElementById('partnerProposalCreateForm').addEventListener('submit', 
         event.preventDefault();
         const summary = document.getElementById('partnerProposalSummary');
         const detalheRegra = summary?.innerText?.trim()
-            || 'Regra atual: o sistema bloqueia parceiro que já tenha cotação em aberto neste mesmo endereço.';
+            || 'O sistema bloqueia apenas o mesmo provedor quando ele ja possui cotacao em Em negociacao para o mesmo endereco operacional e para o mesmo endereco do lead selecionado.';
         alert(`Nenhuma cotação foi criada.\n\n${detalheRegra}`);
     }
 });

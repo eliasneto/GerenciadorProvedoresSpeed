@@ -1283,6 +1283,54 @@ def api_lead_empresa_enderecos(request, pk):
     })
 
 
+def _montar_cobertura_parceiros_por_regiao(endereco):
+    estado = (endereco.estado or '').strip().upper()
+    cidade = (endereco.cidade or '').strip()
+    bairro = (endereco.bairro or '').strip()
+
+    partners = Partner.objects.all()
+
+    if estado:
+        parceiros_estado = partners.filter(
+            proposals__client_address__estado__iexact=estado
+        ).distinct()
+    else:
+        parceiros_estado = Partner.objects.none()
+
+    if cidade:
+        filtros_cidade = Q(proposals__client_address__cidade__iexact=cidade)
+        if estado:
+            filtros_cidade &= Q(proposals__client_address__estado__iexact=estado)
+        parceiros_cidade = partners.filter(filtros_cidade).distinct()
+    else:
+        parceiros_cidade = Partner.objects.none()
+
+    if bairro:
+        filtros_bairro = Q(proposals__client_address__bairro__iexact=bairro)
+        if cidade:
+            filtros_bairro &= Q(proposals__client_address__cidade__iexact=cidade)
+        if estado:
+            filtros_bairro &= Q(proposals__client_address__estado__iexact=estado)
+        parceiros_bairro = partners.filter(filtros_bairro).distinct()
+    else:
+        parceiros_bairro = Partner.objects.none()
+
+    return {
+        'bairro': {
+            'nome': bairro or '',
+            'count': parceiros_bairro.count() if bairro else None,
+        },
+        'cidade': {
+            'nome': cidade or '',
+            'count': parceiros_cidade.count() if cidade else None,
+        },
+        'estado': {
+            'nome': estado or '',
+            'count': parceiros_estado.count() if estado else None,
+        },
+    }
+
+
 @user_passes_test(grupo_LastMile_required)
 @login_required
 def endereco_lastmile_lead_address_grid(request, endereco_pk):
@@ -1353,6 +1401,10 @@ def endereco_lastmile_partner_search(request, endereco_pk):
     q = (request.GET.get('q') or '').strip()
     estado = (request.GET.get('estado') or endereco.estado or '').strip().upper()
     cidade = (request.GET.get('cidade') or endereco.cidade or '').strip()
+    lead_endereco_ids = [
+        int(value) for value in request.GET.getlist('lead_endereco_ids')
+        if value and str(value).isdigit()
+    ]
 
     parceiros_queryset = Partner.objects.all()
 
@@ -1380,14 +1432,29 @@ def endereco_lastmile_partner_search(request, endereco_pk):
     )
 
     parceiros_ids = [partner.id for partner in parceiros]
-    parceiros_com_cotacao_aberta = set(
-        Proposal.objects.filter(
-            client_address=endereco,
-            partner_id__in=parceiros_ids,
-        )
-        .exclude(status__in=PROPOSAL_STATUSES_ENCERRADAS)
-        .values_list('partner_id', flat=True)
+    propostas_em_negociacao = Proposal.objects.filter(
+        client_address=endereco,
+        partner_id__in=parceiros_ids,
+        status='analise',
     )
+
+    pares_bloqueados = set()
+    parceiros_totalmente_bloqueados = set()
+    if lead_endereco_ids:
+        pares_bloqueados = set(
+            propostas_em_negociacao
+            .filter(lead_endereco_id__in=lead_endereco_ids)
+            .values_list('partner_id', 'lead_endereco_id')
+        )
+        total_enderecos = len(set(lead_endereco_ids))
+        if total_enderecos:
+            contagem_por_parceiro = {}
+            for partner_id, _lead_endereco_id in pares_bloqueados:
+                contagem_por_parceiro.setdefault(partner_id, set()).add(_lead_endereco_id)
+            parceiros_totalmente_bloqueados = {
+                partner_id for partner_id, enderecos_ids in contagem_por_parceiro.items()
+                if len(enderecos_ids) >= total_enderecos
+            }
 
     resultados = [
         {
@@ -1396,7 +1463,7 @@ def endereco_lastmile_partner_search(request, endereco_pk):
             'razao_social': partner.razao_social or '',
             'cnpj_cpf': partner.cnpj_cpf or '',
             'status': partner.status or '',
-            'ja_possui_cotacao_aberta': partner.id in parceiros_com_cotacao_aberta,
+            'ja_possui_cotacao_aberta': partner.id in parceiros_totalmente_bloqueados,
         }
         for partner in parceiros
     ]
@@ -1405,8 +1472,13 @@ def endereco_lastmile_partner_search(request, endereco_pk):
         'endereco': {
             'id': endereco.id,
             'login_ixc': endereco.login_ixc or '',
+            'bairro': endereco.bairro or '',
             'cidade': endereco.cidade or '',
             'estado': endereco.estado or '',
+        },
+        'cobertura': _montar_cobertura_parceiros_por_regiao(endereco),
+        'selecionados': {
+            'lead_endereco_ids': lead_endereco_ids,
         },
         'resultados': resultados,
     })
