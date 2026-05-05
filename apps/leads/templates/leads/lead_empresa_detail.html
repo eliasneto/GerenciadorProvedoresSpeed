@@ -4,7 +4,7 @@
 <div class="p-6 md:p-10 max-w-7xl mx-auto">
     <div class="mb-6">
         <a href="{% url 'lead_list' %}" class="page-back-button">
-            <i data-lucide="arrow-left" class="w-4 h-4"></i> Voltar para empresas
+            <i data-lucide="arrow-left" class="w-4 h-4"></i> Voltar para provedores
         </a>
     </div>
 
@@ -89,7 +89,7 @@
                                 <button type="button" class="p-2 text-gray-300 bg-gray-50 rounded-lg cursor-not-allowed" title="Cadastre ou vincule um parceiro para gerenciar os planos">
                                     <i data-lucide="waypoints" class="w-5 h-5"></i>
                                 </button>
-                                <button type="button" class="p-2 text-gray-300 bg-gray-50 rounded-lg cursor-not-allowed" title="Este prospecto ainda não possui cotação aberta">
+                                <button type="button" class="p-2 text-gray-300 bg-gray-50 rounded-lg cursor-not-allowed" title="Esta prospecção ainda não possui cotação aberta">
                                     <i data-lucide="folder-open" class="w-5 h-5"></i>
                                 </button>
                                 {% endif %}
@@ -98,11 +98,11 @@
                                     <i data-lucide="history" class="w-5 h-5"></i>
                                 </a>
 
-                                <a href="{% url 'lead_update' endereco.lead_espelho.pk %}" class="p-2 text-gray-400 hover:text-ageis-black hover:bg-gray-100 rounded-lg transition" title="Editar lead">
+                                <a href="{% url 'lead_update' endereco.lead_espelho.pk %}" class="p-2 text-gray-400 hover:text-ageis-black hover:bg-gray-100 rounded-lg transition" title="Editar prospecção">
                                     <i data-lucide="edit-3" class="w-5 h-5"></i>
                                 </a>
                                 {% else %}
-                                <span class="text-xs text-gray-300 font-bold uppercase tracking-widest">Sem lead espelho</span>
+                                <span class="text-xs text-gray-300 font-bold uppercase tracking-widest">Sem prospecção espelho</span>
                                 {% endif %}
                             </div>
                         </td>

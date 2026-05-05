@@ -16,7 +16,7 @@
     <div class="flex flex-col md:flex-row md:items-end justify-between mb-6 gap-4">
         <div>
             <p class="text-[10px] text-gray-400 font-black uppercase tracking-[0.2em] mb-2">Clientes</p>
-            <h1 class="text-3xl font-black text-gray-900 italic uppercase tracking-tighter">Empresas de Prospecção</h1>
+            <h1 class="text-3xl font-black text-gray-900 italic uppercase tracking-tighter">Empresas de Provedores</h1>
             <p class="text-[10px] text-gray-500 font-bold uppercase tracking-widest mt-1">Base estruturada por empresa e endereço</p>
         </div>
         <div class="flex items-center gap-4">
@@ -24,7 +24,7 @@
                 {{ page_obj.paginator.count }} empresas
             </span>
             <a href="{% url 'lead_create' %}" class="inline-flex items-center justify-center gap-2 bg-ageis-black text-ageis-yellow px-6 py-2.5 rounded-full font-bold uppercase tracking-widest text-[10px] hover:bg-gray-800 transition shadow-lg">
-                <i data-lucide="plus" class="w-4 h-4"></i> Novo Lead
+                <i data-lucide="plus" class="w-4 h-4"></i> Nova Prospecção
             </a>
         </div>
     </div>
@@ -57,7 +57,7 @@
 
     <div class="flex justify-end mb-4">
         <a href="{% url 'lead_list_legacy' %}" class="text-[10px] font-black uppercase tracking-widest text-gray-400 hover:text-gray-700 transition">
-            Ver listagem legada por endereço
+            Ver listagem legada por prospecção
         </a>
     </div>
 
@@ -90,7 +90,7 @@
                                     </p>
                                     <div class="mt-2 flex flex-wrap items-center gap-1">
                                         {% if endereco.lead_espelho %}
-                                        <button type="button" onclick="openQuickProposalModal('{{ endereco.lead_espelho.pk }}', '{{ endereco.lead_espelho.nome_fantasia|default:endereco.lead_espelho.razao_social|escapejs }}', '{{ endereco.lead_espelho.cnpj_cpf|default:''|escapejs }}')" class="p-2 text-gray-400 hover:text-ageis-yellow hover:bg-yellow-50 rounded-lg transition" title="Abrir cotação rápida neste endereço">
+                                        <button type="button" onclick="openQuickProposalModal('{{ endereco.lead_espelho.pk }}', '{{ endereco.lead_espelho.nome_fantasia|default:endereco.lead_espelho.razao_social|escapejs }}', '{{ endereco.lead_espelho.cnpj_cpf|default:''|escapejs }}')" class="p-2 text-gray-400 hover:text-ageis-yellow hover:bg-yellow-50 rounded-lg transition" title="Abrir cotação rápida nesta prospecção">
                                             <i data-lucide="file-plus-2" class="w-4 h-4"></i>
                                         </button>
 
@@ -105,7 +105,7 @@
                                         <button type="button" class="p-2 text-gray-300 bg-white rounded-lg cursor-not-allowed" title="Cadastre ou vincule um parceiro para gerenciar os planos">
                                             <i data-lucide="waypoints" class="w-4 h-4"></i>
                                         </button>
-                                        <button type="button" class="p-2 text-gray-300 bg-white rounded-lg cursor-not-allowed" title="Este prospecto ainda não possui cotação aberta">
+                                        <button type="button" class="p-2 text-gray-300 bg-white rounded-lg cursor-not-allowed" title="Esta prospecção ainda não possui cotação aberta">
                                             <i data-lucide="folder-open" class="w-4 h-4"></i>
                                         </button>
                                         {% endif %}
@@ -114,11 +114,11 @@
                                             <i data-lucide="history" class="w-4 h-4"></i>
                                         </a>
 
-                                        <a href="{% url 'lead_update' endereco.lead_espelho.pk %}" class="p-2 text-gray-400 hover:text-ageis-black hover:bg-gray-100 rounded-lg transition" title="Editar lead deste endereço">
+                                        <a href="{% url 'lead_update' endereco.lead_espelho.pk %}" class="p-2 text-gray-400 hover:text-ageis-black hover:bg-gray-100 rounded-lg transition" title="Editar prospecção deste endereço">
                                             <i data-lucide="edit-3" class="w-4 h-4"></i>
                                         </a>
                                         {% else %}
-                                        <span class="text-[10px] font-black uppercase tracking-widest text-gray-300">Sem lead espelho</span>
+                                        <span class="text-[10px] font-black uppercase tracking-widest text-gray-300">Sem prospecção espelho</span>
                                         {% endif %}
                                     </div>
                                 </div>

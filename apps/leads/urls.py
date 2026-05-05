@@ -1,5 +1,6 @@
 from django.urls import path
 from . import views
+from . import lastmile_views
 
 urlpatterns = [
     path('', views.lead_empresa_list, name='lead_list'),
@@ -17,8 +18,8 @@ urlpatterns = [
     path('integracoes/', views.integracoes_view, name='integracoes_lastmile'),
     path('enderecos/', views.enderecos_lastmile_view, name='enderecos_lastmile'),
     path('enderecos/<int:endereco_pk>/leads-enderecos-grid/', views.endereco_lastmile_lead_address_grid, name='endereco_lastmile_lead_address_grid'),
-    path('enderecos/<int:endereco_pk>/parceiros/', views.endereco_lastmile_partner_search, name='endereco_lastmile_partner_search'),
-    path('enderecos/<int:endereco_pk>/cotacoes/criar/', views.endereco_lastmile_batch_proposal_create, name='endereco_lastmile_batch_proposal_create'),
+    path('enderecos/<int:endereco_pk>/parceiros/', lastmile_views.endereco_lastmile_partner_search, name='endereco_lastmile_partner_search'),
+    path('enderecos/<int:endereco_pk>/cotacoes/criar/', lastmile_views.endereco_lastmile_batch_proposal_create, name='endereco_lastmile_batch_proposal_create'),
     path('enderecos/<int:pk>/', views.enderecos_lastmile_cliente_view, name='enderecos_lastmile_cliente'),
     path('integracoes/modelo/', views.download_modelo_google_view, name='download_modelo_google'),
     

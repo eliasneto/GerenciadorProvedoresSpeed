@@ -492,7 +492,7 @@ def lead_create(request):
         if form.is_valid():
             lead = form.save()
             _sync_lead_to_structured_models(lead)
-            messages.success(request, "Novo lead cadastrado com sucesso!")
+            messages.success(request, "Nova prospecção cadastrada com sucesso!")
             return redirect('lead_list')
     else:
         form = LeadForm()
@@ -513,7 +513,7 @@ def lead_update(request, pk):
         if form.is_valid():
             lead = form.save()
             _sync_lead_to_structured_models(lead)
-            messages.success(request, "Dados do lead atualizados!")
+            messages.success(request, "Dados da prospecção atualizados!")
             return redirect('lead_list')
     else:
         form = LeadForm(instance=lead)
@@ -522,7 +522,7 @@ def lead_update(request, pk):
         'form': form,
         'lead': lead, # Injetamos o lead para a tela saber o ID
         'historico': historico, # Injetamos a lista de eventos
-        'title': 'Editar Lead'
+        'title': 'Editar Prospecção'
     })
 
 @user_passes_test(grupo_LastMile_required)
@@ -546,7 +546,7 @@ def lead_add_historico(request, pk):
                 content_type=ContentType.objects.get_for_model(Lead),
                 object_id=lead.id
             )
-            messages.success(request, "Registro adicionado à linha do tempo do lead!")
+            messages.success(request, "Registro adicionado à linha do tempo da prospecção!")
             
     return redirect('lead_update', pk=pk)
 
@@ -557,7 +557,7 @@ def lead_delete(request, pk):
     lead = get_object_or_404(Lead, pk=pk)
     if request.method == 'POST':
         lead.delete()
-        messages.warning(request, "Lead removido da base de cotação.")
+        messages.warning(request, "Prospecção removida da base de provedores.")
         return redirect('lead_list')
     return redirect('lead_list')
 
@@ -605,7 +605,7 @@ def update_lead_status(request, pk):
                     object_id=lead.id
                 )
             
-            messages.warning(request, f"O Lead '{lead.nome_fantasia or lead.razao_social}' foi marcado como Inviável.")
+            messages.warning(request, f"A prospecção '{lead.nome_fantasia or lead.razao_social}' foi marcada como inviável.")
             return redirect('lead_list')
             
         elif novo_status == 'negociacao':
@@ -628,7 +628,7 @@ def update_lead_status(request, pk):
                     object_id=lead.id
                 )
             
-            messages.info(request, "Lead movido para Em Negociação.")
+            messages.info(request, "Prospecção movida para Em Negociação.")
             return redirect('lead_list')
         
     return redirect('lead_list')
@@ -1460,7 +1460,7 @@ def endereco_lastmile_partner_search(request, endereco_pk):
         'resultados': resultados,
     })
     if not lead_endereco_ids:
-        messages.error(request, "Selecione um endereço do lead antes de criar as cotações.")
+        messages.error(request, "Selecione pelo menos um endereço da prospecção antes de criar as cotações.")
         return redirect(redirect_url)
 
     lead_endereco = get_object_or_404(
@@ -1525,7 +1525,7 @@ def endereco_lastmile_batch_proposal_create(request, endereco_pk):
     redirect_url = request.POST.get('next') or request.META.get('HTTP_REFERER') or reverse_lazy('enderecos_lastmile_cliente', kwargs={'pk': endereco.cliente_id})
 
     if not lead_endereco_id or not str(lead_endereco_id).isdigit():
-        messages.error(request, "Selecione um endereço do lead antes de criar as cotações.")
+        messages.error(request, "Selecione pelo menos um endereço da prospecção antes de criar as cotações.")
         return redirect(redirect_url)
 
     lead_enderecos = list(
@@ -1534,7 +1534,7 @@ def endereco_lastmile_batch_proposal_create(request, endereco_pk):
         .order_by('empresa__razao_social', 'cidade', 'bairro', 'endereco', 'id')
     )
     if not lead_enderecos:
-        messages.error(request, "Nenhum endereço do lead válido foi selecionado.")
+        messages.error(request, "Nenhum endereço válido da prospecção foi selecionado.")
         return redirect(redirect_url)
 
     partner_ids_limpos = []

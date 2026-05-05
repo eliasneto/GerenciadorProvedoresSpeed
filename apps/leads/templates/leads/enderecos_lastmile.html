@@ -202,7 +202,7 @@
                     </div>
                     <div>
                         <h3 class="text-xl font-black text-gray-900 leading-none">Abrir Cotação por Endereço</h3>
-                        <p class="text-xs text-gray-500 font-bold mt-1">O endereço operacional já está definido. Selecione o lead, os endereços do lead e os parceiros.</p>
+                        <p class="text-xs text-gray-500 font-bold mt-1">O endereço operacional já está definido. Selecione a prospecção, os endereços da prospecção e os parceiros.</p>
                     </div>
                 </div>
                 <div class="flex flex-wrap items-center gap-2 text-[11px] font-black uppercase">
@@ -220,7 +220,7 @@
         <div class="space-y-5 mb-5">
             <section class="border border-gray-100 rounded-[1.5rem] p-4 bg-gray-50/40 transition-all duration-200">
                 <div class="grid grid-cols-1 md:grid-cols-[minmax(0,1.8fr)_minmax(0,0.8fr)_110px_auto] gap-3 mb-3">
-                    <input type="text" id="leadAddressGridQuery" placeholder="Buscar lead, endereço, bairro, cidade ou CEP..."
+                    <input type="text" id="leadAddressGridQuery" placeholder="Buscar prospecção, endereço, bairro, cidade ou CEP..."
                            class="w-full px-4 py-3 bg-white border border-gray-100 rounded-2xl outline-none focus:ring-2 focus:ring-ageis-yellow transition-all font-bold text-gray-800">
                     <input type="text" id="leadAddressGridCidade" placeholder="Cidade"
                            class="w-full px-4 py-3 bg-white border border-gray-100 rounded-2xl outline-none focus:ring-2 focus:ring-ageis-yellow transition-all font-bold uppercase text-gray-800">
@@ -245,7 +245,7 @@
                 </div>
 
                 <div class="grid grid-cols-[minmax(0,1.2fr)_100px_minmax(0,1fr)_minmax(0,1fr)_120px_minmax(0,1.8fr)_80px] gap-4 px-4 py-3 text-[10px] font-black uppercase tracking-[0.18em] text-gray-400 border border-b-0 border-gray-100 rounded-t-[1.5rem] bg-white">
-                    <span>Lead</span>
+                    <span>Prospecção</span>
                     <span>UF</span>
                     <span>Cidade</span>
                     <span>Bairro</span>
@@ -265,9 +265,10 @@
             <input type="hidden" name="next" value="{{ request.get_full_path }}">
             <div id="selectedLeadAddressInputs"></div>
             <div id="selectedPartnerInputs"></div>
+            <input type="hidden" name="force_lead_partner_fallback" id="partnerProposalLeadFallbackMode" value="0">
             <input type="hidden" name="lead_endereco_id" id="selectedLeadAddressId">
             <div id="partnerCoverageSummary" class="text-[11px] font-bold text-gray-500 mb-2">Analisando cobertura regional dos parceiros...</div>
-            <div id="partnerProposalSummary" class="text-[11px] font-bold text-gray-500 mb-2">Selecione pelo menos um endereço do lead para calcular os parceiros elegíveis.</div>
+            <div id="partnerProposalSummary" class="text-[11px] font-bold text-gray-500 mb-2">Selecione pelo menos um endereço da prospecção para calcular os parceiros elegíveis.</div>
 
             <div class="flex items-center justify-between gap-4 pt-5 mt-5">
                 <p class="text-[11px] font-bold text-gray-400">Regra de bloqueio: o sistema só impede nova cotação quando o mesmo provedor já possui uma cotação em Em negociação para este mesmo endereço operacional.</p>
@@ -294,15 +295,15 @@ let partnerProposalOptionsLoading = false;
 let partnerProposalOptionsRequestId = 0;
 
 function leadAddressGridUrl(addressId) {
-    return `/prospeccao/enderecos/${addressId}/leads-enderecos-grid/`;
+    return `/provedores/enderecos/${addressId}/leads-enderecos-grid/`;
 }
 
 function partnerSearchUrl(addressId) {
-    return `/prospeccao/enderecos/${addressId}/parceiros/`;
+    return `/provedores/enderecos/${addressId}/parceiros/`;
 }
 
 function partnerCreateUrl(addressId) {
-    return `/prospeccao/enderecos/${addressId}/cotacoes/criar/`;
+    return `/provedores/enderecos/${addressId}/cotacoes/criar/`;
 }
 
 function setPartnerProposalSubmitState(disabled) {
@@ -336,6 +337,7 @@ function openPartnerProposalModal(button) {
     document.getElementById('leadAddressGridQuery').value = '';
     document.getElementById('leadAddressGridCidade').value = cidade || '';
     document.getElementById('leadAddressGridUf').value = (estado || '').toUpperCase();
+    document.getElementById('partnerProposalLeadFallbackMode').value = '0';
     document.getElementById('leadAddressGridList').innerHTML = '<div class="px-4 py-8 text-center text-sm font-bold text-gray-400 uppercase">Carregando...</div>';
     document.getElementById('leadAddressGridSummary').innerText = 'Carregando endereços...';
     syncLeadAddressInputs();
@@ -355,6 +357,7 @@ function closePartnerProposalModal() {
     document.getElementById('selectedLeadAddressId').value = '';
     document.getElementById('selectedLeadAddressInputs').innerHTML = '';
     document.getElementById('selectedPartnerInputs').innerHTML = '';
+    document.getElementById('partnerProposalLeadFallbackMode').value = '0';
     document.getElementById('partnerProposalClienteBadge').innerText = 'Cliente --';
     partnerProposalAddressId = null;
     leadAddressGridCache = [];
@@ -464,7 +467,7 @@ async function loadPartnerProposalOptions() {
     coverage.innerText = 'Analisando cobertura regional dos parceiros...';
     if (!leadEnderecoIds.length) {
         if (requestId !== partnerProposalOptionsRequestId) return;
-        summary.innerText = 'Selecione pelo menos um endereço do lead para calcular os parceiros elegíveis.';
+        summary.innerText = 'Selecione pelo menos um endereço da prospecção para calcular os parceiros elegíveis.';
         selectedPartnerInputs.innerHTML = '';
         partnerProposalOptionsLoading = false;
         setPartnerProposalSubmitState(false);
@@ -485,10 +488,8 @@ async function loadPartnerProposalOptions() {
         if (requestId !== partnerProposalOptionsRequestId) return;
 
         const resultados = data.resultados || [];
-        const resultadosFallback = data.resultados_fallback || [];
         const parceirosDisponiveis = resultados.filter((partner) => !partner.ja_possui_cotacao_aberta);
         const parceirosBloqueados = resultados.filter((partner) => partner.ja_possui_cotacao_aberta);
-        const parceirosFallbackDisponiveis = resultadosFallback.filter((partner) => !partner.ja_possui_cotacao_aberta);
         const nomesBloqueados = parceirosBloqueados.map((partner) => partner.nome).join(', ');
         const cobertura = data.cobertura || {};
         const bairro = cobertura.bairro || {};
@@ -506,21 +507,21 @@ async function loadPartnerProposalOptions() {
             : `${estadoCobertura.nome || 'Estado'}: ${estadoCobertura.count} parceiro(s)`;
 
         coverage.innerText = `Cobertura conhecida para este endereco - ${bairroTexto} | ${cidadeTexto} | ${estadoTexto}.`;
+        document.getElementById('partnerProposalLeadFallbackMode').value = '0';
 
-        summary.innerText = `${parceirosDisponiveis.length} parceiro(s) elegível(is) serão usados automaticamente para os endereços do lead selecionados.`;
+        summary.innerText = `${parceirosDisponiveis.length} parceiro(s) elegível(is) serão usados automaticamente para os endereços da prospecção selecionados.`;
 
         if (!parceirosDisponiveis.length) {
-            if (parceirosFallbackDisponiveis.length) {
-                summary.innerText = `Nenhum provedor elegível foi encontrado pela cobertura conhecida para os endereços do lead selecionados. Se quiser prosseguir mesmo assim, clique em Criar Cotações para abrir com ${parceirosFallbackDisponiveis.length} provedor(es) disponíveis fora da cobertura conhecida.`;
-                selectedPartnerInputs.innerHTML = parceirosFallbackDisponiveis
-                    .map((partner) => `<input type="hidden" name="partner_ids" value="${partner.id}">`)
-                    .join('');
+            if (leadEnderecoIds.length) {
+                summary.innerText = `Nenhum provedor elegível foi encontrado pela cobertura conhecida para os endereços da prospecção selecionados. Se quiser prosseguir mesmo assim, clique em Criar Cotações para abrir usando os provedores desta prospecção.`;
+                document.getElementById('partnerProposalLeadFallbackMode').value = '1';
+                selectedPartnerInputs.innerHTML = '';
                 return;
             }
 
             summary.innerText = nomesBloqueados
                 ? `Nenhuma cotação foi criada porque estes provedores já possuem cotação em Em negociação neste mesmo endereço operacional: ${nomesBloqueados}.`
-                : 'Nenhum provedor elegível foi encontrado para os endereços do lead selecionados, e não há provedores disponíveis para prosseguir fora da cobertura conhecida.';
+                : 'Nenhum provedor elegível foi encontrado para os endereços da prospecção selecionados, e não há provedores disponíveis para prosseguir fora da cobertura conhecida.';
             return;
         }
 
@@ -569,7 +570,7 @@ document.getElementById('leadAddressGridUf').addEventListener('keydown', functio
 document.getElementById('partnerProposalCreateForm').addEventListener('submit', function (event) {
     if (!selectedLeadAddressIds.size) {
         event.preventDefault();
-        alert('Selecione pelo menos um endereço do lead antes de criar as cotações.');
+        alert('Selecione pelo menos um endereço da prospecção antes de criar as cotações.');
         return;
     }
     if (partnerProposalOptionsLoading) {
@@ -578,6 +579,9 @@ document.getElementById('partnerProposalCreateForm').addEventListener('submit', 
         return;
     }
     if (!document.querySelector('#selectedPartnerInputs input[name="partner_ids"]')) {
+        if (document.getElementById('partnerProposalLeadFallbackMode')?.value === '1') {
+            return;
+        }
         event.preventDefault();
         const summary = document.getElementById('partnerProposalSummary');
         const detalheRegra = summary?.innerText?.trim()

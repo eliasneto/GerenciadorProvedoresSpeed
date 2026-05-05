@@ -26,7 +26,9 @@ Melhorado:
 - mensagem da regra de duplicidade no modal de abertura de cotacao por endereco reescrita para ficar mais clara
 - regra de elegibilidade do modal de abertura de cotacao por endereco corrigida para bloquear apenas o mesmo provedor quando ele ja possui cotacao em Em negociacao no mesmo endereco operacional
 - modal de abertura de cotacao por endereco ajustado para permitir prosseguir com provedores disponiveis fora da cobertura conhecida quando nao houver provedor elegivel pela heuristica regional
+- correcao do fallback do modal de abertura de cotacao por endereco para criar cotacoes apenas com os provedores selecionados na prospeccao, sem puxar parceiros historicos indevidos da base
 - fluxo do modal de abertura de cotacao por endereco ajustado para aguardar o carregamento dos parceiros elegiveis antes de permitir a criacao
+- padronizacao da area de prospeccao para a rota canonica `/provedores/`, com ajustes de nomenclatura nas telas para exibir `provedores` e `prospeccao`
 
 ## v1.1.0 - 2026-04-10
 

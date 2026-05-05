@@ -34,7 +34,7 @@ function resetQuickProposalModal() {
 
 function openQuickProposalModal(pk, name, cnpj) {
     resetQuickProposalModal();
-    document.getElementById('quickProposalForm').action = `/cotacao/${pk}/abrir-proposta/`;
+    document.getElementById('quickProposalForm').action = `/provedores/${pk}/abrir-proposta/`;
     document.getElementById('quickProposalLeadName').innerText = name;
     document.getElementById('quickProposalLeadDoc').innerText = cnpj ? `CNPJ/CPF: ${cnpj}` : 'CNPJ/CPF nao informado';
     document.getElementById('quickProposalModal').classList.remove('hidden');

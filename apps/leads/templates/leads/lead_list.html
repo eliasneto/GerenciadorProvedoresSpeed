@@ -21,15 +21,15 @@
 
     <div class="flex flex-col md:flex-row md:items-end justify-between mb-6 gap-4">
         <div>
-            <h1 class="text-3xl font-black text-gray-900 italic uppercase tracking-tighter">Cotação</h1>
-            <p class="text-[10px] text-gray-500 font-bold uppercase tracking-widest mt-1">Gestão de Oportunidades</p>
+            <h1 class="text-3xl font-black text-gray-900 italic uppercase tracking-tighter">Provedores</h1>
+            <p class="text-[10px] text-gray-500 font-bold uppercase tracking-widest mt-1">Gestão de Prospecções</p>
         </div>
         <div class="flex items-center gap-4">
             <span class="bg-ageis-yellow text-black px-4 py-2.5 rounded-full text-[10px] font-black uppercase tracking-widest shadow-sm">
                 {{ page_obj.paginator.count }} Resultados
             </span>
             <a href="{% url 'lead_create' %}" class="inline-flex items-center justify-center gap-2 bg-ageis-black text-ageis-yellow px-6 py-2.5 rounded-full font-bold uppercase tracking-widest text-[10px] hover:bg-gray-800 transition shadow-lg">
-                <i data-lucide="plus" class="w-4 h-4"></i> Novo Lead
+                <i data-lucide="plus" class="w-4 h-4"></i> Nova Prospecção
             </a>
         </div>
     </div>
@@ -68,7 +68,7 @@
             <table class="w-full text-left">
                 <thead class="bg-gray-50 border-b border-gray-100">
                     <tr>
-                        <th class="px-6 py-4 text-xs font-bold uppercase text-gray-400">Parceiro</th>
+                        <th class="px-6 py-4 text-xs font-bold uppercase text-gray-400">Prospecção</th>
                         <th class="px-6 py-4 text-xs font-bold uppercase text-gray-400">Município / UF</th>
                         <th class="px-6 py-4 text-xs font-bold uppercase text-gray-400">Contato</th>
                                                 <th class="px-6 py-4 text-xs font-bold uppercase text-gray-400 text-right">Ações</th>
@@ -126,7 +126,7 @@
                                 <button type="button" class="p-2 text-gray-300 bg-gray-50 rounded-lg cursor-not-allowed" title="Cadastre ou vincule um parceiro para gerenciar os planos">
                                     <i data-lucide="waypoints" class="w-5 h-5"></i>
                                 </button>
-                                <button type="button" class="p-2 text-gray-300 bg-gray-50 rounded-lg cursor-not-allowed" title="Este prospecto ainda não possui cotação aberta">
+                                <button type="button" class="p-2 text-gray-300 bg-gray-50 rounded-lg cursor-not-allowed" title="Esta prospecção ainda não possui cotação aberta">
                                     <i data-lucide="folder-open" class="w-5 h-5"></i>
                                 </button>
                                 {% endif %}
@@ -135,7 +135,7 @@
                                     <i data-lucide="history" class="w-5 h-5"></i>
                                 </a>
 
-                                <a href="{% url 'lead_update' lead.pk %}" class="p-2 text-gray-400 hover:text-ageis-black hover:bg-gray-100 rounded-lg transition" title="Editar Cotação">
+                                <a href="{% url 'lead_update' lead.pk %}" class="p-2 text-gray-400 hover:text-ageis-black hover:bg-gray-100 rounded-lg transition" title="Editar Prospecção">
                                     <i data-lucide="edit-3" class="w-5 h-5"></i>
                                 </a>
                             </div>
@@ -146,7 +146,7 @@
                         <td colspan="4" class="px-6 py-20 text-center text-gray-400 font-medium">
                             <div class="flex flex-col items-center gap-2">
                                 <i data-lucide="inbox" class="w-8 h-8 opacity-50"></i>
-                                Nenhum lead encontrado com estes filtros.
+                                Nenhuma prospecção encontrada com estes filtros.
                             </div>
                         </td>
                     </tr>
@@ -339,7 +339,7 @@ function resetQuickProposalModal() {
 
 function openQuickProposalModal(pk, name, cnpj) {
     resetQuickProposalModal();
-    document.getElementById('quickProposalForm').action = `/cotacao/${pk}/abrir-proposta/`;
+    document.getElementById('quickProposalForm').action = `/provedores/${pk}/abrir-proposta/`;
     document.getElementById('quickProposalLeadName').innerText = name;
     document.getElementById('quickProposalLeadDoc').innerText = cnpj ? `CNPJ/CPF: ${cnpj}` : 'CNPJ/CPF nao informado';
     document.getElementById('quickProposalModal').classList.remove('hidden');
