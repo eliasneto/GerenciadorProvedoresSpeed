@@ -270,12 +270,12 @@
             <div id="partnerProposalSummary" class="text-[11px] font-bold text-gray-500 mb-2">Selecione pelo menos um endereço do lead para calcular os parceiros elegíveis.</div>
 
             <div class="flex items-center justify-between gap-4 pt-5 mt-5">
-                <p class="text-[11px] font-bold text-gray-400">Regra de bloqueio: o sistema só impede nova cotação quando o mesmo provedor já possui uma cotação em Em negociação para o mesmo endereço operacional e para o mesmo endereço do lead selecionado.</p>
+                <p class="text-[11px] font-bold text-gray-400">Regra de bloqueio: o sistema só impede nova cotação quando o mesmo provedor já possui uma cotação em Em negociação para este mesmo endereço operacional.</p>
                 <div class="flex items-center gap-3">
                     <button type="button" onclick="closePartnerProposalModal()" class="px-5 py-3 rounded-2xl font-bold text-gray-500 hover:bg-gray-50 transition">
                         Cancelar
                     </button>
-                    <button type="submit" class="px-6 py-3 bg-ageis-black text-ageis-yellow font-black uppercase italic rounded-2xl hover:bg-gray-800 transition shadow-lg">
+                    <button type="submit" id="partnerProposalSubmitButton" class="px-6 py-3 bg-ageis-black text-ageis-yellow font-black uppercase italic rounded-2xl hover:bg-gray-800 transition shadow-lg disabled:opacity-50 disabled:cursor-not-allowed">
                         Criar Cotações
                     </button>
                 </div>
@@ -290,6 +290,8 @@
 let partnerProposalAddressId = null;
 let selectedLeadAddressIds = new Set();
 let leadAddressGridCache = [];
+let partnerProposalOptionsLoading = false;
+let partnerProposalOptionsRequestId = 0;
 
 function leadAddressGridUrl(addressId) {
     return `/prospeccao/enderecos/${addressId}/leads-enderecos-grid/`;
@@ -301,6 +303,12 @@ function partnerSearchUrl(addressId) {
 
 function partnerCreateUrl(addressId) {
     return `/prospeccao/enderecos/${addressId}/cotacoes/criar/`;
+}
+
+function setPartnerProposalSubmitState(disabled) {
+    const button = document.getElementById('partnerProposalSubmitButton');
+    if (!button) return;
+    button.disabled = disabled;
 }
 
 function syncLeadAddressInputs() {
@@ -333,6 +341,7 @@ function openPartnerProposalModal(button) {
     syncLeadAddressInputs();
     document.getElementById('partnerProposalCreateForm').action = partnerCreateUrl(partnerProposalAddressId);
     document.getElementById('partnerProposalModal').classList.remove('hidden');
+    setPartnerProposalSubmitState(true);
     loadLeadAddressGrid();
     loadPartnerProposalOptions();
 }
@@ -350,6 +359,9 @@ function closePartnerProposalModal() {
     partnerProposalAddressId = null;
     leadAddressGridCache = [];
     selectedLeadAddressIds = new Set();
+    partnerProposalOptionsLoading = false;
+    partnerProposalOptionsRequestId = 0;
+    setPartnerProposalSubmitState(false);
 }
 
 async function loadLeadAddressGrid() {
@@ -439,6 +451,7 @@ function clearLeadAddressSelection() {
 async function loadPartnerProposalOptions() {
     if (!partnerProposalAddressId) return;
 
+    const requestId = ++partnerProposalOptionsRequestId;
     const estado = document.getElementById('leadAddressGridUf').value.trim().toUpperCase();
     const cidade = document.getElementById('leadAddressGridCidade').value.trim();
     const leadEnderecoIds = Array.from(selectedLeadAddressIds);
@@ -446,10 +459,15 @@ async function loadPartnerProposalOptions() {
     const summary = document.getElementById('partnerProposalSummary');
     const selectedPartnerInputs = document.getElementById('selectedPartnerInputs');
 
+    partnerProposalOptionsLoading = true;
+    setPartnerProposalSubmitState(true);
     coverage.innerText = 'Analisando cobertura regional dos parceiros...';
     if (!leadEnderecoIds.length) {
+        if (requestId !== partnerProposalOptionsRequestId) return;
         summary.innerText = 'Selecione pelo menos um endereço do lead para calcular os parceiros elegíveis.';
         selectedPartnerInputs.innerHTML = '';
+        partnerProposalOptionsLoading = false;
+        setPartnerProposalSubmitState(false);
         return;
     }
 
@@ -459,45 +477,57 @@ async function loadPartnerProposalOptions() {
     const url = new URL(partnerSearchUrl(partnerProposalAddressId), window.location.origin);
     if (estado) url.searchParams.set('estado', estado);
     if (cidade) url.searchParams.set('cidade', cidade);
-    leadEnderecoIds.forEach((id) => url.searchParams.append('lead_endereco_ids', id));
+    try {
+        const response = await fetch(url.toString(), {
+            headers: { 'X-Requested-With': 'XMLHttpRequest' }
+        });
+        const data = await response.json();
+        if (requestId !== partnerProposalOptionsRequestId) return;
 
-    const response = await fetch(url.toString(), {
-        headers: { 'X-Requested-With': 'XMLHttpRequest' }
-    });
-    const data = await response.json();
-    const resultados = data.resultados || [];
-    const parceirosDisponiveis = resultados.filter((partner) => !partner.ja_possui_cotacao_aberta);
-    const parceirosBloqueados = resultados.filter((partner) => partner.ja_possui_cotacao_aberta);
-    const nomesBloqueados = parceirosBloqueados.map((partner) => partner.nome).join(', ');
-    const cobertura = data.cobertura || {};
-    const bairro = cobertura.bairro || {};
-    const cidadeCobertura = cobertura.cidade || {};
-    const estadoCobertura = cobertura.estado || {};
+        const resultados = data.resultados || [];
+        const parceirosDisponiveis = resultados.filter((partner) => !partner.ja_possui_cotacao_aberta);
+        const parceirosBloqueados = resultados.filter((partner) => partner.ja_possui_cotacao_aberta);
+        const nomesBloqueados = parceirosBloqueados.map((partner) => partner.nome).join(', ');
+        const cobertura = data.cobertura || {};
+        const bairro = cobertura.bairro || {};
+        const cidadeCobertura = cobertura.cidade || {};
+        const estadoCobertura = cobertura.estado || {};
 
-    const bairroTexto = bairro.count === null || bairro.count === undefined
-        ? 'Bairro nao informado'
-        : `${bairro.nome || 'Bairro'}: ${bairro.count} parceiro(s)`;
-    const cidadeTexto = cidadeCobertura.count === null || cidadeCobertura.count === undefined
-        ? 'Cidade nao informada'
-        : `${cidadeCobertura.nome || 'Cidade'}: ${cidadeCobertura.count} parceiro(s)`;
-    const estadoTexto = estadoCobertura.count === null || estadoCobertura.count === undefined
-        ? 'Estado nao informado'
-        : `${estadoCobertura.nome || 'Estado'}: ${estadoCobertura.count} parceiro(s)`;
+        const bairroTexto = bairro.count === null || bairro.count === undefined
+            ? 'Bairro nao informado'
+            : `${bairro.nome || 'Bairro'}: ${bairro.count} parceiro(s)`;
+        const cidadeTexto = cidadeCobertura.count === null || cidadeCobertura.count === undefined
+            ? 'Cidade nao informada'
+            : `${cidadeCobertura.nome || 'Cidade'}: ${cidadeCobertura.count} parceiro(s)`;
+        const estadoTexto = estadoCobertura.count === null || estadoCobertura.count === undefined
+            ? 'Estado nao informado'
+            : `${estadoCobertura.nome || 'Estado'}: ${estadoCobertura.count} parceiro(s)`;
 
-    coverage.innerText = `Cobertura conhecida para este endereco - ${bairroTexto} | ${cidadeTexto} | ${estadoTexto}.`;
+        coverage.innerText = `Cobertura conhecida para este endereco - ${bairroTexto} | ${cidadeTexto} | ${estadoTexto}.`;
 
-    summary.innerText = `${parceirosDisponiveis.length} parceiro(s) elegível(is) serão usados automaticamente para os endereços do lead selecionados.`;
+        summary.innerText = `${parceirosDisponiveis.length} parceiro(s) elegível(is) serão usados automaticamente para os endereços do lead selecionados.`;
 
-    if (!parceirosDisponiveis.length) {
-        summary.innerText = nomesBloqueados
-            ? `Nenhuma cotação foi criada porque estes provedores já possuem cotação em Em negociação para o mesmo endereço operacional e para todos os endereços do lead selecionados: ${nomesBloqueados}.`
-            : 'Nenhum provedor elegível foi encontrado para os endereços do lead selecionados.';
-        return;
+        if (!parceirosDisponiveis.length) {
+            summary.innerText = nomesBloqueados
+                ? `Nenhuma cotação foi criada porque estes provedores já possuem cotação em Em negociação neste mesmo endereço operacional: ${nomesBloqueados}.`
+                : 'Nenhum provedor elegível foi encontrado para os endereços do lead selecionados.';
+            return;
+        }
+
+        selectedPartnerInputs.innerHTML = parceirosDisponiveis
+            .map((partner) => `<input type="hidden" name="partner_ids" value="${partner.id}">`)
+            .join('');
+    } catch (error) {
+        if (requestId !== partnerProposalOptionsRequestId) return;
+        console.error(error);
+        summary.innerText = 'Nao foi possivel carregar os parceiros elegiveis agora. Tente novamente.';
+        selectedPartnerInputs.innerHTML = '';
+    } finally {
+        if (requestId === partnerProposalOptionsRequestId) {
+            partnerProposalOptionsLoading = false;
+            setPartnerProposalSubmitState(false);
+        }
     }
-
-    selectedPartnerInputs.innerHTML = parceirosDisponiveis
-        .map((partner) => `<input type="hidden" name="partner_ids" value="${partner.id}">`)
-        .join('');
 }
 
 document.getElementById('leadAddressGridFilterBtn').addEventListener('click', function () {
@@ -532,11 +562,16 @@ document.getElementById('partnerProposalCreateForm').addEventListener('submit', 
         alert('Selecione pelo menos um endereço do lead antes de criar as cotações.');
         return;
     }
+    if (partnerProposalOptionsLoading) {
+        event.preventDefault();
+        alert('Aguarde a busca dos parceiros terminar antes de criar as cotações.');
+        return;
+    }
     if (!document.querySelector('#selectedPartnerInputs input[name="partner_ids"]')) {
         event.preventDefault();
         const summary = document.getElementById('partnerProposalSummary');
         const detalheRegra = summary?.innerText?.trim()
-            || 'O sistema bloqueia apenas o mesmo provedor quando ele ja possui cotacao em Em negociacao para o mesmo endereco operacional e para o mesmo endereco do lead selecionado.';
+            || 'O sistema bloqueia apenas o mesmo provedor quando ele ja possui cotacao em Em negociacao para este mesmo endereco operacional.';
         alert(`Nenhuma cotação foi criada.\n\n${detalheRegra}`);
     }
 });

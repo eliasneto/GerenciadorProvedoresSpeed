@@ -24,7 +24,8 @@ Melhorado:
 - ordenacao do grid de empresas de prospeccao ajustada para mostrar primeiro os leads mais recentes
 - resumo de cobertura de parceiros por bairro, cidade e estado adicionado no modal de abertura de cotacao por endereco
 - mensagem da regra de duplicidade no modal de abertura de cotacao por endereco reescrita para ficar mais clara
-- regra de elegibilidade do modal de abertura de cotacao por endereco ajustada para bloquear apenas o mesmo provedor quando ele ja possui cotacao em Em negociacao para os enderecos do lead selecionados
+- regra de elegibilidade do modal de abertura de cotacao por endereco corrigida para bloquear apenas o mesmo provedor quando ele ja possui cotacao em Em negociacao no mesmo endereco operacional
+- fluxo do modal de abertura de cotacao por endereco ajustado para aguardar o carregamento dos parceiros elegiveis antes de permitir a criacao
 
 ## v1.1.0
 
