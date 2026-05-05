@@ -259,7 +259,7 @@
                     </div>
                     <div class="px-4 py-2 bg-green-50 rounded-lg border border-green-100">
                         <p class="text-[9px] font-black text-green-700 uppercase italic tracking-widest">
-                            Fórmula Speed: (Mensal + Taxa de Instalação Parceiro) - Custo Parceiro = Resultado
+                            Fórmula Speed: (Mensal + Taxa de Instalação) - Custo do Provedor = Resultado
                         </p>
                     </div>
                 </div>
@@ -289,11 +289,11 @@
                         {{ form.valor_mensal }}
                     </div>
                     <div class="space-y-2 order-3 md:col-span-2 xl:col-span-2">
-                        <label class="text-[10px] font-black text-gray-500 uppercase italic tracking-widest">Taxa de Instalação Parceiro</label>
+                        <label class="text-[10px] font-black text-gray-500 uppercase italic tracking-widest">Taxa de Instalação Provedor Parceiro (Valor Único)</label>
                         {{ form.taxa_instalacao }}
                     </div>
                     <div class="space-y-2 order-2">
-                        <label class="text-[10px] font-black text-blue-600 uppercase italic tracking-widest">Custo Parceiro</label>
+                        <label class="text-[10px] font-black text-blue-600 uppercase italic tracking-widest">Custo Provedor Parceiro (Mensal)</label>
                         {{ form.valor_parceiro }}
                     </div>
 
@@ -342,7 +342,7 @@
                 </div>
                 <div class="p-8 space-y-3">
                     <input type="hidden" id="observacaoContratacaoFluxo" value="{{ request.POST.observacao_contratacao|default:'' }}">
-                    <p class="text-[11px] font-bold text-gray-400">Ao clicar em salvar dados da conversão, o sistema pergunta se deseja finalizar a O.S. no IXC. Se você escolher <span class="text-ageis-black">Sim</span>, o preenchimento obrigatório acontece dentro do modal.</p>
+                    <p data-ixc-info="true" class="text-[11px] font-bold text-gray-400">Ao clicar em salvar, você poderá escolher se deseja finalizar a O.S. no IXC.</p>
                 </div>
             </div>
             {% endif %}
@@ -363,7 +363,7 @@
                         <div id="alteracaoOsChoiceStep" class="space-y-4">
                             <div class="rounded-2xl border border-yellow-100 bg-yellow-50/70 px-4 py-4">
                                 <p class="text-xs font-black uppercase tracking-widest text-yellow-700">Escolha como continuar</p>
-                                <p class="text-sm text-gray-600 font-bold mt-2">Se você escolher <span class="text-ageis-black">Sim</span>, o sistema vai exigir comentário e anexo antes de salvar a conversão.</p>
+                                <p class="text-sm text-gray-600 font-bold mt-2">Se você escolher <span class="text-ageis-black">Sim</span>, será preciso informar um comentário e anexar o arquivo antes de salvar.</p>
                             </div>
                             <div class="flex flex-col-reverse sm:flex-row sm:items-center sm:justify-end gap-3 pt-2">
                                 <button type="button" id="skipAlteracaoOsBtn" class="px-4 py-3 rounded-xl border border-gray-200 text-sm font-black text-gray-500 hover:text-gray-800 hover:border-gray-300 transition">
@@ -403,7 +403,7 @@
 
             <div class="flex items-center justify-end gap-4 pb-12">
                 <button type="submit" class="bg-ageis-black text-ageis-yellow font-black px-16 py-5 rounded-2xl shadow-2xl hover:bg-gray-800 hover:scale-[1.03] active:scale-95 transition-all uppercase italic tracking-tighter">
-                    {% if is_conversion_completion %}Salvar Dados da Conversão{% else %}
+                    {% if is_conversion_completion %}Salvar{% else %}
                     Gerar Cotações em Lote
                     {% endif %}
                 </button>
@@ -468,14 +468,11 @@ document.addEventListener('DOMContentLoaded', function() {
 
     if (observacaoContratacaoFluxo) {
         const blocoInfoIxc = observacaoContratacaoFluxo.parentElement;
-        if (blocoInfoIxc && !blocoInfoIxc.querySelector('[data-ixc-info]')) {
-            const info = document.createElement('p');
-            info.setAttribute('data-ixc-info', 'true');
-            info.className = 'text-[11px] font-bold text-gray-400';
+        const info = blocoInfoIxc?.querySelector('[data-ixc-info]');
+        if (info) {
             info.textContent = possuiOsLastmile
-                ? 'Ao clicar em salvar, o sistema vai perguntar se deseja alterar a O.S. no IXC antes de mover a cotação para aguardando contratação.'
-                : 'Este lote não possui O.S. aberta em Lastmile. A cotação seguirá sem alterar O.S. no IXC.';
-            blocoInfoIxc.appendChild(info);
+                ? 'Ao clicar em salvar, você poderá escolher se deseja finalizar a O.S. no IXC.'
+                : 'Este lote não possui O.S. aberta em Lastmile.';
         }
     }
 
