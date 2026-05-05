@@ -29,6 +29,7 @@ Melhorado:
 - correcao do fallback do modal de abertura de cotacao por endereco para criar cotacoes apenas com os provedores selecionados na prospeccao, sem puxar parceiros historicos indevidos da base
 - fluxo do modal de abertura de cotacao por endereco ajustado para aguardar o carregamento dos parceiros elegiveis antes de permitir a criacao
 - padronizacao da area de prospeccao para a rota canonica `/provedores/`, com ajustes de nomenclatura nas telas para exibir `provedores` e `prospeccao`
+- ajuste da rota do numero da cotacao em `Minhas Cotacoes` para abrir diretamente a visao consolidada do lote da cotacao
 
 ## v1.1.0 - 2026-04-10
 

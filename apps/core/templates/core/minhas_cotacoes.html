@@ -58,7 +58,7 @@
                         <td class="px-6 py-5"><div class="font-bold text-gray-900">{{ item.partner.nome_fantasia|default:item.partner.razao_social }}</div></td>
                         <td class="px-6 py-5">
                             <div class="font-bold text-ageis-yellow">
-                                <a href="{% url 'proposal_update' item.pk %}?next={{ request.get_full_path|urlencode }}" class="hover:text-gray-900 transition-colors">
+                                <a href="{% url 'proposal_batch_detail' item.pk %}?next={{ request.get_full_path|urlencode }}" class="hover:text-gray-900 transition-colors">
                                     #{{ item.codigo_exibicao }}
                                 </a>
                             </div>
