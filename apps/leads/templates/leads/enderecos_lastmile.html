@@ -509,11 +509,11 @@ async function loadPartnerProposalOptions() {
         coverage.innerText = `Cobertura conhecida para este endereco - ${bairroTexto} | ${cidadeTexto} | ${estadoTexto}.`;
         document.getElementById('partnerProposalLeadFallbackMode').value = '0';
 
-        summary.innerText = `${parceirosDisponiveis.length} parceiro(s) elegível(is) serão usados automaticamente para os endereços da prospecção selecionados.`;
+        summary.innerText = `${parceirosDisponiveis.length} provedor(es) foram encontrados pela cobertura conhecida para esta região. Ao criar, o sistema abrirá cotações apenas para os provedores selecionados na prospecção.`;
 
         if (!parceirosDisponiveis.length) {
             if (leadEnderecoIds.length) {
-                summary.innerText = `Nenhum provedor elegível foi encontrado pela cobertura conhecida para os endereços da prospecção selecionados. Se quiser prosseguir mesmo assim, clique em Criar Cotações para abrir usando os provedores desta prospecção.`;
+                summary.innerText = `Nenhum provedor elegível foi encontrado pela cobertura conhecida para os endereços da prospecção selecionados. Se quiser prosseguir mesmo assim, clique em Criar Cotações para abrir usando apenas os provedores desta prospecção.`;
                 document.getElementById('partnerProposalLeadFallbackMode').value = '1';
                 selectedPartnerInputs.innerHTML = '';
                 return;
