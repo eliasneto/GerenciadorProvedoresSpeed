@@ -32,6 +32,7 @@ Melhorado:
 - ajuste da rota do numero da cotacao em `Minhas Cotacoes` para abrir diretamente a visao consolidada do lote da cotacao
 - simplificacao da comunicacao na tela de conversao da cotacao viavel, com textos mais diretos sobre a finalizacao da O.S. no IXC, ajuste dos nomes dos campos comerciais e botao final alterado para `Salvar`
 - tela de importacao administrativa renomeada para `Importador de Provedores`, com novo status `interrompida` para cancelamentos manuais e botao para parar importacoes em andamento
+- fluxo de criacao de cotacao Lastmile ajustado para abrir cotacoes apenas para os provedores selecionados na prospeccao, evitando criacoes em massa por parceiros historicos da cobertura
 
 ## v1.1.0 - 2026-04-10
 

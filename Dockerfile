@@ -2,8 +2,8 @@
 FROM python:3.12-slim
 
 # Impede o Python de criar arquivos .pyc e força os logs a aparecerem no terminal
-ENV PYTHONDONTWRITEBYTECODE 1
-ENV PYTHONUNBUFFERED 1
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
 
 # Cria a pasta do sistema dentro do Docker
 WORKDIR /app
@@ -13,6 +13,7 @@ RUN apt-get update && apt-get install -y \
     default-mysql-client \
     default-libmysqlclient-dev \
     build-essential \
+    
     libldap2-dev \
     libsasl2-dev \
     libssl-dev \
