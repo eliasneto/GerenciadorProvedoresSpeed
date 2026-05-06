@@ -33,12 +33,15 @@ from .forms import BackupRestoreForm, ExcelUploadForm, SMTPTestForm
 from .import_services import (
     IMPORT_STATUS_ERROR,
     IMPORT_STATUS_RUNNING,
+    IMPORT_STATUS_STOPPED,
     IMPORT_STATUS_SUCCESS,
     LEAD_IMPORT_COLUMNS,
+    atualizar_auditoria_importacao,
     buscar_importacao_em_andamento,
     buscar_ultima_importacao,
     criar_auditoria_importacao,
     salvar_arquivo_importacao,
+    solicitar_interrupcao_importacao,
 )
 
 
@@ -108,6 +111,7 @@ def _render_importacao(request, form):
             "import_status_running": IMPORT_STATUS_RUNNING,
             "import_status_success": IMPORT_STATUS_SUCCESS,
             "import_status_error": IMPORT_STATUS_ERROR,
+            "import_status_stopped": IMPORT_STATUS_STOPPED,
         },
     )
 
@@ -116,6 +120,19 @@ def import_prospects(request):
     form = ExcelUploadForm(request.POST or None, request.FILES or None)
 
     if request.method == "POST":
+        if request.POST.get("action") == "stop":
+            importacao_em_andamento = buscar_importacao_em_andamento()
+            if not importacao_em_andamento:
+                messages.warning(request, "Nao existe importacao em andamento para interromper.")
+                return redirect("import_prospects")
+
+            solicitar_interrupcao_importacao(importacao_em_andamento)
+            messages.success(
+                request,
+                "Solicitacao de interrupcao enviada. Aguarde alguns segundos para a importacao ser finalizada.",
+            )
+            return redirect("import_prospects")
+
         importacao_em_andamento = buscar_importacao_em_andamento()
         if importacao_em_andamento:
             messages.warning(
@@ -135,7 +152,7 @@ def import_prospects(request):
                     arquivo_caminho=str(caminho_salvo),
                 )
 
-                subprocess.Popen(
+                processo = subprocess.Popen(
                     [
                         sys.executable,
                         str(Path(settings.BASE_DIR) / "scripts" / "integracoes" / "importar_leads_planilha.py"),
@@ -143,6 +160,7 @@ def import_prospects(request):
                         str(caminho_salvo),
                     ]
                 )
+                atualizar_auditoria_importacao(audit, worker_pid=processo.pid)
 
                 messages.success(
                     request,

@@ -1,4 +1,5 @@
 import os
+import signal
 from pathlib import Path
 
 import pandas as pd
@@ -15,7 +16,9 @@ IMPORT_ACTION = "importacao_planilha"
 IMPORT_STATUS_RUNNING = "rodando"
 IMPORT_STATUS_SUCCESS = "sucesso"
 IMPORT_STATUS_ERROR = "erro"
+IMPORT_STATUS_STOPPED = "interrompida"
 IMPORT_PROGRESS_SAVE_EVERY = 25
+TEXT_EMPTY_MARKERS = {"", "NAN", "NONE", "NAT"}
 
 LEAD_IMPORT_COLUMNS = [
     "CNPJ_CPF",
@@ -64,6 +67,10 @@ LEAD_COLUMN_ALIASES = {
 }
 
 
+class ImportacaoInterrompida(Exception):
+    pass
+
+
 def _normalizar_coluna(nome):
     return str(nome or "").strip().upper().replace("-", "_").replace(" ", "_")
 
@@ -79,7 +86,31 @@ def _normalizar_dataframe(df):
 
 
 def _valor_limpo(row, key, default=""):
-    return str(row.get(key, default) or default).strip()
+    valor = row.get(key, default)
+
+    if valor is None or pd.isna(valor):
+        return default
+
+    valor_limpo = str(valor).strip()
+    if valor_limpo.upper() in TEXT_EMPTY_MARKERS:
+        return default
+
+    return valor_limpo
+
+
+def _normalizar_chave_texto(valor):
+    return str(valor or "").strip().casefold()
+
+
+def _atualizar_instancia_se_houver_mudanca(instancia, dados):
+    changed_fields = []
+
+    for campo, valor in dados.items():
+        if getattr(instancia, campo) != valor:
+            setattr(instancia, campo, valor)
+            changed_fields.append(campo)
+
+    return changed_fields
 
 
 def _buscar_empresa_duplicada_por_endereco(dados_empresa, dados_endereco):
@@ -114,15 +145,32 @@ def _buscar_empresa_duplicada_por_endereco(dados_empresa, dados_endereco):
     return None
 
 
-def _obter_ou_criar_empresa(dados_empresa, dados_endereco=None):
+def _obter_ou_criar_empresa(dados_empresa, dados_endereco=None, cache=None):
+    cache = cache or {}
+    empresas_por_cnpj = cache.setdefault("empresas_por_cnpj", {})
+    empresas_por_razao_email = cache.setdefault("empresas_por_razao_email", {})
+    empresas_por_razao_telefone = cache.setdefault("empresas_por_razao_telefone", {})
+
     cnpj_cpf = dados_empresa["cnpj_cpf"]
     razao_social = dados_empresa["razao_social"]
     email = dados_empresa["email"]
     telefone = dados_empresa["telefone"]
 
     empresa = None
+    cnpj_key = _normalizar_chave_texto(cnpj_cpf)
+    razao_email_key = (_normalizar_chave_texto(razao_social), _normalizar_chave_texto(email))
+    razao_telefone_key = (_normalizar_chave_texto(razao_social), _normalizar_chave_texto(telefone))
 
-    if dados_endereco:
+    if cnpj_key:
+        empresa = empresas_por_cnpj.get(cnpj_key)
+
+    if empresa is None and razao_social and email:
+        empresa = empresas_por_razao_email.get(razao_email_key)
+
+    if empresa is None and razao_social and telefone:
+        empresa = empresas_por_razao_telefone.get(razao_telefone_key)
+
+    if empresa is None and dados_endereco:
         empresa = _buscar_empresa_duplicada_por_endereco(dados_empresa, dados_endereco)
 
     if empresa is None and cnpj_cpf:
@@ -144,15 +192,39 @@ def _obter_ou_criar_empresa(dados_empresa, dados_endereco=None):
         empresa = LeadEmpresa.objects.create(**dados_empresa)
         created = True
     else:
-        for campo, valor in dados_empresa.items():
-            setattr(empresa, campo, valor)
-        empresa.save()
+        changed_fields = _atualizar_instancia_se_houver_mudanca(empresa, dados_empresa)
+        if changed_fields:
+            empresa.save(update_fields=changed_fields)
         created = False
+
+    if cnpj_key:
+        empresas_por_cnpj[cnpj_key] = empresa
+    if razao_social and email:
+        empresas_por_razao_email[razao_email_key] = empresa
+    if razao_social and telefone:
+        empresas_por_razao_telefone[razao_telefone_key] = empresa
 
     return empresa, created
 
 
-def _obter_ou_criar_endereco(empresa, dados_endereco):
+def _obter_ou_criar_endereco(empresa, dados_endereco, cache=None):
+    cache = cache or {}
+    enderecos_por_chave = cache.setdefault("enderecos_por_chave", {})
+
+    endereco_key = (
+        empresa.pk,
+        _normalizar_chave_texto(dados_endereco["endereco"]),
+        _normalizar_chave_texto(dados_endereco["numero"]),
+        _normalizar_chave_texto(dados_endereco["bairro"]),
+        _normalizar_chave_texto(dados_endereco["cidade"]),
+        _normalizar_chave_texto(dados_endereco["estado"]),
+        _normalizar_chave_texto(dados_endereco["cep"]),
+    )
+
+    endereco = enderecos_por_chave.get(endereco_key)
+    if endereco is not None:
+        return endereco, False
+
     endereco = LeadEndereco.objects.filter(
         empresa=empresa,
         endereco=dados_endereco["endereco"],
@@ -167,17 +239,26 @@ def _obter_ou_criar_endereco(empresa, dados_endereco):
         endereco = LeadEndereco.objects.create(empresa=empresa, **dados_endereco)
         created = True
     else:
-        for campo, valor in dados_endereco.items():
-            setattr(endereco, campo, valor)
-        endereco.empresa = empresa
-        endereco.save()
+        changed_fields = _atualizar_instancia_se_houver_mudanca(endereco, dados_endereco)
+        if endereco.empresa_id != empresa.id:
+            endereco.empresa = empresa
+            changed_fields.append("empresa")
+        if changed_fields:
+            endereco.save(update_fields=changed_fields)
         created = False
+
+    enderecos_por_chave[endereco_key] = endereco
 
     return endereco, created
 
 
-def _obter_ou_criar_lead_espelho(empresa, endereco, dados_lead):
-    lead = Lead.objects.filter(endereco_estruturado=endereco).order_by("id").first()
+def _obter_ou_criar_lead_espelho(empresa, endereco, dados_lead, cache=None):
+    cache = cache or {}
+    leads_por_endereco = cache.setdefault("leads_por_endereco", {})
+
+    lead = leads_por_endereco.get(endereco.pk)
+    if lead is None:
+        lead = Lead.objects.filter(endereco_estruturado=endereco).order_by("id").first()
 
     if lead is None:
         lead = Lead.objects.filter(
@@ -194,10 +275,12 @@ def _obter_ou_criar_lead_espelho(empresa, endereco, dados_lead):
         lead = Lead.objects.create(**dados_lead)
         created = True
     else:
-        for campo, valor in dados_lead.items():
-            setattr(lead, campo, valor)
-        lead.save()
+        changed_fields = _atualizar_instancia_se_houver_mudanca(lead, dados_lead)
+        if changed_fields:
+            lead.save(update_fields=changed_fields)
         created = False
+
+    leads_por_endereco[endereco.pk] = lead
 
     return lead, created
 
@@ -256,6 +339,29 @@ def atualizar_auditoria_importacao(audit, **detalhes):
     audit.save(update_fields=["detalhes_json"])
 
 
+def solicitar_interrupcao_importacao(audit):
+    payload = dict(audit.detalhes_json or {})
+    payload["stop_requested"] = True
+    payload["mensagem"] = "Solicitacao de interrupcao enviada. Aguarde alguns segundos."
+    payload["atualizado_em"] = timezone.now().isoformat()
+    audit.detalhes_json = payload
+    audit.save(update_fields=["detalhes_json"])
+
+    worker_pid = payload.get("worker_pid")
+    if worker_pid:
+        try:
+            os.kill(int(worker_pid), signal.SIGTERM)
+        except (OSError, ValueError, TypeError):
+            pass
+
+    return audit
+
+
+def _interrupcao_solicitada(audit):
+    audit.refresh_from_db(fields=["detalhes_json"])
+    return bool((audit.detalhes_json or {}).get("stop_requested"))
+
+
 def salvar_arquivo_importacao(uploaded_file, media_root):
     destino_dir = Path(media_root) / "importacoes_leads"
     destino_dir.mkdir(parents=True, exist_ok=True)
@@ -274,9 +380,9 @@ def salvar_arquivo_importacao(uploaded_file, media_root):
 def carregar_dataframe_importacao(caminho_arquivo):
     caminho = Path(caminho_arquivo)
     if caminho.suffix.lower() == ".csv":
-        df = pd.read_csv(caminho)
+        df = pd.read_csv(caminho, dtype=str, keep_default_na=False)
     else:
-        df = pd.read_excel(caminho)
+        df = pd.read_excel(caminho, dtype=str, keep_default_na=False)
     return _normalizar_dataframe(df)
 
 
@@ -291,12 +397,23 @@ def processar_importacao_leads(caminho_arquivo, audit_id):
     leads_novos = 0
     leads_atualizados = 0
     ignorados = 0
+    cache_importacao = {}
+    ultima_linha_processada = 0
+    signal_anterior = None
+
+    def _handler_sigterm(_signum, _frame):
+        raise ImportacaoInterrompida("Importacao interrompida manualmente.")
 
     try:
+        signal_anterior = signal.getsignal(signal.SIGTERM)
+        signal.signal(signal.SIGTERM, _handler_sigterm)
+
         atualizar_auditoria_importacao(
             audit,
             status_execucao=IMPORT_STATUS_RUNNING,
             mensagem="Lendo planilha e preparando importacao.",
+            worker_pid=os.getpid(),
+            stop_requested=False,
         )
 
         df = carregar_dataframe_importacao(arquivo_path)
@@ -314,6 +431,8 @@ def processar_importacao_leads(caminho_arquivo, audit_id):
         )
 
         for indice, row in enumerate(df.to_dict("records"), start=1):
+            ultima_linha_processada = indice
+
             razao_social = _valor_limpo(row, "RAZAO_SOCIAL")
             if not razao_social:
                 ignorados += 1
@@ -344,8 +463,16 @@ def processar_importacao_leads(caminho_arquivo, audit_id):
                 }
 
                 with transaction.atomic():
-                    empresa, empresa_created = _obter_ou_criar_empresa(dados_empresa, dados_endereco=dados_endereco)
-                    endereco, endereco_created = _obter_ou_criar_endereco(empresa, dados_endereco)
+                    empresa, empresa_created = _obter_ou_criar_empresa(
+                        dados_empresa,
+                        dados_endereco=dados_endereco,
+                        cache=cache_importacao,
+                    )
+                    endereco, endereco_created = _obter_ou_criar_endereco(
+                        empresa,
+                        dados_endereco,
+                        cache=cache_importacao,
+                    )
 
                     dados_lead = {
                         **dados_empresa,
@@ -354,7 +481,12 @@ def processar_importacao_leads(caminho_arquivo, audit_id):
                         "endereco_estruturado": endereco,
                     }
 
-                    _, lead_created = _obter_ou_criar_lead_espelho(empresa, endereco, dados_lead)
+                    _, lead_created = _obter_ou_criar_lead_espelho(
+                        empresa,
+                        endereco,
+                        dados_lead,
+                        cache=cache_importacao,
+                    )
 
                 if empresa_created:
                     empresas_novas += 1
@@ -372,6 +504,9 @@ def processar_importacao_leads(caminho_arquivo, audit_id):
                     leads_atualizados += 1
 
             if indice == total_linhas or indice % IMPORT_PROGRESS_SAVE_EVERY == 0:
+                if _interrupcao_solicitada(audit):
+                    raise ImportacaoInterrompida("Importacao interrompida manualmente.")
+
                 atualizar_auditoria_importacao(
                     audit,
                     status_execucao=IMPORT_STATUS_RUNNING,
@@ -419,6 +554,40 @@ def processar_importacao_leads(caminho_arquivo, audit_id):
                 "detalhes_json",
             ]
         )
+    except ImportacaoInterrompida as exc:
+        processadas = min(ultima_linha_processada, audit.detalhes_json.get("processadas") or ultima_linha_processada)
+        audit.total_registros = processadas
+        audit.total_sucessos = max(0, processadas - ignorados)
+        audit.total_erros = 0
+        audit.arquivo_nome = audit.arquivo_nome or arquivo_path.name
+        audit.detalhes_json = {
+            **(audit.detalhes_json or {}),
+            "status_execucao": IMPORT_STATUS_STOPPED,
+            "mensagem": str(exc),
+            "arquivo_nome": audit.arquivo_nome or arquivo_path.name,
+            "arquivo_caminho": str(arquivo_path),
+            "processadas": processadas,
+            "total_previsto": audit.detalhes_json.get("total_previsto") or processadas,
+            "ignorados": ignorados,
+            "empresas_novas": empresas_novas,
+            "empresas_atualizadas": empresas_atualizadas,
+            "enderecos_novos": enderecos_novos,
+            "enderecos_atualizados": enderecos_atualizados,
+            "leads_novos": leads_novos,
+            "leads_atualizados": leads_atualizados,
+            "stop_requested": False,
+            "finalizado_em": timezone.now().isoformat(),
+            "atualizado_em": timezone.now().isoformat(),
+        }
+        audit.save(
+            update_fields=[
+                "arquivo_nome",
+                "total_registros",
+                "total_sucessos",
+                "total_erros",
+                "detalhes_json",
+            ]
+        )
     except Exception as exc:
         audit.total_erros = 1
         audit.detalhes_json = {
@@ -433,6 +602,8 @@ def processar_importacao_leads(caminho_arquivo, audit_id):
         audit.save(update_fields=["total_erros", "detalhes_json"])
         raise
     finally:
+        if signal_anterior is not None:
+            signal.signal(signal.SIGTERM, signal_anterior)
         try:
             os.remove(arquivo_path)
         except OSError:

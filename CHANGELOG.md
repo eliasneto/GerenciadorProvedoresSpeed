@@ -31,6 +31,7 @@ Melhorado:
 - padronizacao da area de prospeccao para a rota canonica `/provedores/`, com ajustes de nomenclatura nas telas para exibir `provedores` e `prospeccao`
 - ajuste da rota do numero da cotacao em `Minhas Cotacoes` para abrir diretamente a visao consolidada do lote da cotacao
 - simplificacao da comunicacao na tela de conversao da cotacao viavel, com textos mais diretos sobre a finalizacao da O.S. no IXC, ajuste dos nomes dos campos comerciais e botao final alterado para `Salvar`
+- tela de importacao administrativa renomeada para `Importador de Provedores`, com novo status `interrompida` para cancelamentos manuais e botao para parar importacoes em andamento
 
 ## v1.1.0 - 2026-04-10
 

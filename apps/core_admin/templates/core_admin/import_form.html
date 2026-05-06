@@ -7,8 +7,8 @@
             <div class="w-20 h-20 bg-ageis-yellow rounded-[2rem] flex items-center justify-center shadow-2xl mb-6">
                 <i data-lucide="database" class="text-black w-10 h-10"></i>
             </div>
-            <h1 class="text-3xl font-black text-gray-900 uppercase italic text-center">Importador de Leads</h1>
-            <p class="text-gray-400 font-bold text-xs uppercase tracking-widest mt-2">Administracao • Base de prospeccao</p>
+            <h1 class="text-3xl font-black text-gray-900 uppercase italic text-center">Importador de Provedores</h1>
+            <p class="text-gray-400 font-bold text-xs uppercase tracking-widest mt-2">Administracao • Base de provedores</p>
         </div>
 
         {% if importacao_em_andamento %}
@@ -46,18 +46,27 @@
             </div>
 
             <p class="text-xs text-gray-600 font-medium leading-relaxed">
-                A importacao agora roda em segundo plano com trava unica. Enquanto este card estiver visivel, uma segunda importacao nao sera iniciada e a pagina se atualiza sozinha para acompanhar o andamento.
+                A importacao roda em segundo plano com trava unica. Enquanto este card estiver visivel, uma segunda importacao nao sera iniciada e a pagina se atualiza sozinha para acompanhar o andamento.
             </p>
+
+            <form id="stopImportForm" method="POST" class="pt-2">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="stop">
+                <button id="stopImportButton" type="submit" class="w-full md:w-auto inline-flex items-center justify-center gap-2 rounded-2xl bg-rose-600 px-5 py-3 text-xs font-black uppercase tracking-widest text-white shadow-sm hover:bg-rose-700 transition-all">
+                    <i data-lucide="octagon-x" class="w-4 h-4"></i>
+                    Parar importacao
+                </button>
+            </form>
         </div>
         {% elif ultima_importacao %}
-        <div class="mb-8 rounded-[2rem] border {% if ultima_importacao.status_execucao == import_status_success %}border-emerald-200 bg-emerald-50{% elif ultima_importacao.status_execucao == import_status_error %}border-rose-200 bg-rose-50{% else %}border-gray-200 bg-white{% endif %} shadow-sm p-6 space-y-4">
+        <div class="mb-8 rounded-[2rem] border {% if ultima_importacao.status_execucao == import_status_success %}border-emerald-200 bg-emerald-50{% elif ultima_importacao.status_execucao == import_status_error %}border-rose-200 bg-rose-50{% elif ultima_importacao.status_execucao == import_status_stopped %}border-amber-200 bg-amber-50{% else %}border-gray-200 bg-white{% endif %} shadow-sm p-6 space-y-4">
             <div class="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                 <div>
                     <p class="text-[10px] font-black uppercase tracking-widest text-gray-500">Ultima importacao</p>
                     <h2 class="text-lg font-black text-gray-900 mt-2 break-all">{{ ultima_importacao.arquivo_nome }}</h2>
                     <p class="text-sm text-gray-600 font-medium mt-2">{{ ultima_importacao.mensagem|default:"Sem detalhes adicionais." }}</p>
                 </div>
-                <span class="inline-flex items-center justify-center rounded-full px-4 py-2 text-[10px] font-black uppercase tracking-widest {% if ultima_importacao.status_execucao == import_status_success %}bg-emerald-600 text-white{% elif ultima_importacao.status_execucao == import_status_error %}bg-rose-600 text-white{% else %}bg-gray-800 text-white{% endif %}">
+                <span class="inline-flex items-center justify-center rounded-full px-4 py-2 text-[10px] font-black uppercase tracking-widest {% if ultima_importacao.status_execucao == import_status_success %}bg-emerald-600 text-white{% elif ultima_importacao.status_execucao == import_status_error %}bg-rose-600 text-white{% elif ultima_importacao.status_execucao == import_status_stopped %}bg-amber-500 text-white{% else %}bg-gray-800 text-white{% endif %}">
                     {{ ultima_importacao.status_execucao }}
                 </span>
             </div>
@@ -101,7 +110,7 @@
                         <span class="font-black text-gray-800">Campos aceitos:</span> CNPJ_CPF, NOME_FANTASIA, SITE, CEP, ENDERECO, NUMERO, BAIRRO, CIDADE, ESTADO, CONTATO_NOME, EMAIL, TELEFONE, INSTAGRAM_USERNAME e INSTAGRAM_URL
                     </p>
                     <p class="text-[11px] text-gray-500 font-bold leading-relaxed">
-                        Essa importacao separa <span class="text-gray-900">empresa</span> e <span class="text-gray-900">endereco</span>, e mantem uma prospecção espelho para compatibilidade com a rota <span class="text-gray-900">/provedores/novo/</span>.
+                        Essa importacao separa <span class="text-gray-900">empresa</span> e <span class="text-gray-900">endereco</span>, e mantem um cadastro espelho para compatibilidade com a rota <span class="text-gray-900">/provedores/novo/</span>.
                     </p>
                 </div>
             </div>
@@ -175,6 +184,8 @@
         const submitButton = document.getElementById('leadImportSubmit');
         const submitText = document.getElementById('leadImportSubmitText');
         const overlay = document.getElementById('leadImportLoadingOverlay');
+        const stopForm = document.getElementById('stopImportForm');
+        const stopButton = document.getElementById('stopImportButton');
         const importacaoEmAndamento = {{ importacao_em_andamento|yesno:"true,false" }};
 
         if (importacaoEmAndamento) {
@@ -183,21 +194,30 @@
             }, 10000);
         }
 
-        if (!form || !fileInput || !submitButton || !submitText || !overlay) {
-            return;
+        if (form && fileInput && submitButton && submitText && overlay) {
+            form.addEventListener('submit', function () {
+                if (!fileInput.files || !fileInput.files.length) {
+                    return;
+                }
+
+                submitButton.disabled = true;
+                fileInput.disabled = true;
+                submitText.textContent = 'Enviando para fila...';
+                overlay.classList.remove('hidden');
+                document.body.classList.add('overflow-hidden');
+            });
         }
 
-        form.addEventListener('submit', function () {
-            if (!fileInput.files || !fileInput.files.length) {
-                return;
-            }
-
-            submitButton.disabled = true;
-            fileInput.disabled = true;
-            submitText.textContent = 'Enviando para fila...';
-            overlay.classList.remove('hidden');
-            document.body.classList.add('overflow-hidden');
-        });
+        if (stopForm && stopButton) {
+            stopForm.addEventListener('submit', function () {
+                stopButton.disabled = true;
+                stopButton.classList.add('opacity-70', 'cursor-not-allowed');
+                stopButton.innerHTML = '<i data-lucide="loader-circle" class="w-4 h-4 animate-spin"></i> Interrompendo...';
+                if (window.lucide) {
+                    window.lucide.createIcons();
+                }
+            });
+        }
     });
 </script>
 {% endblock %}
