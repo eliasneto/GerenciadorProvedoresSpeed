@@ -28,6 +28,7 @@ import django
 django.setup()
 
 from clientes.models import Cliente, ClienteExcluido, Endereco, EnderecoExcluido, HistoricoSincronizacao
+from clientes.sync_utils import descrever_rotina_em_execucao, iniciar_historico_com_trava
 
 # ==========================================
 # 🌐 CONFIGURAÇÕES DA API DO IXC
@@ -144,12 +145,14 @@ if __name__ == "__main__":
     
     print(f"🤖 Faxina detectada como: {origem_detectada.upper()}")
 
-    historico = HistoricoSincronizacao.objects.create(
-        tipo='faxina', 
-        status='rodando',
+    historico, rotina_ativa = iniciar_historico_com_trava(
+        tipo='faxina',
         origem=origem_detectada,
-        executado_por=usuario_executor
+        executado_por=usuario_executor,
     )
+    if rotina_ativa:
+        print(descrever_rotina_em_execucao('faxina', rotina_ativa))
+        raise SystemExit(0)
     
     try:
         # Passamos o objeto historico para a função

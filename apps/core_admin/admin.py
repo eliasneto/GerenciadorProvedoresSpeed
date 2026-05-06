@@ -6,7 +6,7 @@ from django.conf import settings
 from django.contrib import admin, messages
 from django.utils import timezone
 
-from .models import AcessoBancoDados, TabelaAcessoBanco
+from .models import AcessoBancoDados, ConfiguracaoEmailEnvio, TabelaAcessoBanco
 
 
 def sincronizar_tabelas_do_sistema():
@@ -140,3 +140,14 @@ class AcessoBancoDadosAdmin(admin.ModelAdmin):
         acesso.ultimo_aplicado_em = timezone.now()
         acesso.ultimo_erro = ''
         acesso.save(update_fields=['ultimo_aplicado_em', 'ultimo_erro'])
+
+
+@admin.register(ConfiguracaoEmailEnvio)
+class ConfiguracaoEmailEnvioAdmin(admin.ModelAdmin):
+    list_display = ('nome', 'email_remetente_padrao', 'atualizado_em')
+    readonly_fields = ('atualizado_em',)
+
+    def has_add_permission(self, request):
+        if ConfiguracaoEmailEnvio.objects.exists():
+            return False
+        return super().has_add_permission(request)

@@ -136,6 +136,22 @@ class Proposal(models.Model):
         blank=True,
         verbose_name="Unidade de Instalação"
     )
+    lead = models.ForeignKey(
+        'leads.Lead',
+        on_delete=models.SET_NULL,
+        related_name='proposals',
+        null=True,
+        blank=True,
+        verbose_name='Lead de Origem'
+    )
+    lead_endereco = models.ForeignKey(
+        'leads.LeadEndereco',
+        on_delete=models.SET_NULL,
+        related_name='proposals',
+        null=True,
+        blank=True,
+        verbose_name='Endereço do Lead'
+    )
     
     # --- DADOS TÉCNICOS ---
     grupo_proposta_id = models.PositiveIntegerField('Grupo da Cotação', null=True, blank=True, db_index=True)

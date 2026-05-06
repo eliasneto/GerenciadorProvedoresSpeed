@@ -10,21 +10,24 @@ import os
 from django.http import HttpResponse, JsonResponse
 from django.conf import settings
 from django.core.files.storage import FileSystemStorage
+from django.urls import reverse_lazy
 
-from .models import Lead
+from .models import Lead, LeadEmpresa, LeadEndereco
 from .forms import LeadForm
 from partners.models import Partner, Proposal
 from partners.forms import ProposalForm
-from clientes.models import Endereco
+from clientes.models import Cliente, Endereco
 import re
 
 # IMPORTAÇÃO DA TIMELINE (HISTÓRICO)
 from core.models import IntegrationAudit, RegistroHistorico
 from apps.core.integration_audit import dataframe_to_records, registrar_auditoria_integracao
 
-from django.db.models import Q
+from django.db.models import Q, Count, Prefetch
 from decimal import Decimal, InvalidOperation
 import pandas as pd
+
+PROPOSAL_STATUSES_ENCERRADAS = ['encerrada', 'ativa', 'aguardando_contratacao', 'contratado', 'declinado']
 
 # 1. Cria a regra de verificação
 def grupo_LastMile_required(user):
@@ -142,8 +145,11 @@ def _converter_lead_em_parceiro_rapido(lead, enderecos, user, ticket_cliente=Non
 
         proposta_base = Proposal.objects.create(
             partner=partner,
+            responsavel=user,
             cliente=enderecos[0].cliente,
             client_address=enderecos[0],
+            lead=lead,
+            lead_endereco=lead.endereco_estruturado,
             nome_proposta=nome_proposta,
             ticket_cliente=ticket_cliente,
             ticket_empresa=ticket_empresa,
@@ -174,6 +180,8 @@ def _converter_lead_em_parceiro_rapido(lead, enderecos, user, ticket_cliente=Non
             clone.nome_proposta = proposta_base.nome_proposta
             clone.client_address = endereco_extra
             clone.cliente = endereco_extra.cliente
+            clone.lead = proposta_base.lead
+            clone.lead_endereco = proposta_base.lead_endereco
             clone.save()
             RegistroHistorico.objects.create(
                 tipo='sistema',
@@ -318,6 +326,92 @@ def _parse_google_maps_address(endereco_completo, cidade_padrao='', estado_padra
         'estado': estado[:2],
     }
 
+
+def _normalizar_texto_lead(valor):
+    return str(valor or '').strip()
+
+
+def _lead_tem_dados_endereco(lead):
+    return any([
+        _normalizar_texto_lead(lead.cep),
+        _normalizar_texto_lead(lead.endereco),
+        _normalizar_texto_lead(lead.numero),
+        _normalizar_texto_lead(lead.bairro),
+        _normalizar_texto_lead(lead.cidade),
+        _normalizar_texto_lead(lead.estado),
+    ])
+
+
+def _sync_lead_to_structured_models(lead):
+    empresa = lead.empresa_estruturada
+
+    if not empresa:
+        cnpj_cpf = _normalizar_texto_lead(lead.cnpj_cpf)
+        razao_social = _normalizar_texto_lead(lead.razao_social)
+        if cnpj_cpf:
+            empresa = LeadEmpresa.objects.filter(cnpj_cpf__iexact=cnpj_cpf).order_by('id').first()
+        elif razao_social:
+            empresa = LeadEmpresa.objects.filter(razao_social__iexact=razao_social).order_by('id').first()
+
+    if not empresa:
+        empresa = LeadEmpresa.objects.create()
+
+    empresa.razao_social = lead.razao_social
+    empresa.cnpj_cpf = lead.cnpj_cpf
+    empresa.nome_fantasia = lead.nome_fantasia
+    empresa.site = lead.site
+    empresa.contato_nome = lead.contato_nome
+    empresa.email = lead.email
+    empresa.telefone = lead.telefone
+    empresa.fonte = lead.fonte
+    empresa.confianca = lead.confianca
+    empresa.instagram_username = lead.instagram_username
+    empresa.instagram_url = lead.instagram_url
+    empresa.bio_instagram = lead.bio_instagram
+    empresa.observacao_ia = lead.observacao_ia
+    empresa.status = lead.status or 'novo'
+    empresa.save()
+
+    endereco = None
+    if _lead_tem_dados_endereco(lead):
+        endereco_existente = lead.endereco_estruturado
+        pode_reaproveitar_existente = bool(
+            endereco_existente
+            and endereco_existente.empresa_id == empresa.id
+            and endereco_existente.leads_legados.exclude(pk=lead.pk).count() == 0
+        )
+
+        if pode_reaproveitar_existente:
+            endereco = endereco_existente
+        else:
+            endereco = LeadEndereco.objects.filter(
+                empresa=empresa,
+                endereco__iexact=_normalizar_texto_lead(lead.endereco),
+                numero__iexact=_normalizar_texto_lead(lead.numero),
+                bairro__iexact=_normalizar_texto_lead(lead.bairro),
+                cidade__iexact=_normalizar_texto_lead(lead.cidade),
+                estado__iexact=_normalizar_texto_lead(lead.estado),
+                cep__iexact=_normalizar_texto_lead(lead.cep),
+            ).order_by('id').first()
+
+        if not endereco:
+            endereco = LeadEndereco(empresa=empresa)
+
+        endereco.empresa = empresa
+        endereco.cep = lead.cep
+        endereco.endereco = lead.endereco
+        endereco.numero = lead.numero
+        endereco.bairro = lead.bairro
+        endereco.cidade = lead.cidade
+        endereco.estado = lead.estado
+        endereco.save()
+
+    lead.empresa_estruturada = empresa
+    lead.endereco_estruturado = endereco
+    lead.save(update_fields=['empresa_estruturada', 'endereco_estruturado'])
+
+    return empresa, endereco
+
 @user_passes_test(grupo_LastMile_required)
 @login_required
 def lead_list(request):
@@ -396,8 +490,9 @@ def lead_create(request):
     if request.method == 'POST':
         form = LeadForm(request.POST)
         if form.is_valid():
-            form.save()
-            messages.success(request, "Novo lead cadastrado com sucesso!")
+            lead = form.save()
+            _sync_lead_to_structured_models(lead)
+            messages.success(request, "Nova prospecção cadastrada com sucesso!")
             return redirect('lead_list')
     else:
         form = LeadForm()
@@ -416,8 +511,9 @@ def lead_update(request, pk):
     if request.method == 'POST':
         form = LeadForm(request.POST, instance=lead)
         if form.is_valid():
-            form.save()
-            messages.success(request, "Dados do lead atualizados!")
+            lead = form.save()
+            _sync_lead_to_structured_models(lead)
+            messages.success(request, "Dados da prospecção atualizados!")
             return redirect('lead_list')
     else:
         form = LeadForm(instance=lead)
@@ -426,7 +522,7 @@ def lead_update(request, pk):
         'form': form,
         'lead': lead, # Injetamos o lead para a tela saber o ID
         'historico': historico, # Injetamos a lista de eventos
-        'title': 'Editar Lead'
+        'title': 'Editar Prospecção'
     })
 
 @user_passes_test(grupo_LastMile_required)
@@ -450,7 +546,7 @@ def lead_add_historico(request, pk):
                 content_type=ContentType.objects.get_for_model(Lead),
                 object_id=lead.id
             )
-            messages.success(request, "Registro adicionado à linha do tempo do lead!")
+            messages.success(request, "Registro adicionado à linha do tempo da prospecção!")
             
     return redirect('lead_update', pk=pk)
 
@@ -461,7 +557,7 @@ def lead_delete(request, pk):
     lead = get_object_or_404(Lead, pk=pk)
     if request.method == 'POST':
         lead.delete()
-        messages.warning(request, "Lead removido da base de cotação.")
+        messages.warning(request, "Prospecção removida da base de provedores.")
         return redirect('lead_list')
     return redirect('lead_list')
 
@@ -509,7 +605,7 @@ def update_lead_status(request, pk):
                     object_id=lead.id
                 )
             
-            messages.warning(request, f"O Lead '{lead.nome_fantasia or lead.razao_social}' foi marcado como Inviável.")
+            messages.warning(request, f"A prospecção '{lead.nome_fantasia or lead.razao_social}' foi marcada como inviável.")
             return redirect('lead_list')
             
         elif novo_status == 'negociacao':
@@ -532,7 +628,7 @@ def update_lead_status(request, pk):
                     object_id=lead.id
                 )
             
-            messages.info(request, "Lead movido para Em Negociação.")
+            messages.info(request, "Prospecção movida para Em Negociação.")
             return redirect('lead_list')
         
     return redirect('lead_list')
@@ -558,10 +654,6 @@ def lead_quick_proposal(request, pk):
 
     if not enderecos_ids:
         messages.error(request, "Selecione pelo menos um login/unidade para abrir a cotação.")
-        return redirect('lead_list')
-
-    if not nome_proposta:
-        messages.error(request, "Informe o nome da cotação para continuar.")
         return redirect('lead_list')
 
     if request.POST.get('ticket_cliente') and ticket_cliente is None:
@@ -627,7 +719,6 @@ def lead_convert(request, pk):
 
             proposta_base = form.save(commit=False)
             primeiro_endereco_id = enderecos_ids.pop(0)
-            from clientes.models import Endereco 
             primeiro_endereco = get_object_or_404(Endereco, pk=primeiro_endereco_id)
             
             proposta_base.partner = partner_draft
@@ -895,6 +986,631 @@ def integracoes_view(request):
             
     return render(request, 'leads/integracoes.html')
 
+
+@user_passes_test(grupo_LastMile_required)
+@login_required
+def enderecos_lastmile_view(request):
+    q = (request.GET.get('q') or '').strip()
+    cidade = (request.GET.get('cidade') or '').strip()
+    estado = (request.GET.get('estado') or '').strip().upper()
+    sort = (request.GET.get('sort') or 'logradouro').strip()
+
+    enderecos = (
+        Endereco.objects
+        .select_related('cliente')
+        .filter(
+            em_os_comercial_lastmile=True,
+            os_atual_aberta=True,
+        )
+    )
+
+    if q:
+        enderecos = enderecos.filter(
+            Q(cliente__razao_social__icontains=q) |
+            Q(cliente__nome_fantasia__icontains=q) |
+            Q(cliente__cnpj_cpf__icontains=q) |
+            Q(cliente__id_ixc__icontains=q) |
+            Q(login_ixc__icontains=q) |
+            Q(logradouro__icontains=q) |
+            Q(numero__icontains=q) |
+            Q(bairro__icontains=q) |
+            Q(cidade__icontains=q) |
+            Q(cep__icontains=q) |
+            Q(ticket_os_atual_ixc__icontains=q)
+        )
+
+    if cidade:
+        enderecos = enderecos.filter(cidade__icontains=cidade)
+
+    if estado:
+        enderecos = enderecos.filter(estado__iexact=estado)
+
+    if sort == 'cidade':
+        enderecos = enderecos.order_by('cidade', 'logradouro', 'id')
+    elif sort == 'cliente':
+        enderecos = enderecos.order_by('cliente__razao_social', 'logradouro', 'id')
+    elif sort == 'ticket':
+        enderecos = enderecos.order_by('ticket_os_atual_ixc', 'logradouro', 'id')
+    else:
+        enderecos = enderecos.order_by('logradouro', 'numero', 'id')
+
+    paginator = Paginator(enderecos, 10)
+    page_number = request.GET.get('page')
+    page_obj = paginator.get_page(page_number)
+
+    return render(request, 'leads/enderecos_lastmile.html', {
+        'page_obj': page_obj,
+        'total_enderecos': paginator.count,
+        'q': q,
+        'cidade': cidade,
+        'estado': estado,
+        'sort': sort,
+    })
+
+
+@user_passes_test(grupo_LastMile_required)
+@login_required
+def enderecos_lastmile_cliente_view(request, pk):
+    cliente = get_object_or_404(Cliente, pk=pk)
+    q = (request.GET.get('q') or '').strip()
+    sort = (request.GET.get('sort') or 'logradouro').strip()
+
+    enderecos = cliente.enderecos.filter(
+        em_os_comercial_lastmile=True,
+        os_atual_aberta=True,
+    )
+
+    if q:
+        enderecos = enderecos.filter(
+            Q(login_ixc__icontains=q) |
+            Q(logradouro__icontains=q) |
+            Q(numero__icontains=q) |
+            Q(bairro__icontains=q) |
+            Q(cidade__icontains=q) |
+            Q(cep__icontains=q) |
+            Q(agent_circuit_id__icontains=q) |
+            Q(ticket_os_atual_ixc__icontains=q)
+        )
+
+    if sort == 'cidade':
+        enderecos = enderecos.order_by('cidade', 'logradouro', 'id')
+    elif sort == 'ticket':
+        enderecos = enderecos.order_by('ticket_os_atual_ixc', 'logradouro', 'id')
+    else:
+        enderecos = enderecos.order_by('logradouro', 'numero', 'id')
+
+    paginator = Paginator(enderecos, 10)
+    page_number = request.GET.get('page')
+    page_obj = paginator.get_page(page_number)
+
+    return render(request, 'leads/enderecos_lastmile_cliente.html', {
+        'cliente': cliente,
+        'page_obj': page_obj,
+        'total_enderecos': enderecos.count(),
+        'q': q,
+        'sort': sort,
+    })
+
+
+@user_passes_test(grupo_LastMile_required)
+@login_required
+def lead_empresa_list(request):
+    busca_empresa = (request.GET.get('empresa') or '').strip()
+    busca_cidade = (request.GET.get('cidade') or '').strip()
+    busca_estado = (request.GET.get('estado') or '').strip()
+
+    empresas = (
+        LeadEmpresa.objects
+        .annotate(total_enderecos=Count('enderecos', distinct=True))
+        .order_by('-data_criacao', '-id')
+    )
+
+    if busca_empresa:
+        empresas = empresas.filter(
+            Q(nome_fantasia__icontains=busca_empresa) |
+            Q(razao_social__icontains=busca_empresa) |
+            Q(cnpj_cpf__icontains=busca_empresa) |
+            Q(enderecos__endereco__icontains=busca_empresa) |
+            Q(enderecos__numero__icontains=busca_empresa) |
+            Q(enderecos__bairro__icontains=busca_empresa) |
+            Q(enderecos__cidade__icontains=busca_empresa) |
+            Q(enderecos__estado__icontains=busca_empresa) |
+            Q(enderecos__cep__icontains=busca_empresa)
+        ).distinct()
+
+    if busca_cidade:
+        empresas = empresas.filter(enderecos__cidade__icontains=busca_cidade).distinct()
+
+    if busca_estado:
+        empresas = empresas.filter(enderecos__estado__iexact=busca_estado).distinct()
+
+    paginator = Paginator(empresas, 10)
+    page_number = request.GET.get('page')
+    page_obj = paginator.get_page(page_number)
+
+    filtros_endereco = Q()
+    possui_filtro_endereco = False
+
+    if busca_empresa:
+        filtros_endereco &= (
+            Q(endereco__icontains=busca_empresa) |
+            Q(numero__icontains=busca_empresa) |
+            Q(bairro__icontains=busca_empresa) |
+            Q(cidade__icontains=busca_empresa) |
+            Q(estado__icontains=busca_empresa) |
+            Q(cep__icontains=busca_empresa)
+        )
+        possui_filtro_endereco = True
+
+    if busca_cidade:
+        filtros_endereco &= Q(cidade__icontains=busca_cidade)
+        possui_filtro_endereco = True
+
+    if busca_estado:
+        filtros_endereco &= Q(estado__iexact=busca_estado)
+        possui_filtro_endereco = True
+
+    for empresa in page_obj.object_list:
+        enderecos_qs = empresa.enderecos.all().order_by('cidade', 'bairro', 'endereco', 'id')
+        if possui_filtro_endereco:
+            enderecos_qs = enderecos_qs.filter(filtros_endereco)
+            empresa.total_enderecos_filtrados = enderecos_qs.count()
+            empresa.enderecos_filtrados_preview = list(enderecos_qs[:3])
+        else:
+            empresa.total_enderecos_filtrados = empresa.total_enderecos
+            empresa.enderecos_filtrados_preview = []
+
+        for endereco in empresa.enderecos_filtrados_preview:
+            endereco.lead_espelho = endereco.leads_legados.order_by('id').first()
+            if endereco.lead_espelho:
+                partner_relacionado = _buscar_parceiro_existente_para_lead(endereco.lead_espelho)
+                endereco.lead_espelho.partner_relacionado = partner_relacionado
+            else:
+                endereco.partner_relacionado = None
+
+        empresa.endereco_acao_rapida = empresa.enderecos_filtrados_preview[0] if empresa.enderecos_filtrados_preview else None
+
+    return render(request, 'leads/lead_empresa_list.html', {
+        'page_obj': page_obj,
+        'busca_empresa': busca_empresa,
+        'busca_cidade': busca_cidade,
+        'busca_estado': busca_estado,
+    })
+
+
+@user_passes_test(grupo_LastMile_required)
+@login_required
+def lead_empresa_detail(request, pk):
+    empresa = get_object_or_404(LeadEmpresa, pk=pk)
+    q = (request.GET.get('q') or '').strip()
+
+    enderecos = empresa.enderecos.all().order_by('cidade', 'bairro', 'endereco', 'id')
+
+    if q:
+        enderecos = enderecos.filter(
+            Q(endereco__icontains=q) |
+            Q(numero__icontains=q) |
+            Q(bairro__icontains=q) |
+            Q(cidade__icontains=q) |
+            Q(estado__icontains=q) |
+            Q(cep__icontains=q)
+        )
+
+    paginator = Paginator(enderecos, 10)
+    page_number = request.GET.get('page')
+    page_obj = paginator.get_page(page_number)
+
+    for endereco in page_obj.object_list:
+        endereco.lead_espelho = endereco.leads_legados.order_by('id').first()
+        if endereco.lead_espelho:
+            partner_relacionado = _buscar_parceiro_existente_para_lead(endereco.lead_espelho)
+            endereco.lead_espelho.partner_relacionado = partner_relacionado
+        else:
+            endereco.partner_relacionado = None
+
+    return render(request, 'leads/lead_empresa_detail.html', {
+        'empresa': empresa,
+        'page_obj': page_obj,
+        'q': q,
+        'total_enderecos': enderecos.count(),
+    })
+
+
+@user_passes_test(grupo_LastMile_required)
+@login_required
+def api_lead_empresa_search(request):
+    q = (request.GET.get('q') or '').strip()
+    estado = (request.GET.get('estado') or '').strip().upper()
+    cidade = (request.GET.get('cidade') or '').strip()
+
+    empresas = LeadEmpresa.objects.all()
+
+    if q:
+        empresas = empresas.filter(
+            Q(razao_social__icontains=q) |
+            Q(nome_fantasia__icontains=q) |
+            Q(cnpj_cpf__icontains=q)
+        )
+
+    if estado:
+        empresas = empresas.filter(enderecos__estado__iexact=estado)
+
+    if cidade:
+        empresas = empresas.filter(enderecos__cidade__icontains=cidade)
+
+    empresas = empresas.annotate(total_enderecos=Count('enderecos', distinct=True)).distinct().order_by('nome_fantasia', 'razao_social', 'id')[:30]
+
+    return JsonResponse({
+        'results': [{
+            'id': empresa.id,
+            'nome': empresa.nome_fantasia or empresa.razao_social,
+            'razao_social': empresa.razao_social,
+            'documento': empresa.cnpj_cpf or '',
+            'total_enderecos': empresa.total_enderecos,
+        } for empresa in empresas]
+    })
+
+
+@user_passes_test(grupo_LastMile_required)
+@login_required
+def api_lead_empresa_enderecos(request, pk):
+    empresa = get_object_or_404(LeadEmpresa, pk=pk)
+    q = (request.GET.get('q') or '').strip()
+
+    enderecos = empresa.enderecos.all().order_by('cidade', 'bairro', 'endereco', 'id')
+
+    if q:
+        enderecos = enderecos.filter(
+            Q(endereco__icontains=q) |
+            Q(numero__icontains=q) |
+            Q(bairro__icontains=q) |
+            Q(cidade__icontains=q) |
+            Q(estado__icontains=q) |
+            Q(cep__icontains=q)
+        )
+
+    return JsonResponse({
+        'results': [{
+            'id': endereco.id,
+            'endereco': endereco.endereco or '',
+            'numero': endereco.numero or 'S/N',
+            'bairro': endereco.bairro or '',
+            'cidade': endereco.cidade or '',
+            'estado': endereco.estado or '',
+            'cep': endereco.cep or '',
+            'label': f"{endereco.endereco or 'Endereço não informado'}, {endereco.numero or 'S/N'}",
+        } for endereco in enderecos[:100]]
+    })
+
+
+def _montar_cobertura_parceiros_por_regiao(endereco):
+    estado = (endereco.estado or '').strip().upper()
+    cidade = (endereco.cidade or '').strip()
+    bairro = (endereco.bairro or '').strip()
+
+    partners = Partner.objects.all()
+
+    if estado:
+        parceiros_estado = partners.filter(
+            proposals__client_address__estado__iexact=estado
+        ).distinct()
+    else:
+        parceiros_estado = Partner.objects.none()
+
+    if cidade:
+        filtros_cidade = Q(proposals__client_address__cidade__iexact=cidade)
+        if estado:
+            filtros_cidade &= Q(proposals__client_address__estado__iexact=estado)
+        parceiros_cidade = partners.filter(filtros_cidade).distinct()
+    else:
+        parceiros_cidade = Partner.objects.none()
+
+    if bairro:
+        filtros_bairro = Q(proposals__client_address__bairro__iexact=bairro)
+        if cidade:
+            filtros_bairro &= Q(proposals__client_address__cidade__iexact=cidade)
+        if estado:
+            filtros_bairro &= Q(proposals__client_address__estado__iexact=estado)
+        parceiros_bairro = partners.filter(filtros_bairro).distinct()
+    else:
+        parceiros_bairro = Partner.objects.none()
+
+    return {
+        'bairro': {
+            'nome': bairro or '',
+            'count': parceiros_bairro.count() if bairro else None,
+        },
+        'cidade': {
+            'nome': cidade or '',
+            'count': parceiros_cidade.count() if cidade else None,
+        },
+        'estado': {
+            'nome': estado or '',
+            'count': parceiros_estado.count() if estado else None,
+        },
+    }
+
+
+@user_passes_test(grupo_LastMile_required)
+@login_required
+def endereco_lastmile_lead_address_grid(request, endereco_pk):
+    endereco = get_object_or_404(
+        Endereco.objects.select_related('cliente'),
+        pk=endereco_pk,
+        em_os_comercial_lastmile=True,
+        os_atual_aberta=True,
+    )
+
+    q = (request.GET.get('q') or '').strip()
+    cidade = (request.GET.get('cidade') or endereco.cidade or '').strip()
+    estado = (request.GET.get('estado') or endereco.estado or '').strip().upper()
+
+    enderecos = LeadEndereco.objects.select_related('empresa').all()
+
+    if estado:
+        enderecos = enderecos.filter(estado__iexact=estado)
+
+    if cidade:
+        enderecos = enderecos.filter(cidade__icontains=cidade)
+
+    if q:
+        enderecos = enderecos.filter(
+            Q(empresa__razao_social__icontains=q) |
+            Q(empresa__nome_fantasia__icontains=q) |
+            Q(empresa__cnpj_cpf__icontains=q) |
+            Q(endereco__icontains=q) |
+            Q(numero__icontains=q) |
+            Q(bairro__icontains=q) |
+            Q(cidade__icontains=q) |
+            Q(estado__icontains=q) |
+            Q(cep__icontains=q)
+        )
+
+    enderecos = enderecos.order_by('empresa__nome_fantasia', 'empresa__razao_social', 'estado', 'cidade', 'bairro', 'endereco', 'id')[:400]
+
+    return JsonResponse({
+        'filtros': {
+            'cidade': cidade,
+            'estado': estado,
+        },
+        'results': [{
+            'id': item.id,
+            'lead_nome': item.empresa.nome_fantasia or item.empresa.razao_social or f'Lead #{item.empresa_id}',
+            'lead_documento': item.empresa.cnpj_cpf or '',
+            'estado': item.estado or '',
+            'cidade': item.cidade or '',
+            'bairro': item.bairro or '',
+            'cep': item.cep or '',
+            'endereco': item.endereco or '',
+            'numero': item.numero or 'S/N',
+            'logradouro_label': f"{item.endereco or 'Não informado'}, {item.numero or 'S/N'}",
+        } for item in enderecos]
+    })
+
+
+@user_passes_test(grupo_LastMile_required)
+@login_required
+def endereco_lastmile_partner_search(request, endereco_pk):
+    endereco = get_object_or_404(
+        Endereco.objects.select_related('cliente'),
+        pk=endereco_pk,
+        em_os_comercial_lastmile=True,
+        os_atual_aberta=True,
+    )
+
+    q = (request.GET.get('q') or '').strip()
+    estado = (request.GET.get('estado') or endereco.estado or '').strip().upper()
+    cidade = (request.GET.get('cidade') or endereco.cidade or '').strip()
+    parceiros_queryset = Partner.objects.all()
+
+    if q:
+        parceiros_queryset = parceiros_queryset.filter(
+            Q(nome_fantasia__icontains=q) |
+            Q(razao_social__icontains=q) |
+            Q(cnpj_cpf__icontains=q)
+        )
+
+    if estado:
+        parceiros_queryset = parceiros_queryset.filter(
+            proposals__client_address__estado__iexact=estado
+        )
+
+    if cidade:
+        parceiros_queryset = parceiros_queryset.filter(
+            proposals__client_address__cidade__icontains=cidade
+        )
+
+    parceiros = list(
+        parceiros_queryset
+        .distinct()
+        .order_by('nome_fantasia', 'razao_social', 'id')[:100]
+    )
+
+    parceiros_ids = [partner.id for partner in parceiros]
+    parceiros_com_cotacao_aberta = set(
+        Proposal.objects.filter(
+            client_address=endereco,
+            partner_id__in=parceiros_ids,
+            status='analise',
+        )
+        .values_list('partner_id', flat=True)
+    )
+
+    resultados = [
+        {
+            'id': partner.id,
+            'nome': partner.nome_fantasia or partner.razao_social or f'Parceiro #{partner.id}',
+            'razao_social': partner.razao_social or '',
+            'cnpj_cpf': partner.cnpj_cpf or '',
+            'status': partner.status or '',
+            'ja_possui_cotacao_aberta': partner.id in parceiros_com_cotacao_aberta,
+        }
+        for partner in parceiros
+    ]
+
+    return JsonResponse({
+        'endereco': {
+            'id': endereco.id,
+            'login_ixc': endereco.login_ixc or '',
+            'bairro': endereco.bairro or '',
+            'cidade': endereco.cidade or '',
+            'estado': endereco.estado or '',
+        },
+        'cobertura': _montar_cobertura_parceiros_por_regiao(endereco),
+        'resultados': resultados,
+    })
+    if not lead_endereco_ids:
+        messages.error(request, "Selecione pelo menos um endereço da prospecção antes de criar as cotações.")
+        return redirect(redirect_url)
+
+    lead_endereco = get_object_or_404(
+        LeadEndereco.objects.select_related('empresa'),
+        pk=lead_endereco_id,
+    )
+    lead_espelho = lead_endereco.leads_legados.order_by('id').first()
+
+    parceiros_com_cotacao_aberta = set(
+        Proposal.objects.filter(
+            client_address=endereco,
+            partner_id__in=parceiros_ids,
+        )
+        .exclude(status__in=PROPOSAL_STATUSES_ENCERRADAS)
+        .values_list('partner_id', flat=True)
+    )
+
+    resultados = [
+        {
+            'id': partner.id,
+            'nome': partner.nome_fantasia or partner.razao_social or f'Parceiro #{partner.id}',
+            'razao_social': partner.razao_social or '',
+            'cnpj_cpf': partner.cnpj_cpf or '',
+            'status': partner.status or '',
+            'ja_possui_cotacao_aberta': partner.id in parceiros_com_cotacao_aberta,
+        }
+        for partner in parceiros
+    ]
+
+    return JsonResponse({
+        'endereco': {
+            'id': endereco.id,
+            'login_ixc': endereco.login_ixc or '',
+            'cidade': endereco.cidade or '',
+            'estado': endereco.estado or '',
+        },
+        'resultados': resultados,
+    })
+
+
+@user_passes_test(grupo_LastMile_required)
+@login_required
+def endereco_lastmile_batch_proposal_create(request, endereco_pk):
+    if request.method != 'POST':
+        return redirect('enderecos_lastmile')
+
+    endereco = get_object_or_404(
+        Endereco.objects.select_related('cliente'),
+        pk=endereco_pk,
+        em_os_comercial_lastmile=True,
+        os_atual_aberta=True,
+    )
+
+    partner_ids = request.POST.getlist('partner_ids')
+    lead_endereco_ids = [
+        int(value) for value in request.POST.getlist('lead_endereco_ids')
+        if value and str(value).isdigit()
+    ]
+    lead_endereco_id = request.POST.get('lead_endereco_id')
+    if not lead_endereco_ids and lead_endereco_id and str(lead_endereco_id).isdigit():
+        lead_endereco_ids = [int(lead_endereco_id)]
+    redirect_url = request.POST.get('next') or request.META.get('HTTP_REFERER') or reverse_lazy('enderecos_lastmile_cliente', kwargs={'pk': endereco.cliente_id})
+
+    if not lead_endereco_id or not str(lead_endereco_id).isdigit():
+        messages.error(request, "Selecione pelo menos um endereço da prospecção antes de criar as cotações.")
+        return redirect(redirect_url)
+
+    lead_enderecos = list(
+        LeadEndereco.objects.select_related('empresa')
+        .filter(pk__in=lead_endereco_ids)
+        .order_by('empresa__razao_social', 'cidade', 'bairro', 'endereco', 'id')
+    )
+    if not lead_enderecos:
+        messages.error(request, "Nenhum endereço válido da prospecção foi selecionado.")
+        return redirect(redirect_url)
+
+    partner_ids_limpos = []
+    for value in partner_ids:
+        if value and str(value).isdigit():
+            partner_ids_limpos.append(int(value))
+
+    if not partner_ids_limpos:
+        messages.error(request, "Selecione pelo menos um parceiro para abrir a cotação.")
+        return redirect(redirect_url)
+
+    parceiros = list(Partner.objects.filter(id__in=partner_ids_limpos).order_by('nome_fantasia', 'razao_social', 'id'))
+    if not parceiros:
+        messages.error(request, "Nenhum parceiro válido foi selecionado.")
+        return redirect(redirect_url)
+
+    parceiros_com_cotacao_aberta = set(
+        Proposal.objects.filter(
+            client_address=endereco,
+            partner_id__in=[partner.id for partner in parceiros],
+            status='analise',
+        )
+        .values_list('partner_id', flat=True)
+    )
+
+    proposal_type = ContentType.objects.get_for_model(Proposal)
+    criadas = 0
+    ignoradas = 0
+
+    with transaction.atomic():
+        for partner in parceiros:
+            for lead_endereco_item in lead_enderecos:
+                if partner.id in parceiros_com_cotacao_aberta:
+                    ignoradas += 1
+                    continue
+
+                lead_espelho_item = lead_endereco_item.leads_legados.order_by('id').first()
+
+                proposal = Proposal.objects.create(
+                    partner=partner,
+                    responsavel=request.user,
+                    cliente=endereco.cliente,
+                    client_address=endereco,
+                    lead=lead_espelho_item,
+                    lead_endereco=lead_endereco_item,
+                )
+                proposal.grupo_proposta_id = proposal.id
+                proposal.codigo_proposta = Proposal.montar_codigo_proposta(proposal.id)
+                proposal.save(update_fields=['grupo_proposta_id', 'codigo_proposta'])
+
+                RegistroHistorico.objects.create(
+                    tipo='sistema',
+                    acao=(
+                    "Cotação criada a partir da fila de endereços Lastmile.\n\n"
+                    f"ID da proposta: #{proposal.codigo_exibicao}\n"
+                    f"Parceiro: {partner}\n"
+                    f"Lead: {lead_endereco_item.empresa}\n"
+                    f"Endereço do lead: {lead_endereco_item}\n"
+                    f"Cliente: {proposal.cliente or '--'}\n"
+                    f"Unidade: {proposal.client_address or '--'}"
+                    ),
+                    usuario=request.user,
+                    content_type=proposal_type,
+                    object_id=proposal.id,
+                )
+                criadas += 1
+
+    if criadas and ignoradas:
+        messages.success(request, f"{criadas} cotação(ões) criada(s). {ignoradas} parceiro(s) já tinham cotação em aberto para este endereço.")
+    elif criadas:
+        messages.success(request, f"{criadas} cotação(ões) criada(s) com sucesso para este endereço.")
+    else:
+        messages.info(request, "Nenhuma cotação nova foi criada porque os parceiros selecionados já possuem cotação em aberto para este endereço.")
+
+    return redirect(redirect_url)
+
 def download_modelo_google_view(request):
     df = pd.DataFrame(columns=['Serviço', 'Cidade', 'Estado', 'Bairro', 'CEP'])
     
@@ -917,3 +1633,212 @@ def download_modelo_google_view(request):
     df.to_excel(response, index=False)
     
     return response
+
+
+@user_passes_test(grupo_LastMile_required)
+@login_required
+def endereco_lastmile_partner_search(request, endereco_pk):
+    endereco = get_object_or_404(
+        Endereco.objects.select_related('cliente'),
+        pk=endereco_pk,
+        em_os_comercial_lastmile=True,
+        os_atual_aberta=True,
+    )
+
+    q = (request.GET.get('q') or '').strip()
+    estado = (request.GET.get('estado') or endereco.estado or '').strip().upper()
+    cidade = (request.GET.get('cidade') or endereco.cidade or '').strip()
+    parceiros_queryset = Partner.objects.all()
+
+    if q:
+        parceiros_queryset = parceiros_queryset.filter(
+            Q(nome_fantasia__icontains=q) |
+            Q(razao_social__icontains=q) |
+            Q(cnpj_cpf__icontains=q)
+        )
+
+    if estado:
+        parceiros_queryset = parceiros_queryset.filter(
+            proposals__client_address__estado__iexact=estado
+        )
+
+    if cidade:
+        parceiros_queryset = parceiros_queryset.filter(
+            proposals__client_address__cidade__icontains=cidade
+        )
+
+    parceiros = list(
+        parceiros_queryset
+        .distinct()
+        .order_by('nome_fantasia', 'razao_social', 'id')[:100]
+    )
+    parceiros_fallback_queryset = Partner.objects.all()
+
+    if q:
+        parceiros_fallback_queryset = parceiros_fallback_queryset.filter(
+            Q(nome_fantasia__icontains=q) |
+            Q(razao_social__icontains=q) |
+            Q(cnpj_cpf__icontains=q)
+        )
+
+    parceiros_fallback = list(
+        parceiros_fallback_queryset
+        .distinct()
+        .order_by('nome_fantasia', 'razao_social', 'id')[:100]
+    )
+
+    parceiros_ids = [partner.id for partner in parceiros]
+    parceiros_fallback_ids = [partner.id for partner in parceiros_fallback]
+    parceiros_com_cotacao_aberta = set(
+        Proposal.objects.filter(
+            client_address=endereco,
+            partner_id__in=list(set(parceiros_ids + parceiros_fallback_ids)),
+            status='analise',
+        ).values_list('partner_id', flat=True)
+    )
+
+    resultados = [
+        {
+            'id': partner.id,
+            'nome': partner.nome_fantasia or partner.razao_social or f'Parceiro #{partner.id}',
+            'razao_social': partner.razao_social or '',
+            'cnpj_cpf': partner.cnpj_cpf or '',
+            'status': partner.status or '',
+            'ja_possui_cotacao_aberta': partner.id in parceiros_com_cotacao_aberta,
+        }
+        for partner in parceiros
+    ]
+    resultados_fallback = [
+        {
+            'id': partner.id,
+            'nome': partner.nome_fantasia or partner.razao_social or f'Parceiro #{partner.id}',
+            'razao_social': partner.razao_social or '',
+            'cnpj_cpf': partner.cnpj_cpf or '',
+            'status': partner.status or '',
+            'ja_possui_cotacao_aberta': partner.id in parceiros_com_cotacao_aberta,
+        }
+        for partner in parceiros_fallback
+    ]
+
+    return JsonResponse({
+        'endereco': {
+            'id': endereco.id,
+            'login_ixc': endereco.login_ixc or '',
+            'bairro': endereco.bairro or '',
+            'cidade': endereco.cidade or '',
+            'estado': endereco.estado or '',
+        },
+        'cobertura': _montar_cobertura_parceiros_por_regiao(endereco),
+        'resultados': resultados,
+        'resultados_fallback': resultados_fallback,
+    })
+
+
+@user_passes_test(grupo_LastMile_required)
+@login_required
+def endereco_lastmile_batch_proposal_create(request, endereco_pk):
+    if request.method != 'POST':
+        return redirect('enderecos_lastmile')
+
+    endereco = get_object_or_404(
+        Endereco.objects.select_related('cliente'),
+        pk=endereco_pk,
+        em_os_comercial_lastmile=True,
+        os_atual_aberta=True,
+    )
+
+    partner_ids = request.POST.getlist('partner_ids')
+    lead_endereco_ids = [
+        int(value) for value in request.POST.getlist('lead_endereco_ids')
+        if value and str(value).isdigit()
+    ]
+    lead_endereco_id = request.POST.get('lead_endereco_id')
+    if not lead_endereco_ids and lead_endereco_id and str(lead_endereco_id).isdigit():
+        lead_endereco_ids = [int(lead_endereco_id)]
+    redirect_url = request.POST.get('next') or request.META.get('HTTP_REFERER') or reverse_lazy('enderecos_lastmile_cliente', kwargs={'pk': endereco.cliente_id})
+
+    if not lead_endereco_ids:
+        messages.error(request, "Selecione um endereÃ§o do lead antes de criar as cotaÃ§Ãµes.")
+        return redirect(redirect_url)
+
+    lead_enderecos = list(
+        LeadEndereco.objects.select_related('empresa')
+        .filter(pk__in=lead_endereco_ids)
+        .order_by('empresa__razao_social', 'cidade', 'bairro', 'endereco', 'id')
+    )
+    if not lead_enderecos:
+        messages.error(request, "Nenhum endereÃ§o do lead vÃ¡lido foi selecionado.")
+        return redirect(redirect_url)
+
+    partner_ids_limpos = []
+    for value in partner_ids:
+        if value and str(value).isdigit():
+            partner_ids_limpos.append(int(value))
+
+    if not partner_ids_limpos:
+        messages.error(request, "Selecione pelo menos um parceiro para abrir a cotaÃ§Ã£o.")
+        return redirect(redirect_url)
+
+    parceiros = list(Partner.objects.filter(id__in=partner_ids_limpos).order_by('nome_fantasia', 'razao_social', 'id'))
+    if not parceiros:
+        messages.error(request, "Nenhum parceiro vÃ¡lido foi selecionado.")
+        return redirect(redirect_url)
+
+    parceiros_com_cotacao_aberta = set(
+        Proposal.objects.filter(
+            client_address=endereco,
+            partner_id__in=[partner.id for partner in parceiros],
+            status='analise',
+        ).values_list('partner_id', flat=True)
+    )
+
+    proposal_type = ContentType.objects.get_for_model(Proposal)
+    criadas = 0
+    parceiros_ignorados = 0
+
+    with transaction.atomic():
+        for partner in parceiros:
+            if partner.id in parceiros_com_cotacao_aberta:
+                parceiros_ignorados += 1
+                continue
+
+            for lead_endereco_item in lead_enderecos:
+                lead_espelho_item = lead_endereco_item.leads_legados.order_by('id').first()
+
+                proposal = Proposal.objects.create(
+                    partner=partner,
+                    responsavel=request.user,
+                    cliente=endereco.cliente,
+                    client_address=endereco,
+                    lead=lead_espelho_item,
+                    lead_endereco=lead_endereco_item,
+                )
+                proposal.grupo_proposta_id = proposal.id
+                proposal.codigo_proposta = Proposal.montar_codigo_proposta(proposal.id)
+                proposal.save(update_fields=['grupo_proposta_id', 'codigo_proposta'])
+
+                RegistroHistorico.objects.create(
+                    tipo='sistema',
+                    acao=(
+                        "CotaÃ§Ã£o criada a partir da fila de endereÃ§os Lastmile.\n\n"
+                        f"ID da proposta: #{proposal.codigo_exibicao}\n"
+                        f"Parceiro: {partner}\n"
+                        f"Lead: {lead_endereco_item.empresa}\n"
+                        f"EndereÃ§o do lead: {lead_endereco_item}\n"
+                        f"Cliente: {proposal.cliente or '--'}\n"
+                        f"Unidade: {proposal.client_address or '--'}"
+                    ),
+                    usuario=request.user,
+                    content_type=proposal_type,
+                    object_id=proposal.id,
+                )
+                criadas += 1
+
+    if criadas and parceiros_ignorados:
+        messages.success(request, f"{criadas} cotaÃ§Ã£o(Ãµes) criada(s). {parceiros_ignorados} provedor(es) jÃ¡ tinham cotaÃ§Ã£o em Em negociaÃ§Ã£o para este endereÃ§o.")
+    elif criadas:
+        messages.success(request, f"{criadas} cotaÃ§Ã£o(Ãµes) criada(s) com sucesso para este endereÃ§o.")
+    else:
+        messages.info(request, "Nenhuma cotaÃ§Ã£o nova foi criada porque os provedores selecionados jÃ¡ possuem cotaÃ§Ã£o em Em negociaÃ§Ã£o para este endereÃ§o.")
+
+    return redirect(redirect_url)

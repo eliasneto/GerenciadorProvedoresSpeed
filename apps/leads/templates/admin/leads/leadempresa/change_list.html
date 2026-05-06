@@ -1,0 +1,8 @@
+{% extends "admin/change_list.html" %}
+
+{% block object-tools-items %}
+  <li>
+    <a href="{{ consolidar_duplicadas_url }}" class="addlink">Consolidar Duplicadas</a>
+  </li>
+  {{ block.super }}
+{% endblock %}

@@ -50,9 +50,17 @@ class Endereco(models.Model):
     estado = models.CharField('UF', max_length=2, choices=ESTADO_CHOICES, default='CE')
 
     login_ixc = models.CharField('Login IXC (PPPoE)', max_length=150, blank=True, null=True)
+    login_id_ixc = models.CharField('Login ID IXC', max_length=50, blank=True, null=True, db_index=True)
+    contrato_id_ixc = models.CharField('Contrato ID IXC', max_length=50, blank=True, null=True, db_index=True)
     filial_ixc = models.CharField('Filial (IXC)', max_length=100, blank=True, null=True)
     agente_id_ixc = models.CharField('Agente ID', max_length=50, blank=True, null=True)
     agent_circuit_id = models.CharField('ID do Circuito', max_length=100, null=True, blank=True)
+    ticket_os_atual_ixc = models.CharField('Ticket/OS Atual IXC', max_length=50, blank=True, null=True)
+    setor_os_atual_id_ixc = models.CharField('Setor Atual da OS ID IXC', max_length=50, blank=True, null=True)
+    setor_os_atual_nome = models.CharField('Setor Atual da OS', max_length=150, blank=True, null=True)
+    status_os_atual_nome = models.CharField('Status Atual da OS', max_length=100, blank=True, null=True)
+    os_atual_aberta = models.BooleanField('OS Atual Aberta?', default=False, db_index=True)
+    em_os_comercial_lastmile = models.BooleanField('Em OS Comercial | Lastmile?', default=False, db_index=True)
 
     velocidade = models.CharField('Velocidade (Mbps)', max_length=50, blank=True, null=True)
     tecnologia = models.CharField('Tecnologia de Acesso', max_length=50, blank=True, null=True)
@@ -102,6 +110,9 @@ class HistoricoSincronizacao(models.Model):
         ('incremental', 'Incremental'),
         ('total', 'Carga Total'),
         ('faxina', 'Faxina/Lixo'),
+        ('os_comercial_lastmile', 'OS Comercial | Lastmile'),
+        ('email_respostas_cotacao', 'Respostas de E-mail da Cotacao'),
+        ('backup', 'Backup'),
     ]
 
     ORIGEM_CHOICES = [
@@ -109,7 +120,7 @@ class HistoricoSincronizacao(models.Model):
         ('automatica', 'Automática'),
     ]
     
-    tipo = models.CharField('Tipo de Sync', max_length=20, choices=TIPO_CHOICES, default='incremental')
+    tipo = models.CharField('Tipo de Sync', max_length=30, choices=TIPO_CHOICES, default='incremental')
     status = models.CharField('Status', max_length=20, choices=[('rodando', 'Rodando...'), ('sucesso', 'Sucesso'), ('erro', 'Erro')], default='rodando')
     
     # --- NOVOS CAMPOS ---

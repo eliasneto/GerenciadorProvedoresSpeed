@@ -59,6 +59,7 @@ MIDDLEWARE = [
     'whitenoise.middleware.WhiteNoiseMiddleware', # Essencial para arquivos estáticos
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
+    'core.middleware.RestoreBackupUploadGuardMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
@@ -214,4 +215,67 @@ CSRF_TRUSTED_ORIGINS = [
     "http://localhost:8003",
     "http://127.0.0.1:8003",
     "http://192.168.90.202:8090",
+    "http://192.168.90.202:8091",
+    "http://192.168.90.203:8091",
 ]
+
+# Restore de backup pode enviar arquivos grandes; sem isso o Django pode devolver 400
+# antes da view receber o POST.
+DATA_UPLOAD_MAX_MEMORY_SIZE = None
+FILE_UPLOAD_MAX_MEMORY_SIZE = 1024
+FILE_UPLOAD_HANDLERS = [
+    "django.core.files.uploadhandler.TemporaryFileUploadHandler",
+]
+
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "handlers": {
+        "console": {
+            "class": "logging.StreamHandler",
+        },
+    },
+    "loggers": {
+        "django.security": {
+            "handlers": ["console"],
+            "level": "WARNING",
+            "propagate": False,
+        },
+        "core.middleware": {
+            "handlers": ["console"],
+            "level": "WARNING",
+            "propagate": False,
+        },
+        "apps.core.middleware": {
+            "handlers": ["console"],
+            "level": "WARNING",
+            "propagate": False,
+        },
+    },
+}
+
+# ==========================================
+# EMAIL / SMTP
+# ==========================================
+EMAIL_BACKEND = config('EMAIL_BACKEND', default='django.core.mail.backends.smtp.EmailBackend')
+EMAIL_HOST = config('EMAIL_HOST', default='')
+EMAIL_PORT = config('EMAIL_PORT', default=587, cast=int)
+EMAIL_HOST_USER = config('EMAIL_HOST_USER', default='')
+EMAIL_HOST_PASSWORD = config('EMAIL_HOST_PASSWORD', default='')
+EMAIL_USE_TLS = config('EMAIL_USE_TLS', default=True, cast=bool)
+EMAIL_USE_SSL = config('EMAIL_USE_SSL', default=False, cast=bool)
+EMAIL_TIMEOUT = config('EMAIL_TIMEOUT', default=30, cast=int)
+DEFAULT_FROM_EMAIL = config('DEFAULT_FROM_EMAIL', default=config('ADMIN_EMAIL', default='noreply@localhost'))
+SERVER_EMAIL = config('SERVER_EMAIL', default=DEFAULT_FROM_EMAIL)
+
+# ==========================================
+# MICROSOFT GRAPH / RESPOSTAS DE E-MAIL
+# ==========================================
+GRAPH_EMAIL_REPLIES_ENABLED = config('GRAPH_EMAIL_REPLIES_ENABLED', default=False, cast=bool)
+GRAPH_EMAIL_REPLIES_CLIENT_ID = config('GRAPH_EMAIL_REPLIES_CLIENT_ID', default='')
+GRAPH_EMAIL_REPLIES_CLIENT_SECRET = config('GRAPH_EMAIL_REPLIES_CLIENT_SECRET', default='')
+GRAPH_EMAIL_REPLIES_TENANT_ID = config('GRAPH_EMAIL_REPLIES_TENANT_ID', default='')
+GRAPH_EMAIL_REPLIES_MAILBOX = config('GRAPH_EMAIL_REPLIES_MAILBOX', default=DEFAULT_FROM_EMAIL)
+GRAPH_EMAIL_REPLIES_INITIAL_LOOKBACK_DAYS = config('GRAPH_EMAIL_REPLIES_INITIAL_LOOKBACK_DAYS', default=15, cast=int)
+GRAPH_EMAIL_REPLIES_TIMEOUT = config('GRAPH_EMAIL_REPLIES_TIMEOUT', default=30, cast=int)
+GRAPH_EMAIL_REPLIES_MAX_PAGES_PER_RUN = config('GRAPH_EMAIL_REPLIES_MAX_PAGES_PER_RUN', default=20, cast=int)

@@ -288,15 +288,16 @@ def executar_cadastro_ixc(dados):
         # Se o servidor respondeu (Status 200 = OK)
         if response.status_code == 200:
             if resposta_json.get('type') == 'success':
+                id_ixc = resposta_json.get('id')
                 _atualizar_endereco_tecnico(linha, observacao_cliente)
-                return True, f"Criado com sucesso! ID IXC: {resposta_json.get('id')}"
+                return True, "Criado com sucesso!", id_ixc
             
             # Se a requisição chegou, mas o IXC negou
-            return False, f"IXC Negou: {resposta_json.get('message')}"
+            return False, f"IXC Negou: {resposta_json.get('message')}", resposta_json.get('id')
         
         # Erro de rota ou indisponibilidade
-        return False, f"Erro HTTP {response.status_code}"
+        return False, f"Erro HTTP {response.status_code}", None
 
     except Exception as e:
         # Erro de execução do Python
-        return False, f"Erro Técnico: {str(e)}"
+        return False, f"Erro Técnico: {str(e)}", None

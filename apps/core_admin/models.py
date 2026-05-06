@@ -48,3 +48,28 @@ class AcessoBancoDados(models.Model):
 
     def __str__(self):
         return f'{self.nome} ({self.usuario_banco})'
+
+
+class ConfiguracaoEmailEnvio(models.Model):
+    nome = models.CharField(max_length=80, default='Padrao do Sistema', verbose_name='Identificacao')
+    email_remetente_padrao = models.EmailField(
+        blank=True,
+        null=True,
+        verbose_name='E-mail remetente padrao',
+        help_text='Este e-mail aparece como remetente padrao na composicao das mensagens do sistema.',
+    )
+    atualizado_em = models.DateTimeField(auto_now=True, verbose_name='Atualizado em')
+
+    class Meta:
+        verbose_name = 'Configuracao de E-mail'
+        verbose_name_plural = 'Configuracoes de E-mail'
+
+    def __str__(self):
+        return self.nome or 'Configuracao de E-mail'
+
+    @classmethod
+    def obter_configuracao(cls):
+        configuracao = cls.objects.order_by('id').first()
+        if configuracao:
+            return configuracao
+        return cls.objects.create()

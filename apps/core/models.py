@@ -59,11 +59,74 @@ class RegistroHistorico(models.Model):
         verbose_name_plural = "Registros de Historico"
 
 
+class EmailCotacaoRespostaSync(models.Model):
+    mailbox_email = models.EmailField("Caixa monitorada", unique=True)
+    inbox_delta_link = models.TextField("DeltaLink da Inbox", blank=True, null=True)
+    ultima_sincronizacao_em = models.DateTimeField("Ultima sincronizacao", blank=True, null=True)
+    ultimo_erro = models.TextField("Ultimo erro", blank=True)
+    ativo = models.BooleanField("Ativo", default=True)
+    atualizado_em = models.DateTimeField("Atualizado em", auto_now=True)
+
+    class Meta:
+        verbose_name = "Sync de respostas por e-mail da cotacao"
+        verbose_name_plural = "Syncs de respostas por e-mail da cotacao"
+
+    def __str__(self):
+        return self.mailbox_email
+
+    @classmethod
+    def obter_configuracao(cls, mailbox_email):
+        mailbox_normalizado = (mailbox_email or "").strip().lower()
+        if not mailbox_normalizado:
+            raise ValueError("Nao foi possivel determinar a caixa de e-mail monitorada para respostas.")
+
+        configuracao = cls.objects.order_by("id").first()
+        if configuracao:
+            if configuracao.mailbox_email.strip().lower() != mailbox_normalizado:
+                configuracao.mailbox_email = mailbox_normalizado
+                configuracao.save(update_fields=["mailbox_email", "atualizado_em"])
+            return configuracao
+
+        return cls.objects.create(mailbox_email=mailbox_normalizado)
+
+
+class EmailCotacaoRespostaImportacao(models.Model):
+    proposal = models.ForeignKey(
+        "partners.Proposal",
+        on_delete=models.CASCADE,
+        related_name="respostas_email_importadas",
+        verbose_name="Cotacao",
+    )
+    historico = models.ForeignKey(
+        "RegistroHistorico",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="respostas_email_importadas",
+        verbose_name="Historico gerado",
+    )
+    graph_message_id = models.CharField("ID da mensagem no Graph", max_length=255, unique=True)
+    internet_message_id = models.CharField("Message-ID da internet", max_length=500, blank=True, null=True)
+    assunto = models.CharField("Assunto", max_length=998)
+    remetente = models.EmailField("Remetente", blank=True, null=True)
+    recebido_em = models.DateTimeField("Recebido em", blank=True, null=True)
+    importado_em = models.DateTimeField("Importado em", auto_now_add=True)
+
+    class Meta:
+        ordering = ["-importado_em"]
+        verbose_name = "Resposta de e-mail importada"
+        verbose_name_plural = "Respostas de e-mail importadas"
+
+    def __str__(self):
+        return f"{self.proposal.codigo_exibicao} - {self.assunto}"
+
+
 class IntegrationAudit(models.Model):
     INTEGRATION_CHOICES = [
         ("logins_ixc", "Logins IXC"),
         ("atendimento_ixc", "Atendimento IXC"),
         ("buscar_fornecedores", "Buscar Fornecedores"),
+        ("importador_leads", "Importador de Leads"),
     ]
 
     ACTION_CHOICES = [

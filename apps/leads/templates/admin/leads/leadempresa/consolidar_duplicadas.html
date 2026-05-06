@@ -1,0 +1,109 @@
+{% extends "admin/base_site.html" %}
+
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+  <a href="{% url 'admin:index' %}">Início</a>
+  &rsaquo; <a href="{% url 'admin:app_list' app_label=opts.app_label %}">{{ opts.app_config.verbose_name }}</a>
+  &rsaquo; <a href="{{ changelist_url }}">{{ opts.verbose_name_plural|capfirst }}</a>
+  &rsaquo; Consolidar duplicadas
+</div>
+{% endblock %}
+
+{% block content %}
+<div id="content-main">
+  <div class="module" style="padding: 20px; margin-bottom: 20px;">
+    <h1 style="margin-top: 0;">Consolidar empresas duplicadas</h1>
+    <p>Busque por nome da empresa ou documento. Você pode marcar mais de uma empresa antes de rodar a consolidação.</p>
+    <p><strong>Critério da rotina:</strong> mesma empresa por nome ou documento, e pelo menos um endereço exatamente igual.</p>
+
+    <form method="get" style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-top: 18px;">
+      <input
+        type="text"
+        name="q"
+        value="{{ termo }}"
+        placeholder="Buscar por nome ou documento"
+        style="min-width: 380px; padding: 10px 12px;"
+      >
+      <button type="submit" class="button default">Buscar</button>
+      <a href="{{ changelist_url }}" class="button">Voltar para listagem</a>
+    </form>
+  </div>
+
+  {% if termo %}
+    <div class="module" style="padding: 20px;">
+      <h2 style="margin-top: 0;">{{ total_resultados }} resultado(s) para "{{ termo }}"</h2>
+
+      <form method="post">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="consolidar">
+        <input type="hidden" name="q" value="{{ termo }}">
+
+        <div style="margin: 14px 0 18px;">
+          <button type="submit" class="button default">Consolidar selecionadas</button>
+        </div>
+
+        <table id="result_list">
+          <thead>
+            <tr>
+              <th scope="col"><input type="checkbox" id="marcar-todas"></th>
+              <th scope="col">Empresa</th>
+              <th scope="col">Documento</th>
+              <th scope="col">Contato</th>
+              <th scope="col">Endereços</th>
+              <th scope="col">Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for empresa in empresas %}
+              <tr>
+                <td><input type="checkbox" name="empresa_ids" value="{{ empresa.id }}"></td>
+                <td>
+                  <strong>{{ empresa.nome_fantasia|default:empresa.razao_social|default:"Sem nome" }}</strong><br>
+                  <span style="opacity: .75;">{{ empresa.razao_social|default:"-" }}</span><br>
+                  <span style="opacity: .65;">ID {{ empresa.id }}</span>
+                </td>
+                <td>{{ empresa.cnpj_cpf|default:"Não informado" }}</td>
+                <td>
+                  {{ empresa.contato_nome|default:"Sem nome" }}<br>
+                  <span style="opacity: .75;">{{ empresa.telefone|default:"Sem telefone" }}</span>
+                </td>
+                <td>
+                  {{ empresa.total_enderecos }} endereço(s)<br>
+                  {% with primeiro_endereco=empresa.enderecos.first %}
+                    <span style="opacity: .75;">
+                      {% if primeiro_endereco %}
+                        {{ primeiro_endereco.endereco|default:"Endereço não informado" }},
+                        {{ primeiro_endereco.numero|default:"S/N" }} -
+                        {{ primeiro_endereco.cidade|default:"Cidade não informada" }}/{{ primeiro_endereco.estado|default:"--" }}
+                      {% else %}
+                        Sem endereços
+                      {% endif %}
+                    </span>
+                  {% endwith %}
+                </td>
+                <td>{{ empresa.get_status_display }}</td>
+              </tr>
+            {% empty %}
+              <tr>
+                <td colspan="6">Nenhuma empresa encontrada com esse termo.</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </form>
+    </div>
+  {% endif %}
+</div>
+
+<script>
+  (function () {
+    const toggle = document.getElementById('marcar-todas');
+    if (!toggle) return;
+    toggle.addEventListener('change', function () {
+      document.querySelectorAll('input[name="empresa_ids"]').forEach(function (checkbox) {
+        checkbox.checked = toggle.checked;
+      });
+    });
+  })();
+</script>
+{% endblock %}

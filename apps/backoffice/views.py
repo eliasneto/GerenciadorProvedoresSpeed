@@ -44,6 +44,7 @@ def cotacao_import(request):
             )
             df["Status_Importacao"] = ""
             df["Mensagem_Importacao"] = ""
+            df["ID_IXC"] = ""
 
             sucessos = 0
             falhas = 0
@@ -51,7 +52,12 @@ def cotacao_import(request):
 
             for index, linha in df.iterrows():
                 if pd.notna(linha.get("Login_Login")):
-                    status, mensagem = executar_cadastro_ixc(linha)
+                    resultado = executar_cadastro_ixc(linha)
+                    if len(resultado) == 3:
+                        status, mensagem, id_ixc = resultado
+                    else:
+                        status, mensagem = resultado
+                        id_ixc = ""
 
                     if status:
                         sucessos += 1
@@ -61,11 +67,13 @@ def cotacao_import(request):
                         df.at[index, "Status_Importacao"] = "ERRO"
 
                     df.at[index, "Mensagem_Importacao"] = mensagem
+                    df.at[index, "ID_IXC"] = id_ixc or ""
                     itens_execucao.append(
                         {
                             "linha_numero": index + 2,
                             "status": "sucesso" if status else "erro",
                             "mensagem": mensagem,
+                            "id_ixc": id_ixc or "",
                             "dados_json": {str(k).strip(): linha[k] for k in df.columns if k in linha},
                         }
                     )
@@ -281,6 +289,7 @@ def atendimento_import(request):
             )
             df["Status_Importacao"] = ""
             df["Mensagem_Importacao"] = ""
+            df["ID_IXC"] = ""
             sucessos = 0
             falhas = 0
             itens_execucao = []
@@ -302,6 +311,7 @@ def atendimento_import(request):
                             "linha_numero": index + 2,
                             "status": "sucesso" if status else "erro",
                             "mensagem": mensagem,
+                            "id_ixc": "",
                             "dados_json": {str(k).strip(): linha[k] for k in df.columns if k in linha},
                         }
                     )

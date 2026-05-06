@@ -1,34 +1,223 @@
 {% extends "core/base.html" %}
 
 {% block content %}
-<div class="max-w-2xl mx-auto p-10">
-    <div class="mb-10 flex flex-col items-center">
-        <div class="w-20 h-20 bg-ageis-yellow rounded-[2rem] flex items-center justify-center shadow-2xl mb-6">
-            <i data-lucide="database" class="text-black w-10 h-10"></i>
-        </div>
-        <h1 class="text-3xl font-black text-gray-900 uppercase italic text-center">Importador de Dados</h1>
-        <p class="text-gray-400 font-bold text-xs uppercase tracking-widest mt-2">Ageis Sistemas - Ferramenta Admin</p>
-    </div>
-
-    <div class="bg-white p-10 rounded-[3rem] border border-gray-100 shadow-sm space-y-8">
-        <div class="p-6 bg-gray-50 rounded-3xl border border-dashed border-gray-200 text-center">
-            <p class="text-sm text-gray-600 mb-4 font-medium">Ainda não tem a planilha padrão?</p>
-            <a href="{% url 'download_template' %}" class="inline-flex items-center gap-2 text-xs font-black uppercase text-ageis-black hover:underline">
-                <i data-lucide="download" class="w-4 h-4"></i> Baixar Planilha Modelo
-            </a>
+<div class="min-h-screen bg-[#F8F9FA] -mx-6 -my-6 md:-mx-10 md:-my-10 px-6 md:px-10 py-10">
+    <div class="max-w-2xl mx-auto">
+        <div class="mb-10 flex flex-col items-center">
+            <div class="w-20 h-20 bg-ageis-yellow rounded-[2rem] flex items-center justify-center shadow-2xl mb-6">
+                <i data-lucide="database" class="text-black w-10 h-10"></i>
+            </div>
+            <h1 class="text-3xl font-black text-gray-900 uppercase italic text-center">Importador de Provedores</h1>
+            <p class="text-gray-400 font-bold text-xs uppercase tracking-widest mt-2">Administracao • Base de provedores</p>
         </div>
 
-        <form method="POST" enctype="multipart/form-data" class="space-y-6">
-            {% csrf_token %}
-            <div class="space-y-2">
-                <label class="text-[10px] font-black uppercase text-gray-400 ml-2">Selecione o arquivo preenchido</label>
-                <input type="file" name="file" required class="w-full p-4 bg-gray-50 border border-gray-100 rounded-2xl file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-black file:bg-ageis-yellow file:text-black">
+        {% if importacao_em_andamento %}
+        <div class="mb-8 rounded-[2rem] border border-amber-200 bg-amber-50 shadow-sm p-6 space-y-5">
+            <div class="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                <div>
+                    <p class="text-[10px] font-black uppercase tracking-widest text-amber-700">Importacao em andamento</p>
+                    <h2 class="text-lg font-black text-gray-900 mt-2 break-all">{{ importacao_em_andamento.arquivo_nome }}</h2>
+                    <p class="text-sm text-gray-600 font-medium mt-2">{{ importacao_em_andamento.mensagem|default:"Processando planilha..." }}</p>
+                </div>
+                <span class="inline-flex items-center justify-center rounded-full bg-ageis-black px-4 py-2 text-[10px] font-black uppercase tracking-widest text-ageis-yellow">
+                    Rodando
+                </span>
             </div>
 
-            <button type="submit" class="w-full bg-ageis-black text-ageis-yellow py-5 rounded-3xl font-black uppercase italic shadow-xl hover:bg-gray-800 transition-all flex items-center justify-center gap-3">
-                <i data-lucide="play" class="w-5 h-5"></i> Iniciar Importação
-            </button>
-        </form>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div class="rounded-2xl bg-white border border-amber-100 px-4 py-3">
+                    <p class="text-[10px] font-black uppercase tracking-widest text-gray-400">Processadas</p>
+                    <p class="text-lg font-black text-gray-900 mt-1">
+                        {{ importacao_em_andamento.processadas }}{% if importacao_em_andamento.total_previsto %}/{{ importacao_em_andamento.total_previsto }}{% endif %}
+                    </p>
+                </div>
+                <div class="rounded-2xl bg-white border border-amber-100 px-4 py-3">
+                    <p class="text-[10px] font-black uppercase tracking-widest text-gray-400">Inicio</p>
+                    <p class="text-sm font-black text-gray-900 mt-1">{{ importacao_em_andamento.criado_em|date:"d/m/Y H:i:s" }}</p>
+                </div>
+                <div class="rounded-2xl bg-white border border-amber-100 px-4 py-3">
+                    <p class="text-[10px] font-black uppercase tracking-widest text-gray-400">Ultima atualizacao</p>
+                    <p class="text-sm font-black text-gray-900 mt-1">{{ importacao_em_andamento.atualizado_em|default:"Aguardando..." }}</p>
+                </div>
+            </div>
+
+            <div class="w-full h-3 bg-white rounded-full overflow-hidden border border-amber-100">
+                <div class="lead-import-indeterminate h-full rounded-full"></div>
+            </div>
+
+            <p class="text-xs text-gray-600 font-medium leading-relaxed">
+                A importacao roda em segundo plano com trava unica. Enquanto este card estiver visivel, uma segunda importacao nao sera iniciada e a pagina se atualiza sozinha para acompanhar o andamento.
+            </p>
+
+            <form id="stopImportForm" method="POST" class="pt-2">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="stop">
+                <button id="stopImportButton" type="submit" class="w-full md:w-auto inline-flex items-center justify-center gap-2 rounded-2xl bg-rose-600 px-5 py-3 text-xs font-black uppercase tracking-widest text-white shadow-sm hover:bg-rose-700 transition-all">
+                    <i data-lucide="octagon-x" class="w-4 h-4"></i>
+                    Parar importacao
+                </button>
+            </form>
+        </div>
+        {% elif ultima_importacao %}
+        <div class="mb-8 rounded-[2rem] border {% if ultima_importacao.status_execucao == import_status_success %}border-emerald-200 bg-emerald-50{% elif ultima_importacao.status_execucao == import_status_error %}border-rose-200 bg-rose-50{% elif ultima_importacao.status_execucao == import_status_stopped %}border-amber-200 bg-amber-50{% else %}border-gray-200 bg-white{% endif %} shadow-sm p-6 space-y-4">
+            <div class="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                <div>
+                    <p class="text-[10px] font-black uppercase tracking-widest text-gray-500">Ultima importacao</p>
+                    <h2 class="text-lg font-black text-gray-900 mt-2 break-all">{{ ultima_importacao.arquivo_nome }}</h2>
+                    <p class="text-sm text-gray-600 font-medium mt-2">{{ ultima_importacao.mensagem|default:"Sem detalhes adicionais." }}</p>
+                </div>
+                <span class="inline-flex items-center justify-center rounded-full px-4 py-2 text-[10px] font-black uppercase tracking-widest {% if ultima_importacao.status_execucao == import_status_success %}bg-emerald-600 text-white{% elif ultima_importacao.status_execucao == import_status_error %}bg-rose-600 text-white{% elif ultima_importacao.status_execucao == import_status_stopped %}bg-amber-500 text-white{% else %}bg-gray-800 text-white{% endif %}">
+                    {{ ultima_importacao.status_execucao }}
+                </span>
+            </div>
+
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+                <div class="rounded-2xl bg-white/80 border border-white px-4 py-3">
+                    <p class="text-[10px] font-black uppercase tracking-widest text-gray-400">Linhas</p>
+                    <p class="text-lg font-black text-gray-900 mt-1">{{ ultima_importacao.total_registros }}</p>
+                </div>
+                <div class="rounded-2xl bg-white/80 border border-white px-4 py-3">
+                    <p class="text-[10px] font-black uppercase tracking-widest text-gray-400">Sucessos</p>
+                    <p class="text-lg font-black text-gray-900 mt-1">{{ ultima_importacao.total_sucessos }}</p>
+                </div>
+                <div class="rounded-2xl bg-white/80 border border-white px-4 py-3">
+                    <p class="text-[10px] font-black uppercase tracking-widest text-gray-400">Erros</p>
+                    <p class="text-lg font-black text-gray-900 mt-1">{{ ultima_importacao.total_erros }}</p>
+                </div>
+                <div class="rounded-2xl bg-white/80 border border-white px-4 py-3">
+                    <p class="text-[10px] font-black uppercase tracking-widest text-gray-400">Ignoradas</p>
+                    <p class="text-lg font-black text-gray-900 mt-1">{{ ultima_importacao.ignorados }}</p>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <div class="bg-white p-10 rounded-[3rem] border border-gray-100 shadow-sm space-y-8">
+            <div class="p-6 bg-gray-50 rounded-3xl border border-dashed border-gray-200 text-center">
+                <p class="text-sm text-gray-600 mb-4 font-medium">Ainda nao tem a planilha padrao?</p>
+                <a href="{% url 'download_template' %}" class="inline-flex items-center gap-2 text-xs font-black uppercase text-ageis-black hover:underline">
+                    <i data-lucide="download" class="w-4 h-4"></i> Baixar Planilha Modelo
+                </a>
+            </div>
+
+            <div class="px-1">
+                <p class="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-2 ml-2">Campos da planilha</p>
+                <div class="rounded-2xl border border-gray-100 bg-gray-50 px-4 py-4 space-y-2">
+                    <p class="text-xs text-gray-700 font-medium leading-relaxed">
+                        <span class="font-black text-gray-900">Obrigatorio:</span> RAZAO_SOCIAL
+                    </p>
+                    <p class="text-xs text-gray-600 font-medium leading-relaxed">
+                        <span class="font-black text-gray-800">Campos aceitos:</span> CNPJ_CPF, NOME_FANTASIA, SITE, CEP, ENDERECO, NUMERO, BAIRRO, CIDADE, ESTADO, CONTATO_NOME, EMAIL, TELEFONE, INSTAGRAM_USERNAME e INSTAGRAM_URL
+                    </p>
+                    <p class="text-[11px] text-gray-500 font-bold leading-relaxed">
+                        Essa importacao separa <span class="text-gray-900">empresa</span> e <span class="text-gray-900">endereco</span>, e mantem um cadastro espelho para compatibilidade com a rota <span class="text-gray-900">/provedores/novo/</span>.
+                    </p>
+                </div>
+            </div>
+
+            <form id="leadImportForm" method="POST" enctype="multipart/form-data" class="space-y-6">
+                {% csrf_token %}
+                <div class="space-y-2">
+                    <label class="text-[10px] font-black uppercase text-gray-400 ml-2">Selecione o arquivo preenchido</label>
+                    <input id="leadImportFile" type="file" name="file" required {% if importacao_em_andamento %}disabled{% endif %} class="w-full p-4 bg-gray-50 border border-gray-100 rounded-2xl file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-black file:bg-ageis-yellow file:text-black disabled:opacity-60">
+                </div>
+
+                <button id="leadImportSubmit" type="submit" {% if importacao_em_andamento %}disabled{% endif %} class="w-full bg-ageis-black text-ageis-yellow py-5 rounded-3xl font-black uppercase italic shadow-xl hover:bg-gray-800 transition-all flex items-center justify-center gap-3 disabled:opacity-60 disabled:cursor-not-allowed">
+                    <i data-lucide="play" class="w-5 h-5"></i>
+                    <span id="leadImportSubmitText">{% if importacao_em_andamento %}Importacao em andamento{% else %}Iniciar Importacao{% endif %}</span>
+                </button>
+            </form>
+        </div>
     </div>
 </div>
+
+<div id="leadImportLoadingOverlay" class="fixed inset-0 bg-black/45 backdrop-blur-sm z-[999] hidden">
+    <div class="min-h-screen flex items-center justify-center px-6">
+        <div class="w-full max-w-xl bg-white rounded-[2rem] shadow-2xl border border-gray-100 p-8 md:p-10">
+            <div class="flex items-center gap-4 mb-6">
+                <div class="w-14 h-14 rounded-[1.25rem] bg-ageis-yellow flex items-center justify-center shadow-lg">
+                    <i data-lucide="database-zap" class="w-7 h-7 text-black"></i>
+                </div>
+                <div>
+                    <h2 class="text-xl font-black uppercase italic text-gray-900">Importacao em andamento</h2>
+                    <p class="text-xs font-bold uppercase tracking-widest text-gray-400 mt-1">A importacao foi enviada para o processamento em segundo plano</p>
+                </div>
+            </div>
+
+            <div class="rounded-2xl border border-gray-100 bg-gray-50 p-5 space-y-4">
+                <div class="flex items-center justify-between gap-4">
+                    <span class="text-sm font-bold text-gray-700">Preparando fila da importacao</span>
+                    <span class="text-[10px] font-black uppercase tracking-widest text-ageis-yellow bg-ageis-black px-3 py-1 rounded-full">Rodando</span>
+                </div>
+
+                <div class="w-full h-3 bg-white rounded-full overflow-hidden border border-gray-100">
+                    <div class="lead-import-indeterminate h-full rounded-full"></div>
+                </div>
+
+                <p class="text-xs text-gray-500 font-medium leading-relaxed">
+                    Vamos redirecionar voce de volta para esta mesma tela para acompanhar o progresso real da planilha, sem precisar adivinhar se travou ou nao.
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<style>
+    .lead-import-indeterminate {
+        width: 38%;
+        background: linear-gradient(90deg, #facc15 0%, #f59e0b 100%);
+        animation: lead-import-slide 1.15s ease-in-out infinite;
+    }
+
+    @keyframes lead-import-slide {
+        0% { transform: translateX(-120%); }
+        100% { transform: translateX(320%); }
+    }
+</style>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        const form = document.getElementById('leadImportForm');
+        const fileInput = document.getElementById('leadImportFile');
+        const submitButton = document.getElementById('leadImportSubmit');
+        const submitText = document.getElementById('leadImportSubmitText');
+        const overlay = document.getElementById('leadImportLoadingOverlay');
+        const stopForm = document.getElementById('stopImportForm');
+        const stopButton = document.getElementById('stopImportButton');
+        const importacaoEmAndamento = {{ importacao_em_andamento|yesno:"true,false" }};
+
+        if (importacaoEmAndamento) {
+            window.setTimeout(function () {
+                window.location.reload();
+            }, 10000);
+        }
+
+        if (form && fileInput && submitButton && submitText && overlay) {
+            form.addEventListener('submit', function () {
+                if (!fileInput.files || !fileInput.files.length) {
+                    return;
+                }
+
+                submitButton.disabled = true;
+                fileInput.disabled = true;
+                submitText.textContent = 'Enviando para fila...';
+                overlay.classList.remove('hidden');
+                document.body.classList.add('overflow-hidden');
+            });
+        }
+
+        if (stopForm && stopButton) {
+            stopForm.addEventListener('submit', function () {
+                stopButton.disabled = true;
+                stopButton.classList.add('opacity-70', 'cursor-not-allowed');
+                stopButton.innerHTML = '<i data-lucide="loader-circle" class="w-4 h-4 animate-spin"></i> Interrompendo...';
+                if (window.lucide) {
+                    window.lucide.createIcons();
+                }
+            });
+        }
+    });
+</script>
 {% endblock %}

@@ -43,6 +43,9 @@
             </div>
 
             <div class="flex items-center gap-2 w-full xl:w-auto shrink-0">
+                <a href="?{{ csv_query }}" class="w-12 h-12 flex items-center justify-center rounded-full bg-emerald-50 text-emerald-600 hover:bg-emerald-100 transition" title="Baixar CSV">
+                    <i data-lucide="download" class="w-4 h-4"></i>
+                </a>
                 {% if busca or usuario_filtro %}
                 <a href="{% url 'gestao_relatorio_login_usuario' %}" class="w-12 h-12 flex items-center justify-center rounded-full bg-red-50 text-red-500 hover:bg-red-100 transition" title="Limpar Filtros">
                     <i data-lucide="x" class="w-4 h-4"></i>

@@ -8,7 +8,7 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 IXC_URL = "https://megainfraestrutura.com.br/webservice/v1"
 IXC_TOKEN = "76:54f35af33ea35f3b8a9a8fa14868322662d0465ebbb63fc56c3fb499ac3e1b61"
-USUARIO_IXC_PADRAO = "108"
+USUARIO_IXC_PADRAO = "76"
 
 
 def get_headers():

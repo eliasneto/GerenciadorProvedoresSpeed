@@ -1,4 +1,4 @@
-from django.shortcuts import render, get_object_or_404, redirect
+﻿from django.shortcuts import render, get_object_or_404, redirect
 from django.contrib.auth.decorators import login_required, user_passes_test
 from django.core.exceptions import PermissionDenied
 from django.core.paginator import Paginator
@@ -6,14 +6,18 @@ from django.contrib import messages
 from django.db.models import Sum
 from django.contrib.contenttypes.models import ContentType
 from django.urls import reverse
+from django.utils.html import strip_tags
 from django.utils import timezone
 from datetime import datetime, time
+from html import unescape
 from urllib.parse import urlparse, urlencode
 
-# Importações do próprio App
+# Importações do próprio app
 from .models import Partner, PartnerPlan, Proposal, ProposalMotivoInviavel
 from .forms import PartnerForm, PartnerPlanForm, ProposalForm
 from clientes.models import Endereco 
+from scripts.integracoes.ixc_finalizacao_service import finalizar_os_existente, resumir_erro_finalizacao
+from scripts.integracoes.ixc_ticket_arquivo_service import anexar_arquivo_atendimento_por_os
 
 # --- IMPORTAÇÃO DO HISTÓRICO SPEED ---
 from core.models import RegistroHistorico
@@ -22,10 +26,10 @@ from core.models import RegistroHistorico
 def grupo_Parceiro_required(user):
     if not user.is_authenticated:
         return False
-    # O Superuser (você) sempre passa. Os outros precisam estar no grupo.
+    # O superuser sempre passa. Os outros precisam estar no grupo.
     if user.groups.filter(name='Parceiro').exists() or user.is_superuser:
         return True
-    # Se não for do grupo, joga um Erro 403 (Acesso Negado)
+    # Se não for do grupo, gera erro 403 (acesso negado).
     raise PermissionDenied
 
 
@@ -38,6 +42,80 @@ def _registrar_historico_proposta(proposal, usuario, acao, tipo='sistema', arqui
         content_type=ContentType.objects.get_for_model(Proposal),
         object_id=proposal.id
     )
+
+
+def _baixar_endereco_da_fila_lastmile(endereco):
+    if not endereco:
+        return
+
+    update_fields = []
+
+    if endereco.os_atual_aberta:
+        endereco.os_atual_aberta = False
+        update_fields.append('os_atual_aberta')
+
+    if endereco.em_os_comercial_lastmile:
+        endereco.em_os_comercial_lastmile = False
+        update_fields.append('em_os_comercial_lastmile')
+
+    if endereco.status_os_atual_nome != 'Finalizada':
+        endereco.status_os_atual_nome = 'Finalizada'
+        update_fields.append('status_os_atual_nome')
+
+    if update_fields:
+        endereco.save(update_fields=update_fields)
+
+
+def _resumir_erro_anexo_ixc(resultado):
+    if not isinstance(resultado, dict):
+        return "Falha desconhecida ao enviar anexo ao atendimento no IXC."
+
+    if resultado.get('message'):
+        mensagem = strip_tags(unescape(str(resultado['message']))).strip()
+        return mensagem or "Falha ao enviar anexo ao atendimento no IXC."
+
+    body = resultado.get('body') or {}
+    detalhes_os = resultado.get('detalhes_os') or {}
+    os_id = detalhes_os.get('id') or '--'
+    ticket_id = resultado.get('ticket_id') or detalhes_os.get('id_ticket') or '--'
+    arquivo_nome = resultado.get('arquivo_nome') or '--'
+    mensagem = ''
+    if isinstance(body, dict):
+        mensagem = body.get('message') or body.get('raw') or ''
+
+    if mensagem:
+        mensagem_limpa = strip_tags(unescape(str(mensagem))).strip()
+        if 'sessão foi finalizada' in mensagem_limpa.lower() or 'sessao foi finalizada' in mensagem_limpa.lower():
+            return (
+                f"O.S. {os_id} / atendimento {ticket_id} / arquivo {arquivo_nome}: "
+                "o IXC recusou o anexo porque a sessão do painel não ficou autenticada. "
+                "Use o e-mail de login do IXC e a senha desse usuário, não um e-mail pessoal."
+            )
+        return f"O.S. {os_id} / atendimento {ticket_id} / arquivo {arquivo_nome}: {mensagem_limpa}"
+
+    return f"O.S. {os_id} / atendimento {ticket_id} / arquivo {arquivo_nome}: falha ao enviar anexo ao IXC."
+
+
+def _endereco_possui_os_lastmile(endereco):
+    if not endereco:
+        return False
+
+    setor_nome = (getattr(endereco, 'setor_os_atual_nome', '') or '').strip().lower()
+    return bool(
+        getattr(endereco, 'ticket_os_atual_ixc', None)
+        and getattr(endereco, 'os_atual_aberta', False)
+        and (
+            getattr(endereco, 'em_os_comercial_lastmile', False)
+            or 'lastmile' in setor_nome
+        )
+    )
+
+
+def _propostas_com_os_lastmile(propostas_lote):
+    return [
+        item for item in propostas_lote
+        if item.client_address_id and _endereco_possui_os_lastmile(item.client_address)
+    ]
 
 
 def _resolver_periodo_historico(request):
@@ -109,7 +187,7 @@ def _append_next(url, next_param):
 @user_passes_test(grupo_Parceiro_required)
 @login_required
 def partner_list(request):
-    """Lista APENAS os parceiros ATIVOS (A operação real)."""
+    """Lista apenas os parceiros ativos."""
     proposal_statuses_partner_list = ['aguardando_contratacao', 'contratado', 'declinado']
     partners_queryset = (
         Partner.objects.filter(proposals__status__in=proposal_statuses_partner_list)
@@ -152,8 +230,8 @@ def partner_list(request):
 @user_passes_test(grupo_Parceiro_required)
 @login_required
 def partner_inactive_list(request):
-    """Esteira de Reativação (Win-back) para parceiros inativos."""
-    # Traz todo mundo que NÃO está ativo (inativo, negociacao, inviavel)
+    """Esteira de reativação (win-back) para parceiros inativos."""
+    # Traz todo mundo que não está ativo (inativo, negociacao, inviavel)
     partners_inativos = Partner.objects.exclude(status__in=['ativo', 'aguardando_contratacao', 'contratado']).order_by('-data_cadastro')
     
     paginator = Paginator(partners_inativos, 10)
@@ -167,7 +245,7 @@ def partner_inactive_list(request):
 @user_passes_test(grupo_Parceiro_required)
 @login_required
 def partner_detail(request, pk):
-    """Exibe o perfil do parceiro, propostas e o HISTÓRICO (Timeline)."""
+    """Exibe o perfil do parceiro, propostas e o histórico."""
     partner = get_object_or_404(Partner, pk=pk)
     back_url, next_param = _resolver_back_url(request, reverse('partner_list'))
     proposals = partner.proposals.exclude(status__in=['encerrada', 'ativa', 'aguardando_contratacao', 'contratado', 'declinado']).order_by('-id')
@@ -210,7 +288,7 @@ def partner_detail(request, pk):
     
     partner_type = ContentType.objects.get_for_model(Partner)
     
-    # MÁGICA SPEED: Leitura de Histórico "Ativo" x "Arquivado"
+    # Leitura de histórico "ativo" x "arquivado"
     ver_antigos = request.GET.get('ver_antigos') == 'true'
     
     if ver_antigos:
@@ -286,7 +364,7 @@ def partner_plan_delete(request, partner_pk, plan_pk):
 @user_passes_test(grupo_Parceiro_required)
 @login_required
 def partner_add_historico(request, pk):
-    """Mini-view que recebe o POST do comentário/anexo na tela do Parceiro"""
+    """Recebe o POST do comentário/anexo na tela do parceiro."""
     partner = get_object_or_404(Partner, pk=pk)
     
     if request.method == 'POST':
@@ -332,19 +410,19 @@ def update_partner_status(request, pk):
             if status_antigo != novo_status:
                 if novo_status == 'inativo':
                     tipo_hist = 'anexo' if arquivo else 'sistema'
-                    texto_historico = f"🚫 PARCEIRO INATIVADO\n\nMotivo / Observação:\n{observacao}" if observacao else "🚫 PARCEIRO INATIVADO"
+                    texto_historico = f"PARCEIRO INATIVADO\n\nMotivo / Observação:\n{observacao}" if observacao else "PARCEIRO INATIVADO"
                 elif novo_status == 'declinado':
                     tipo_hist = 'anexo' if arquivo else 'sistema'
-                    texto_historico = f"❌ PARCEIRO DECLINADO\n\nMotivo / Observação:\n{observacao}" if observacao else "❌ PARCEIRO DECLINADO"
+                    texto_historico = f"PARCEIRO DECLINADO\n\nMotivo / Observação:\n{observacao}" if observacao else "PARCEIRO DECLINADO"
                 elif novo_status == 'contratado':
                     tipo_hist = 'sistema'
-                    texto_historico = "✅ PARCEIRO CONTRATADO\n\nStatus operacional alterado para [CONTRATADO]."
+                    texto_historico = "PARCEIRO CONTRATADO\n\nStatus operacional alterado para [CONTRATADO]."
                 elif novo_status == 'aguardando_contratacao':
                     tipo_hist = 'sistema'
-                    texto_historico = "📝 PARCEIRO EM AGUARDANDO CONTRATAÇÃO\n\nA proposta viável foi encaminhada para negociação contratual."
+                    texto_historico = "PARCEIRO EM AGUARDANDO CONTRATAÇÃO\n\nA proposta viável foi encaminhada para negociação contratual."
                 else:
                     tipo_hist = 'sistema'
-                    texto_historico = f"✅ PARCEIRO REATIVADO\n\nStatus operacional alterado para [ATIVO]."
+                    texto_historico = "PARCEIRO REATIVADO\n\nStatus operacional alterado para [ATIVO]."
 
                 RegistroHistorico.objects.create(
                     tipo=tipo_hist, 
@@ -360,7 +438,7 @@ def update_partner_status(request, pk):
 @user_passes_test(grupo_Parceiro_required)
 @login_required
 def update_winback_status(request, pk):
-    """Avança o estágio na esteira de reativação (Win-back)."""
+    """Avança o estágio na esteira de reativação (win-back)."""
     if request.method == 'POST':
         partner = get_object_or_404(Partner, pk=pk)
         novo_status = request.POST.get('status')
@@ -371,13 +449,13 @@ def update_winback_status(request, pk):
             from django.contrib.contenttypes.models import ContentType
             tipo_parceiro = ContentType.objects.get_for_model(Partner)
 
-            # 1. FORÇA BRUTA NO ARQUIVAMENTO (Salva um por um para não falhar)
+            # 1. Arquiva um por um para evitar falhas silenciosas.
             historicos_antigos = RegistroHistorico.objects.filter(content_type=tipo_parceiro, object_id=partner.id)
             for hist in historicos_antigos:
                 hist.arquivado = True
                 hist.save()
 
-            # 2. FORÇA BRUTA NA LIMPEZA (Deleta OS uma por uma)
+            # 2. Limpa as OS uma por uma.
             for prop in partner.proposals.all():
                 prop.delete()
 
@@ -388,7 +466,7 @@ def update_winback_status(request, pk):
             # 4. GERA O LOG INICIAL DO NOVO CICLO (Blindado e Corrigido)
             RegistroHistorico.objects.create(
                 tipo='sistema',
-                acao="🎉 NOVO CICLO DE PARCERIA!\nO parceiro foi reativado na esteira Win-back. O histórico antigo foi arquivado e o perfil foi limpo para a inclusão de novas OS.", # CORRIGIDO
+                acao="NOVO CICLO DE PARCERIA!\nO parceiro foi reativado na esteira win-back. O histórico antigo foi arquivado e o perfil foi limpo para a inclusão de novas OS.",
                 usuario=request.user, # CORRIGIDO
                 content_type=tipo_parceiro,
                 object_id=partner.id,
@@ -402,7 +480,7 @@ def update_winback_status(request, pk):
             partner.status = novo_status
             partner.save()
             
-            texto = "🤝 Negociação de reativação iniciada." if novo_status == 'negociacao' else f"❌ Tentativa de reativação recusada/inviável.\nMotivo: {observacao}"
+            texto = "Negociação de reativação iniciada." if novo_status == 'negociacao' else f"Tentativa de reativação recusada/inviável.\nMotivo: {observacao}"
             
             RegistroHistorico.objects.create(
                 tipo='sistema', 
@@ -574,6 +652,12 @@ def proposal_batch_detail(request, pk):
         item['replicado_lote'] = quantidade_afetada > 1
 
     motivos_inviavel_ativos = ProposalMotivoInviavel.objects.filter(status='ativo').order_by('nome')
+    propostas_lote = list(
+        Proposal.objects.filter(codigo_proposta=proposal.codigo_proposta)
+        .select_related('client_address')
+        .order_by('id')
+    )
+    possui_os_lastmile = bool(_propostas_com_os_lastmile(propostas_lote))
 
     return render(request, 'partners/proposal_batch_detail.html', {
         'back_url': back_url,
@@ -583,6 +667,7 @@ def proposal_batch_detail(request, pk):
         'total_logins_lote': total_logins_lote,
         'historico_lote': historico_lote,
         'motivos_inviavel_ativos': motivos_inviavel_ativos,
+        'possui_os_lastmile': possui_os_lastmile,
         'proposal_status_choices': [
             choice for choice in Proposal.STATUS_CHOICES
             if choice[0] in ['analise', 'ativa', 'encerrada']
@@ -647,11 +732,16 @@ def proposal_batch_status_update(request, pk):
             messages.error(request, "Status de cotação inválido.")
             return redirect(_append_next(reverse('proposal_batch_detail', args=[proposal.pk]), next_param))
 
-        propostas_lote = list(Proposal.objects.filter(codigo_proposta=proposal.codigo_proposta).select_related('cliente'))
+        propostas_lote = list(
+            Proposal.objects.filter(codigo_proposta=proposal.codigo_proposta)
+            .select_related('cliente', 'client_address')
+        )
         status_antigo = proposal.status
         motivo_inviavel = None
         observacao_inviavel = (request.POST.get('observacao_inviavel') or '').strip()
-
+        observacao_contratacao = (request.POST.get('observacao_contratacao') or '').strip()
+        alterar_os_ixc = (request.POST.get('alterar_os_ixc') or 'nao').strip().lower() == 'sim'
+        arquivo_ixc = request.FILES.get('arquivo_ixc')
         if novo_status == 'encerrada':
             motivo_id = request.POST.get('motivo_inviavel')
             motivo_inviavel = ProposalMotivoInviavel.objects.filter(pk=motivo_id, status='ativo').first()
@@ -665,8 +755,61 @@ def proposal_batch_status_update(request, pk):
                 messages.error(request, "A observação da cotação inviável deve ter no máximo 150 caracteres.")
                 return redirect(_append_next(reverse('proposal_batch_detail', args=[proposal.pk]), next_param))
 
+        if novo_status == 'aguardando_contratacao':
+            falhas_ixc = []
+            propostas_com_os_lastmile = _propostas_com_os_lastmile(propostas_lote)
+
+            if alterar_os_ixc:
+                if not observacao_contratacao:
+                    messages.error(request, "Preencha a observação para alterar a O.S. no IXC antes de enviar a cotação para aguardando contratação.")
+                    return redirect(_append_next(reverse('proposal_batch_detail', args=[proposal.pk]), next_param))
+                for item in propostas_com_os_lastmile:
+                    if arquivo_ixc:
+                        resultado_anexo = anexar_arquivo_atendimento_por_os(
+                            os_id=item.client_address.ticket_os_atual_ixc,
+                            uploaded_file=arquivo_ixc,
+                            descricao=observacao_contratacao or f"Anexo enviado na mudança da cotação #{item.codigo_exibicao} para aguardando contratação.",
+                        )
+                        if not resultado_anexo.get('ok'):
+                            falhas_ixc.append({
+                                'proposal': item,
+                                'resultado': resultado_anexo,
+                                'tipo': 'anexo',
+                            })
+                            continue
+
+                    resultado_ixc = finalizar_os_existente(
+                        os_id=item.client_address.ticket_os_atual_ixc,
+                        mensagem=observacao_contratacao,
+                        finaliza_atendimento=False,
+                        usuario_sistema=request.user,
+                    )
+                    if not resultado_ixc.get('ok'):
+                        falhas_ixc.append({
+                            'proposal': item,
+                            'resultado': resultado_ixc,
+                            'tipo': 'finalizacao',
+                        })
+                        continue
+
+                    _baixar_endereco_da_fila_lastmile(item.client_address)
+
+            if falhas_ixc:
+                primeira_falha = falhas_ixc[0]
+                if primeira_falha.get('tipo') == 'anexo':
+                    messages.error(
+                        request,
+                        f"Não foi possível enviar o anexo ao atendimento no IXC para a cotação #{primeira_falha['proposal'].codigo_exibicao}. {_resumir_erro_anexo_ixc(primeira_falha['resultado'])}",
+                    )
+                    return redirect(_append_next(reverse('proposal_batch_detail', args=[proposal.pk]), next_param))
+                messages.error(
+                    request,
+                    f"Não foi possível finalizar a O.S. no IXC para a cotação #{primeira_falha['proposal'].codigo_exibicao}. {resumir_erro_finalizacao(primeira_falha['resultado'])}",
+                )
+                return redirect(_append_next(reverse('proposal_batch_detail', args=[proposal.pk]), next_param))
+
         if novo_status == 'ativa':
-            messages.success(request, "CotaÃ§Ã£o marcada como viÃ¡vel. Complete agora os dados tÃ©cnicos e financeiros.")
+            messages.success(request, "Cotação marcada como viável. Complete agora os dados técnicos e financeiros.")
             return redirect(
                 _append_next(
                     f"{reverse('proposal_update', args=[proposal.pk])}?modo=convertida&status_pendente=ativa",
@@ -687,8 +830,14 @@ def proposal_batch_status_update(request, pk):
                     item.save(update_fields=['status', 'motivo_inviavel', 'observacao_inviavel'])
 
                 detalhe_item_inviavel = ""
+                detalhe_item_contratacao = ""
                 if novo_status == 'encerrada':
                     detalhe_item_inviavel = f"\nMotivo: {motivo_inviavel.nome}\nObservação: {observacao_inviavel}"
+                elif novo_status == 'aguardando_contratacao':
+                    if alterar_os_ixc:
+                        detalhe_item_contratacao = f"\nO.S. no IXC alterada: Sim\nObservação enviada ao IXC: {observacao_contratacao}"
+                    else:
+                        detalhe_item_contratacao = "\nO.S. no IXC alterada: Não"
 
                 _registrar_historico_proposta(
                     item,
@@ -700,12 +849,19 @@ def proposal_batch_status_update(request, pk):
                         f"De: {dict(Proposal.STATUS_CHOICES).get(status_antigo, status_antigo)}\n"
                         f"Para: {item.get_status_display()}"
                         f"{detalhe_item_inviavel}"
+                        f"{detalhe_item_contratacao}"
                     ),
                 )
 
             detalhe_lote_inviavel = ""
+            detalhe_lote_contratacao = ""
             if novo_status == 'encerrada':
                 detalhe_lote_inviavel = f"Motivo: {motivo_inviavel.nome}\nObservação: {observacao_inviavel}\n"
+            elif novo_status == 'aguardando_contratacao':
+                if alterar_os_ixc:
+                    detalhe_lote_contratacao = f"O.S. no IXC alterada: Sim\nObservação enviada ao IXC: {observacao_contratacao}\n"
+                else:
+                    detalhe_lote_contratacao = "O.S. no IXC alterada: Não\n"
 
             RegistroHistorico.objects.create(
                 tipo='sistema',
@@ -715,6 +871,7 @@ def proposal_batch_status_update(request, pk):
                     f"De: {dict(Proposal.STATUS_CHOICES).get(status_antigo, status_antigo)}\n"
                     f"Para: {dict(Proposal.STATUS_CHOICES).get(novo_status, novo_status)}\n"
                     f"{detalhe_lote_inviavel}"
+                    f"{detalhe_lote_contratacao}"
                     f"Quantidade de logins impactados: {len(propostas_lote)}"
                 ),
                 usuario=request.user,
@@ -765,13 +922,93 @@ def proposal_update(request, pk):
     propostas_lote = list(
         Proposal.objects.filter(codigo_proposta=proposal.codigo_proposta).select_related('cliente', 'client_address').order_by('id')
     ) if proposal.codigo_proposta else [proposal]
+    possui_os_lastmile = bool(_propostas_com_os_lastmile(propostas_lote))
 
     if request.method == 'POST':
         form = ProposalForm(request.POST, instance=proposal, lock_relationship_fields=is_conversion_completion)
         enderecos_ids = request.POST.getlist('enderecos_selecionados')
+        arquivo_ixc = request.FILES.get('arquivo_ixc')
 
         if form.is_valid():
             if is_conversion_completion:
+                observacao_contratacao = (request.POST.get('observacao_contratacao') or '').strip()
+                alterar_os_ixc = (request.POST.get('alterar_os_ixc') or 'nao').strip().lower() == 'sim'
+                propostas_com_os_lastmile = _propostas_com_os_lastmile(propostas_lote)
+
+                falhas_ixc = []
+                if alterar_os_ixc:
+                    if not observacao_contratacao:
+                        messages.error(request, "Preencha a observação para alterar a O.S. no IXC antes de enviar a cotação para aguardando contratação.")
+                        return render(request, 'partners/proposal_form.html', {
+                            'form': form,
+                            'proposal': proposal,
+                            'partner': partner,
+                            'is_conversion_completion': is_conversion_completion,
+                            'status_exibicao_conversao': dict(Proposal.STATUS_CHOICES).get(status_pendente, proposal.get_status_display()),
+                            'propostas_lote': propostas_lote,
+                            'possui_os_lastmile': possui_os_lastmile,
+                        })
+                    for item in propostas_com_os_lastmile:
+                        if arquivo_ixc:
+                            resultado_anexo = anexar_arquivo_atendimento_por_os(
+                                os_id=item.client_address.ticket_os_atual_ixc,
+                                uploaded_file=arquivo_ixc,
+                                descricao=observacao_contratacao or f"Anexo enviado na mudança da cotação #{item.codigo_exibicao} para aguardando contratação.",
+                            )
+                            if not resultado_anexo.get('ok'):
+                                falhas_ixc.append({
+                                    'proposal': item,
+                                    'resultado': resultado_anexo,
+                                    'tipo': 'anexo',
+                                })
+                                continue
+
+                        resultado_ixc = finalizar_os_existente(
+                            os_id=item.client_address.ticket_os_atual_ixc,
+                            mensagem=observacao_contratacao,
+                            finaliza_atendimento=False,
+                            usuario_sistema=request.user,
+                        )
+                        if not resultado_ixc.get('ok'):
+                            falhas_ixc.append({
+                                'proposal': item,
+                                'resultado': resultado_ixc,
+                                'tipo': 'finalizacao',
+                            })
+                            continue
+
+                        _baixar_endereco_da_fila_lastmile(item.client_address)
+
+                if falhas_ixc:
+                    primeira_falha = falhas_ixc[0]
+                    if primeira_falha.get('tipo') == 'anexo':
+                        messages.error(
+                            request,
+                            f"Não foi possível enviar o anexo ao atendimento no IXC para a cotação #{primeira_falha['proposal'].codigo_exibicao}. {_resumir_erro_anexo_ixc(primeira_falha['resultado'])}",
+                        )
+                        return render(request, 'partners/proposal_form.html', {
+                            'form': form,
+                            'proposal': proposal,
+                            'partner': partner,
+                            'is_conversion_completion': is_conversion_completion,
+                            'status_exibicao_conversao': dict(Proposal.STATUS_CHOICES).get(status_pendente, proposal.get_status_display()),
+                            'propostas_lote': propostas_lote,
+                            'possui_os_lastmile': possui_os_lastmile,
+                        })
+                    messages.error(
+                        request,
+                        f"Não foi possível finalizar a O.S. no IXC para a cotação #{primeira_falha['proposal'].codigo_exibicao}. {resumir_erro_finalizacao(primeira_falha['resultado'])}",
+                    )
+                    return render(request, 'partners/proposal_form.html', {
+                        'form': form,
+                        'proposal': proposal,
+                        'partner': partner,
+                        'is_conversion_completion': is_conversion_completion,
+                        'status_exibicao_conversao': dict(Proposal.STATUS_CHOICES).get(status_pendente, proposal.get_status_display()),
+                        'propostas_lote': propostas_lote,
+                        'possui_os_lastmile': possui_os_lastmile,
+                    })
+
                 partner.cnpj_cpf = form.cleaned_data.get('partner_cnpj_cpf') or partner.cnpj_cpf
                 partner.save(update_fields=['cnpj_cpf'])
 
@@ -836,7 +1073,9 @@ def proposal_update(request, pk):
                         (
                             "Dados técnicos e financeiros preenchidos após proposta viável.\n\n"
                             f"ID da proposta: #{item.codigo_exibicao}\n"
-                            f"Unidade: {item.client_address or '--'}"
+                            f"Unidade: {item.client_address or '--'}\n"
+                            f"O.S. no IXC alterada: {'Sim' if alterar_os_ixc else 'Não'}"
+                            f"{f'\nObservação enviada ao IXC: {observacao_contratacao}' if alterar_os_ixc else ''}"
                         ),
                     )
 
@@ -845,6 +1084,8 @@ def proposal_update(request, pk):
                     acao=(
                         "Proposta enviada para aguardando contratação após complementação técnica e financeira.\n\n"
                         f"ID da proposta: #{proposal.codigo_exibicao}\n"
+                        f"O.S. no IXC alterada: {'Sim' if alterar_os_ixc else 'Não'}\n"
+                        f"{f'Observação enviada ao IXC: {observacao_contratacao}\n' if alterar_os_ixc else ''}"
                         f"Quantidade de logins impactados: {len(propostas_lote)}"
                     ),
                     usuario=request.user,
@@ -926,14 +1167,14 @@ def proposal_update(request, pk):
                 proposta_salva.save(update_fields=['grupo_proposta_id', 'codigo_proposta'])
 
             if valores_novos or valores_antigos or novas_unidades:
-                texto_snapshot = f"✏️ Edição de Proposta/OS realizada.\n\n"
+                texto_snapshot = "Edição de Proposta/OS realizada.\n\n"
                 if novas_unidades:
-                    texto_snapshot += f"➕ {len(novas_unidades)} NOVO(S) LINK(S) ADICIONADO(S):\n" + "\n".join(novas_unidades) + "\n\n"
+                    texto_snapshot += f"+ {len(novas_unidades)} NOVO(S) LINK(S) ADICIONADO(S):\n" + "\n".join(novas_unidades) + "\n\n"
                 if valores_novos or mudou_unidade:
                     if not mudou_unidade and endereco_atual:
-                        texto_snapshot += f"🔗 REFERÊNCIA: {endereco_atual}\n\n"
-                    texto_snapshot += "✅ Atualizado:\n" + "\n".join(valores_novos) + "\n\n--------------------------------------\n\n"
-                    texto_snapshot += "⏳ Antes:\n" + "\n".join(valores_antigos)
+                        texto_snapshot += f"REFERÊNCIA: {endereco_atual}\n\n"
+                    texto_snapshot += "Atualizado:\n" + "\n".join(valores_novos) + "\n\n--------------------------------------\n\n"
+                    texto_snapshot += "Antes:\n" + "\n".join(valores_antigos)
 
                 RegistroHistorico.objects.create(
                     tipo='sistema', 
@@ -949,7 +1190,7 @@ def proposal_update(request, pk):
                     texto_snapshot.strip(),
                 )
 
-            messages.success(request, f"Sucesso! Atualizações salvas para a Speed.")
+            messages.success(request, "Sucesso! Atualizações salvas para a Speed.")
             return redirect('partner_detail', pk=partner.pk)
     else:
         form = ProposalForm(instance=proposal, lock_relationship_fields=is_conversion_completion)
@@ -961,6 +1202,7 @@ def proposal_update(request, pk):
         'is_conversion_completion': is_conversion_completion,
         'status_exibicao_conversao': dict(Proposal.STATUS_CHOICES).get(status_pendente, proposal.get_status_display()),
         'propostas_lote': propostas_lote,
+        'possui_os_lastmile': possui_os_lastmile,
     })
 
 @user_passes_test(grupo_Parceiro_required)
@@ -978,7 +1220,7 @@ def proposal_status_update(request, pk):
             return redirect('partner_detail', pk=partner.pk)
 
         if novo_status == 'ativa':
-            messages.success(request, "CotaÃ§Ã£o marcada como viÃ¡vel. Complete agora os dados tÃ©cnicos e financeiros.")
+            messages.success(request, "Cotação marcada como viável. Complete agora os dados técnicos e financeiros.")
             return redirect(f"{reverse('proposal_update', args=[proposal.pk])}?modo=convertida&status_pendente=ativa")
 
         status_antigo = proposal.status
@@ -1046,3 +1288,4 @@ def partner_clients_list(request, pk):
     return render(request, 'partners/partner_clients_list.html', {
         'partner': partner, 'clientes_agrupados': clientes_agrupados, 'total_links': proposals.count()
     })
+

@@ -1,5 +1,9 @@
 from django.apps import AppConfig
 
+
 class CoreConfig(AppConfig):
     default_auto_field = 'django.db.models.BigAutoField'
-    name = 'core'  # <--- Adicione o 'apps.' aqui
+    name = 'core'
+
+    def ready(self):
+        import core.ad_sync  # noqa: F401
