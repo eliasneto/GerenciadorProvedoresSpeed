@@ -33,6 +33,9 @@ Melhorado:
 - simplificacao da comunicacao na tela de conversao da cotacao viavel, com textos mais diretos sobre a finalizacao da O.S. no IXC, ajuste dos nomes dos campos comerciais e botao final alterado para `Salvar`
 - tela de importacao administrativa renomeada para `Importador de Provedores`, com novo status `interrompida` para cancelamentos manuais e botao para parar importacoes em andamento
 - fluxo de criacao de cotacao Lastmile ajustado para abrir cotacoes apenas para os provedores selecionados na prospeccao, evitando criacoes em massa por parceiros historicos da cobertura
+- primeira etapa da regra de cotacao viavel por endereco, com modal para decidir se outras cotacoes em negociacao do mesmo endereco devem ser fechadas automaticamente
+- fluxo de alteracao da O.S. no IXC ajustado para deixar o anexo opcional e limitar o seletor aos formatos aceitos pelo IXC
+- validacao de backend adicionada para impedir finalizacao da O.S. no IXC enquanto ainda existirem outras cotacoes em negociacao para o mesmo endereco sem a opcao de fechamento automatico
 
 ## v1.1.0 - 2026-04-10
 

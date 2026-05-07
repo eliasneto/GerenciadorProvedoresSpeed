@@ -118,6 +118,91 @@ def _propostas_com_os_lastmile(propostas_lote):
     ]
 
 
+def _outras_cotacoes_em_negociacao_mesmo_endereco(propostas_lote):
+    endereco_ids = sorted({item.client_address_id for item in propostas_lote if item.client_address_id})
+    if not endereco_ids:
+        return []
+
+    proposal_ids = [item.id for item in propostas_lote if item.id]
+    codigos_lote = [item.codigo_proposta for item in propostas_lote if item.codigo_proposta]
+
+    queryset = (
+        Proposal.objects.filter(client_address_id__in=endereco_ids, status='analise')
+        .exclude(id__in=proposal_ids)
+        .select_related('partner', 'cliente', 'client_address')
+        .order_by('client_address_id', 'id')
+    )
+    if codigos_lote:
+        queryset = queryset.exclude(codigo_proposta__in=codigos_lote)
+
+    return list(queryset)
+
+
+def _montar_resumo_outras_cotacoes_por_endereco(outras_cotacoes):
+    grupos = []
+    grupos_map = {}
+
+    for item in outras_cotacoes:
+        endereco_id = item.client_address_id or f"sem-endereco-{item.id}"
+        if endereco_id not in grupos_map:
+            grupos_map[endereco_id] = {
+                'endereco_id': endereco_id,
+                'endereco_nome': str(item.client_address or '--'),
+                'cotacoes': [],
+            }
+            grupos.append(grupos_map[endereco_id])
+
+        grupos_map[endereco_id]['cotacoes'].append({
+            'id': item.id,
+            'codigo_exibicao': item.codigo_exibicao,
+            'parceiro_nome': item.partner.nome_fantasia or item.partner.razao_social,
+            'cliente_nome': str(item.cliente or '--'),
+        })
+
+    return grupos
+
+
+def _encerrar_outras_cotacoes_automaticamente(outras_cotacoes, proposal_referencia, usuario):
+    if not outras_cotacoes:
+        return 0
+
+    observacao_padrao = (
+        f"Fechada automaticamente porque foi decidido seguir com a cotação #{proposal_referencia.codigo_exibicao}."
+    )[:150]
+
+    for item in outras_cotacoes:
+        status_antigo = item.status
+        item.status = 'encerrada'
+        item.motivo_inviavel = None
+        item.observacao_inviavel = observacao_padrao
+        item.save(update_fields=['status', 'motivo_inviavel', 'observacao_inviavel'])
+
+        _registrar_historico_proposta(
+            item,
+            usuario,
+            (
+                "Cotação fechada automaticamente.\n\n"
+                f"ID da proposta: #{item.codigo_exibicao}\n"
+                f"De: {dict(Proposal.STATUS_CHOICES).get(status_antigo, status_antigo)}\n"
+                f"Para: {dict(Proposal.STATUS_CHOICES).get('encerrada', 'encerrada')}\n"
+                f"Observação: {observacao_padrao}"
+            ),
+        )
+
+    return len(outras_cotacoes)
+
+
+def _mensagem_bloqueio_ixc_por_outras_cotacoes(outras_cotacoes):
+    quantidade = len(outras_cotacoes)
+    if quantidade <= 0:
+        return ""
+    return (
+        f"Não é possível finalizar a O.S. no IXC porque este endereço ainda possui "
+        f"{quantidade} outra(s) cotação(ões) em negociação. Feche essas cotações primeiro "
+        f"ou escolha a opção de encerrá-las automaticamente ao seguir com a cotação viável."
+    )
+
+
 def _resolver_periodo_historico(request):
     agora = timezone.now()
     hoje = timezone.localdate(agora) if timezone.is_aware(agora) else agora.date()
@@ -658,6 +743,8 @@ def proposal_batch_detail(request, pk):
         .order_by('id')
     )
     possui_os_lastmile = bool(_propostas_com_os_lastmile(propostas_lote))
+    outras_cotacoes_abertas = _outras_cotacoes_em_negociacao_mesmo_endereco(propostas_lote)
+    outras_cotacoes_por_endereco = _montar_resumo_outras_cotacoes_por_endereco(outras_cotacoes_abertas)
 
     return render(request, 'partners/proposal_batch_detail.html', {
         'back_url': back_url,
@@ -668,6 +755,8 @@ def proposal_batch_detail(request, pk):
         'historico_lote': historico_lote,
         'motivos_inviavel_ativos': motivos_inviavel_ativos,
         'possui_os_lastmile': possui_os_lastmile,
+        'outras_cotacoes_abertas_qtd': len(outras_cotacoes_abertas),
+        'outras_cotacoes_por_endereco': outras_cotacoes_por_endereco,
         'proposal_status_choices': [
             choice for choice in Proposal.STATUS_CHOICES
             if choice[0] in ['analise', 'ativa', 'encerrada']
@@ -741,6 +830,7 @@ def proposal_batch_status_update(request, pk):
         observacao_inviavel = (request.POST.get('observacao_inviavel') or '').strip()
         observacao_contratacao = (request.POST.get('observacao_contratacao') or '').strip()
         alterar_os_ixc = (request.POST.get('alterar_os_ixc') or 'nao').strip().lower() == 'sim'
+        fechar_outras_cotacoes = (request.POST.get('fechar_outras_cotacoes') or 'nao').strip().lower()
         arquivo_ixc = request.FILES.get('arquivo_ixc')
         if novo_status == 'encerrada':
             motivo_id = request.POST.get('motivo_inviavel')
@@ -812,7 +902,7 @@ def proposal_batch_status_update(request, pk):
             messages.success(request, "Cotação marcada como viável. Complete agora os dados técnicos e financeiros.")
             return redirect(
                 _append_next(
-                    f"{reverse('proposal_update', args=[proposal.pk])}?modo=convertida&status_pendente=ativa",
+                    f"{reverse('proposal_update', args=[proposal.pk])}?modo=convertida&status_pendente=ativa&fechar_outras_cotacoes={fechar_outras_cotacoes}",
                     next_param,
                 )
             )
@@ -919,10 +1009,14 @@ def proposal_update(request, pk):
     endereco_atual = proposal.client_address
     is_conversion_completion = request.GET.get('modo') == 'convertida' or request.POST.get('modo') == 'convertida'
     status_pendente = request.GET.get('status_pendente') or request.POST.get('status_pendente')
+    fechar_outras_cotacoes = (request.GET.get('fechar_outras_cotacoes') or request.POST.get('fechar_outras_cotacoes') or 'nao').strip().lower()
     propostas_lote = list(
         Proposal.objects.filter(codigo_proposta=proposal.codigo_proposta).select_related('cliente', 'client_address').order_by('id')
     ) if proposal.codigo_proposta else [proposal]
     possui_os_lastmile = bool(_propostas_com_os_lastmile(propostas_lote))
+    outras_cotacoes_abertas = _outras_cotacoes_em_negociacao_mesmo_endereco(propostas_lote) if is_conversion_completion else []
+    outras_cotacoes_por_endereco = _montar_resumo_outras_cotacoes_por_endereco(outras_cotacoes_abertas)
+    permite_alterar_os_ixc = bool(possui_os_lastmile and not (outras_cotacoes_abertas and fechar_outras_cotacoes != 'sim'))
 
     if request.method == 'POST':
         form = ProposalForm(request.POST, instance=proposal, lock_relationship_fields=is_conversion_completion)
@@ -933,6 +1027,23 @@ def proposal_update(request, pk):
             if is_conversion_completion:
                 observacao_contratacao = (request.POST.get('observacao_contratacao') or '').strip()
                 alterar_os_ixc = (request.POST.get('alterar_os_ixc') or 'nao').strip().lower() == 'sim'
+                if outras_cotacoes_abertas and fechar_outras_cotacoes != 'sim':
+                    if alterar_os_ixc:
+                        messages.error(request, _mensagem_bloqueio_ixc_por_outras_cotacoes(outras_cotacoes_abertas))
+                        return render(request, 'partners/proposal_form.html', {
+                            'form': form,
+                            'proposal': proposal,
+                            'partner': partner,
+                            'is_conversion_completion': is_conversion_completion,
+                            'status_exibicao_conversao': dict(Proposal.STATUS_CHOICES).get(status_pendente, proposal.get_status_display()),
+                            'propostas_lote': propostas_lote,
+                            'possui_os_lastmile': possui_os_lastmile,
+                            'fechar_outras_cotacoes': fechar_outras_cotacoes,
+                            'outras_cotacoes_abertas_qtd': len(outras_cotacoes_abertas),
+                            'outras_cotacoes_por_endereco': outras_cotacoes_por_endereco,
+                            'permite_alterar_os_ixc': permite_alterar_os_ixc,
+                        })
+                    alterar_os_ixc = False
                 propostas_com_os_lastmile = _propostas_com_os_lastmile(propostas_lote)
 
                 falhas_ixc = []
@@ -947,6 +1058,10 @@ def proposal_update(request, pk):
                             'status_exibicao_conversao': dict(Proposal.STATUS_CHOICES).get(status_pendente, proposal.get_status_display()),
                             'propostas_lote': propostas_lote,
                             'possui_os_lastmile': possui_os_lastmile,
+                            'fechar_outras_cotacoes': fechar_outras_cotacoes,
+                            'outras_cotacoes_abertas_qtd': len(outras_cotacoes_abertas),
+                            'outras_cotacoes_por_endereco': outras_cotacoes_por_endereco,
+                            'permite_alterar_os_ixc': permite_alterar_os_ixc,
                         })
                     for item in propostas_com_os_lastmile:
                         if arquivo_ixc:
@@ -994,6 +1109,10 @@ def proposal_update(request, pk):
                             'status_exibicao_conversao': dict(Proposal.STATUS_CHOICES).get(status_pendente, proposal.get_status_display()),
                             'propostas_lote': propostas_lote,
                             'possui_os_lastmile': possui_os_lastmile,
+                            'fechar_outras_cotacoes': fechar_outras_cotacoes,
+                            'outras_cotacoes_abertas_qtd': len(outras_cotacoes_abertas),
+                            'outras_cotacoes_por_endereco': outras_cotacoes_por_endereco,
+                            'permite_alterar_os_ixc': permite_alterar_os_ixc,
                         })
                     messages.error(
                         request,
@@ -1007,6 +1126,10 @@ def proposal_update(request, pk):
                         'status_exibicao_conversao': dict(Proposal.STATUS_CHOICES).get(status_pendente, proposal.get_status_display()),
                         'propostas_lote': propostas_lote,
                         'possui_os_lastmile': possui_os_lastmile,
+                        'fechar_outras_cotacoes': fechar_outras_cotacoes,
+                        'outras_cotacoes_abertas_qtd': len(outras_cotacoes_abertas),
+                        'outras_cotacoes_por_endereco': outras_cotacoes_por_endereco,
+                        'permite_alterar_os_ixc': permite_alterar_os_ixc,
                     })
 
                 partner.cnpj_cpf = form.cleaned_data.get('partner_cnpj_cpf') or partner.cnpj_cpf
@@ -1093,7 +1216,29 @@ def proposal_update(request, pk):
                     object_id=partner.id
                 )
 
-                messages.success(request, "Dados técnicos e financeiros salvos com sucesso. A cotação foi enviada para a aba de parceiros em aguardando contratação.")
+                qtd_fechadas_automaticamente = 0
+                if fechar_outras_cotacoes == 'sim' and outras_cotacoes_abertas:
+                    qtd_fechadas_automaticamente = _encerrar_outras_cotacoes_automaticamente(
+                        outras_cotacoes_abertas,
+                        proposal,
+                        request.user,
+                    )
+                    RegistroHistorico.objects.create(
+                        tipo='sistema',
+                        acao=(
+                            "Outras cotações do mesmo endereço foram fechadas automaticamente.\n\n"
+                            f"Cotação escolhida: #{proposal.codigo_exibicao}\n"
+                            f"Quantidade de cotações fechadas: {qtd_fechadas_automaticamente}"
+                        ),
+                        usuario=request.user,
+                        content_type=ContentType.objects.get_for_model(Partner),
+                        object_id=partner.id
+                    )
+
+                if qtd_fechadas_automaticamente:
+                    messages.success(request, f"Dados salvos com sucesso. A cotação foi enviada para aguardando contratação e {qtd_fechadas_automaticamente} outra(s) cotação(ões) do mesmo endereço foram fechadas automaticamente.")
+                else:
+                    messages.success(request, "Dados técnicos e financeiros salvos com sucesso. A cotação foi enviada para a aba de parceiros em aguardando contratação.")
                 return redirect('partner_list')
 
             valores_novos, valores_antigos = [], []
@@ -1203,6 +1348,10 @@ def proposal_update(request, pk):
         'status_exibicao_conversao': dict(Proposal.STATUS_CHOICES).get(status_pendente, proposal.get_status_display()),
         'propostas_lote': propostas_lote,
         'possui_os_lastmile': possui_os_lastmile,
+        'fechar_outras_cotacoes': fechar_outras_cotacoes,
+        'outras_cotacoes_abertas_qtd': len(outras_cotacoes_abertas),
+        'outras_cotacoes_por_endereco': outras_cotacoes_por_endereco,
+        'permite_alterar_os_ixc': permite_alterar_os_ixc,
     })
 
 @user_passes_test(grupo_Parceiro_required)
