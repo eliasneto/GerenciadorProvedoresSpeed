@@ -89,6 +89,7 @@
             {% if is_conversion_completion %}
             <input type="hidden" name="modo" value="convertida">
             <input type="hidden" name="status_pendente" value="ativa">
+            <input type="hidden" name="fechar_outras_cotacoes" value="{{ fechar_outras_cotacoes|default:'nao' }}">
             {% endif %}
 
             <div class="bg-white rounded-[2.5rem] shadow-xl border border-gray-200 overflow-hidden">
@@ -342,12 +343,30 @@
                 </div>
                 <div class="p-8 space-y-3">
                     <input type="hidden" id="observacaoContratacaoFluxo" value="{{ request.POST.observacao_contratacao|default:'' }}">
-                    <p data-ixc-info="true" class="text-[11px] font-bold text-gray-400">Ao clicar em salvar, você poderá escolher se deseja finalizar a O.S. no IXC.</p>
+                    <p data-ixc-info="true" class="text-[11px] font-bold text-gray-400">
+                        {% if permite_alterar_os_ixc %}
+                        Ao clicar em salvar, você poderá escolher se deseja finalizar a O.S. no IXC.
+                        {% elif outras_cotacoes_abertas_qtd %}
+                        A finalização da O.S. no IXC ficará indisponível enquanto existirem outras cotações em negociação para este endereço.
+                        {% else %}
+                        Este lote não possui O.S. aberta em Lastmile.
+                        {% endif %}
+                    </p>
+                    {% if outras_cotacoes_abertas_qtd %}
+                    <div class="rounded-2xl border border-yellow-100 bg-yellow-50/70 px-4 py-4">
+                        <p class="text-xs font-black uppercase tracking-widest text-yellow-700">{{ outras_cotacoes_abertas_qtd }} outra(s) cotação(ões) em negociação encontradas</p>
+                        {% if fechar_outras_cotacoes == 'sim' %}
+                        <p class="text-sm text-gray-600 font-bold mt-2">Essas cotações serão fechadas automaticamente como inviáveis quando você salvar esta cotação viável.</p>
+                        {% else %}
+                        <p class="text-sm text-gray-600 font-bold mt-2">Você escolheu manter as outras cotações abertas. Por isso, esta tela não permitirá finalizar a O.S. no IXC agora.</p>
+                        {% endif %}
+                    </div>
+                    {% endif %}
                 </div>
             </div>
             {% endif %}
 
-            {% if is_conversion_completion and possui_os_lastmile %}
+            {% if is_conversion_completion and permite_alterar_os_ixc %}
             <div id="confirmarAlteracaoOsModal" class="fixed inset-0 bg-black/55 z-50 hidden items-center justify-center p-4">
                 <div class="w-full max-w-lg bg-white rounded-[2rem] shadow-2xl border border-gray-100 overflow-hidden">
                     <div class="px-6 py-5 border-b border-gray-100 bg-gray-50/60 flex items-start justify-between gap-4">
@@ -383,9 +402,9 @@
                             </div>
                             <div class="space-y-2">
                                 <label for="arquivoIxcModal" class="block text-[10px] font-black uppercase tracking-widest text-gray-400">Anexo do Atendimento</label>
-                                <input id="arquivoIxcModal" type="file" name="arquivo_ixc" class="block w-full text-sm text-gray-500 file:mr-4 file:py-3 file:px-4 file:rounded-xl file:border-0 file:bg-gray-100 file:text-gray-700 file:font-black hover:file:bg-gray-200">
-                                <p id="arquivoIxcModalErro" class="hidden text-[11px] font-black text-red-500 uppercase tracking-wide">Selecione um anexo para continuar.</p>
-                                <p class="text-[11px] font-bold text-gray-400">O arquivo será enviado para a aba Arquivos do atendimento no IXC antes do fechamento da O.S.</p>
+                                <input id="arquivoIxcModal" type="file" name="arquivo_ixc" accept=".png,.jpeg,.jpg,.jfif,.pdf,.txt,.doc,.docx,.odt,.rar,.xls,.xlsx,.sor,.mp3,.wav,.wma,.ogg,.amr,.avi,.flv,.wmv,.mp4,.mov,.kml,.kmz" class="block w-full text-sm text-gray-500 file:mr-4 file:py-3 file:px-4 file:rounded-xl file:border-0 file:bg-gray-100 file:text-gray-700 file:font-black hover:file:bg-gray-200">
+                                <p class="text-[11px] font-bold text-gray-400">Opcional. Se enviado, o arquivo será anexado ao atendimento no IXC antes do fechamento da O.S.</p>
+                                <p class="text-[11px] font-bold text-gray-400">Formatos aceitos pelo IXC: PNG, JPEG, JPG, JFIF, PDF, TXT, DOC, DOCX, ODT, RAR, XLS, XLSX, SOR, MP3, WAV, WMA, OGG, AMR, AVI, FLV, WMV, MP4, MOV, KML e KMZ.</p>
                             </div>
                             <div class="flex flex-col-reverse sm:flex-row sm:items-center sm:justify-between gap-3 pt-2">
                                 <button type="button" id="backAlteracaoOsBtn" class="px-4 py-3 rounded-xl border border-gray-200 text-sm font-black text-gray-500 hover:text-gray-800 hover:border-gray-300 transition">
@@ -458,6 +477,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const observacaoContratacaoModalErro = document.getElementById('observacaoContratacaoModalErro');
     const arquivoIxcModalErro = document.getElementById('arquivoIxcModalErro');
     const possuiOsLastmile = {{ possui_os_lastmile|yesno:"true,false" }};
+    const permiteAlterarOsIxc = {{ permite_alterar_os_ixc|yesno:"true,false" }};
 
     if (toggleProposalUnitsBtn && proposalUnitsPanel && toggleProposalUnitsIcon) {
         toggleProposalUnitsBtn.addEventListener('click', function() {
@@ -470,9 +490,11 @@ document.addEventListener('DOMContentLoaded', function() {
         const blocoInfoIxc = observacaoContratacaoFluxo.parentElement;
         const info = blocoInfoIxc?.querySelector('[data-ixc-info]');
         if (info) {
-            info.textContent = possuiOsLastmile
+            info.textContent = permiteAlterarOsIxc
                 ? 'Ao clicar em salvar, você poderá escolher se deseja finalizar a O.S. no IXC.'
-                : 'Este lote não possui O.S. aberta em Lastmile.';
+                : {{ outras_cotacoes_abertas_qtd|default:0 }} > 0
+                    ? 'A finalização da O.S. no IXC ficará indisponível enquanto existirem outras cotações em negociação para este endereço.'
+                    : 'Este lote não possui O.S. aberta em Lastmile.';
         }
     }
 
@@ -523,12 +545,8 @@ document.addEventListener('DOMContentLoaded', function() {
 
     function validarDetalhesAlteracaoOs() {
         const observacaoVazia = !(observacaoContratacaoModal?.value || '').trim();
-        const arquivoVazio = !arquivoIxcModal?.files?.length;
-
         marcarErroCampo(observacaoContratacaoModal, observacaoContratacaoModalErro, observacaoVazia);
-        marcarErroCampo(arquivoIxcModal, arquivoIxcModalErro, arquivoVazio);
-
-        return !(observacaoVazia || arquivoVazio);
+        return !observacaoVazia;
     }
 
     function submeterConversaoComOpcao(alterarNoIxc) {
@@ -542,7 +560,7 @@ document.addEventListener('DOMContentLoaded', function() {
         proposalForm?.submit();
     }
 
-    if (proposalForm && possuiOsLastmile && alterarOsIxcInput && !alterarOsIxcInput.value) {
+    if (proposalForm && permiteAlterarOsIxc && alterarOsIxcInput && !alterarOsIxcInput.value) {
         proposalForm.addEventListener('submit', function(event) {
             event.preventDefault();
             if (modalAlteracaoOsEstaAberto()) {
