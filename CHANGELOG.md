@@ -5,9 +5,11 @@ Este arquivo registra as versoes publicadas do sistema e os principais itens adi
 ## v1.2.1 - 2026-05-08
 
 Melhorado:
-- correcao da sincronizacao de enderecos do IXC para resolver a UF a partir da cidade do IXC quando o login ou contrato nao enviar o estado preenchido, evitando fallback indevido para `CE`
+- correcao da sincronizacao de enderecos do IXC para resolver a UF a partir da cidade do IXC e do mapa de estados do proprio IXC, inclusive quando o estado vier como ID numerico, evitando fallback indevido para `CE` ou gravacao do ID no campo de UF
 - processo de backup endurecido para falhar quando o dump `.sql` vier vazio, impedir restore de SQL vazio e unificar o backup automatico com o mesmo fluxo seguro do backup manual, sem incluir `media/backups` dentro do proprio ZIP
 - fluxo de restore ajustado para exibir erros de validacao diretamente na tela e concluir com pagina de sucesso sem depender da sessao atual depois da restauracao
+- ajuste da hierarquia visual do botao flutuante de expandir/recolher o menu para ficar abaixo dos modais abertos no sistema
+- selo de status do topo tornado dinamico com healthcheck leve do Django, verificacao a cada 90 segundos e atualizacao apenas com a aba visivel para reduzir carga no servidor
 
 ## v1.2.0 - 2026-05-05
 

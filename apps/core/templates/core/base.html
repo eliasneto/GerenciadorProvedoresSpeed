@@ -65,7 +65,7 @@
             border-radius: 50%;
             background-color: white;
             border: 1px solid #e5e7eb;
-            z-index: 9999; /* Fica acima de TUDO no sistema */
+            z-index: 55; /* Fica acima do layout, mas abaixo dos modais */
             display: flex;
             align-items: center;
             justify-content: center;
@@ -279,9 +279,9 @@
                     <h2 class="text-xs font-bold text-gray-400 uppercase tracking-widest italic">Ageis Sistemas / <span class="text-gray-900">Gerenciador</span></h2>
                 </div>
             </div>
-            <div class="flex items-center gap-3 bg-green-50 px-3 py-1.5 rounded-full border border-green-100">
-                <span class="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
-                <span class="text-[10px] font-black text-green-700 uppercase">Sistema Online</span>
+            <div id="systemHealthBadge" class="flex items-center gap-3 bg-green-50 px-3 py-1.5 rounded-full border border-green-100 transition-colors duration-200" title="Status automatico do sistema">
+                <span id="systemHealthDot" class="w-2 h-2 bg-green-500 rounded-full animate-pulse transition-colors duration-200"></span>
+                <span id="systemHealthText" class="text-[10px] font-black text-green-700 uppercase transition-colors duration-200">Sistema Online</span>
             </div>
         </header>
         {% endif %}
@@ -346,6 +346,104 @@
             }
         }
 
+        const systemHealthState = {
+            intervalMs: 90000,
+            requestInFlight: false,
+            timerId: null,
+        };
+
+        function setSystemHealthBadge(isOnline) {
+            const badge = document.getElementById('systemHealthBadge');
+            const dot = document.getElementById('systemHealthDot');
+            const text = document.getElementById('systemHealthText');
+
+            if (!badge || !dot || !text) {
+                return;
+            }
+
+            badge.classList.remove('bg-green-50', 'border-green-100', 'bg-red-50', 'border-red-100', 'bg-amber-50', 'border-amber-100');
+            dot.classList.remove('bg-green-500', 'bg-red-500', 'bg-amber-500');
+            text.classList.remove('text-green-700', 'text-red-700', 'text-amber-700');
+
+            if (isOnline === true) {
+                badge.classList.add('bg-green-50', 'border-green-100');
+                dot.classList.add('bg-green-500');
+                text.classList.add('text-green-700');
+                text.textContent = 'Sistema Online';
+                badge.title = 'Sistema respondendo normalmente';
+                return;
+            }
+
+            if (isOnline === false) {
+                badge.classList.add('bg-red-50', 'border-red-100');
+                dot.classList.add('bg-red-500');
+                text.classList.add('text-red-700');
+                text.textContent = 'Sistema Offline';
+                badge.title = 'Falha ao validar a disponibilidade do sistema';
+                return;
+            }
+
+            badge.classList.add('bg-amber-50', 'border-amber-100');
+            dot.classList.add('bg-amber-500');
+            text.classList.add('text-amber-700');
+            text.textContent = 'Verificando Sistema';
+            badge.title = 'Validando disponibilidade do sistema';
+        }
+
+        async function checkSystemHealth() {
+            if (document.hidden || systemHealthState.requestInFlight) {
+                return;
+            }
+
+            systemHealthState.requestInFlight = true;
+            setSystemHealthBadge(null);
+
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 5000);
+
+            try {
+                const response = await fetch("{% url 'system_health' %}", {
+                    method: 'GET',
+                    cache: 'no-store',
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest',
+                    },
+                    signal: controller.signal,
+                });
+
+                setSystemHealthBadge(response.ok);
+            } catch (error) {
+                setSystemHealthBadge(false);
+            } finally {
+                clearTimeout(timeoutId);
+                systemHealthState.requestInFlight = false;
+            }
+        }
+
+        function startSystemHealthMonitor() {
+            if (!document.getElementById('systemHealthBadge')) {
+                return;
+            }
+
+            if (systemHealthState.timerId) {
+                clearInterval(systemHealthState.timerId);
+            }
+
+            checkSystemHealth();
+            systemHealthState.timerId = setInterval(checkSystemHealth, systemHealthState.intervalMs);
+
+            document.addEventListener('visibilitychange', function() {
+                if (!document.hidden) {
+                    checkSystemHealth();
+                }
+            });
+
+            window.addEventListener('online', checkSystemHealth);
+            window.addEventListener('offline', function() {
+                setSystemHealthBadge(false);
+            });
+        }
+
         // Pinta de amarelo o link que está ativo
         function smartGoBack(fallbackUrl) {
             try {
@@ -406,6 +504,8 @@
                     setTimeout(() => { alert.remove(); }, 600);
                 }, 5000);
             });
+
+            startSystemHealthMonitor();
         });
     </script>
     {% block extra_js %}{% endblock %}
