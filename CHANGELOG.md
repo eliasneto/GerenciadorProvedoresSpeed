@@ -2,6 +2,13 @@
 
 Este arquivo registra as versoes publicadas do sistema e os principais itens adicionados ou alterados em cada release.
 
+## v1.2.1 - 2026-05-08
+
+Melhorado:
+- correcao da sincronizacao de enderecos do IXC para resolver a UF a partir da cidade do IXC quando o login ou contrato nao enviar o estado preenchido, evitando fallback indevido para `CE`
+- processo de backup endurecido para falhar quando o dump `.sql` vier vazio, impedir restore de SQL vazio e unificar o backup automatico com o mesmo fluxo seguro do backup manual, sem incluir `media/backups` dentro do proprio ZIP
+- fluxo de restore ajustado para exibir erros de validacao diretamente na tela e concluir com pagina de sucesso sem depender da sessao atual depois da restauracao
+
 ## v1.2.0 - 2026-05-05
 
 Adicionado:
@@ -36,6 +43,11 @@ Melhorado:
 - primeira etapa da regra de cotacao viavel por endereco, com modal para decidir se outras cotacoes em negociacao do mesmo endereco devem ser fechadas automaticamente
 - fluxo de alteracao da O.S. no IXC ajustado para deixar o anexo opcional e limitar o seletor aos formatos aceitos pelo IXC
 - validacao de backend adicionada para impedir finalizacao da O.S. no IXC enquanto ainda existirem outras cotacoes em negociacao para o mesmo endereco sem a opcao de fechamento automatico
+- logs da rotina `OS Comercial | Lastmile` reorganizados para exibir progresso por cliente IXC e resumo dos principais motivos de descarte de tickets
+- botao dedicado para parar a rotina `OS Comercial | Lastmile` adicionado na tela de Historico de Sincronizacoes quando houver execucao em andamento
+- recorte automatico da rotina `OS Comercial | Lastmile` tornado configuravel por `.env` via `OS_LASTMILE_LOOKBACK_DAYS`, removendo o valor fixo de 10 dias do `docker-compose`
+- correcao da sincronizacao de enderecos do IXC para resolver a UF a partir da cidade do IXC quando o login ou contrato nao enviar o estado preenchido, evitando fallback indevido para `CE`
+- processo de backup endurecido para falhar quando o dump `.sql` vier vazio, impedir restore de SQL vazio e unificar o backup automatico com o mesmo fluxo seguro do backup manual, sem incluir `media/backups` dentro do proprio ZIP
 
 ## v1.1.0 - 2026-04-10
 

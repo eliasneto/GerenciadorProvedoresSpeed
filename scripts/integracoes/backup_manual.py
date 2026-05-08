@@ -30,6 +30,14 @@ from clientes.models import HistoricoSincronizacao
 from clientes.sync_utils import descrever_rotina_em_execucao, iniciar_historico_com_trava
 
 
+BACKUP_EXCLUDED_DIRS = {
+    "backups",
+    "temp_google",
+    "importacoes_leads",
+    "__pycache__",
+}
+
+
 def _resolver_usuario_executor():
     if 'manual' not in sys.argv:
         return None, 'automatica'
@@ -53,8 +61,18 @@ def _gerar_dump_sql(sql_path):
     host = db_conf.get("HOST") or "localhost"
     port = str(db_conf.get("PORT") or 3306)
     db_name = db_conf.get("NAME")
-    user = os.getenv("DB_ADMIN_USER", "root")
-    password = os.getenv("DB_ADMIN_PASSWORD", os.getenv("MYSQL_ROOT_PASSWORD", ""))
+    user = (
+        os.getenv("DB_ADMIN_USER")
+        or db_conf.get("USER")
+        or os.getenv("DB_USER")
+        or "root"
+    )
+    password = (
+        os.getenv("DB_ADMIN_PASSWORD")
+        or db_conf.get("PASSWORD")
+        or os.getenv("DB_PASSWORD")
+        or os.getenv("MYSQL_ROOT_PASSWORD", "")
+    )
 
     env = os.environ.copy()
     env["MYSQL_PWD"] = password
@@ -72,7 +90,18 @@ def _gerar_dump_sql(sql_path):
     ]
 
     with open(sql_path, "w", encoding="utf-8") as saida:
-        subprocess.run(cmd, check=True, stdout=saida, stderr=subprocess.PIPE, text=True, env=env)
+        resultado = subprocess.run(
+            cmd,
+            check=True,
+            stdout=saida,
+            stderr=subprocess.PIPE,
+            text=True,
+            env=env,
+        )
+
+    if not Path(sql_path).exists() or Path(sql_path).stat().st_size == 0:
+        detalhe = (resultado.stderr or "").strip() or "mysqldump retornou sem conteudo."
+        raise RuntimeError(f"O dump SQL foi gerado vazio. Detalhe: {detalhe}")
 
 
 def _zipar_arquivos(sql_path, zip_path, media_dir):
@@ -81,12 +110,16 @@ def _zipar_arquivos(sql_path, zip_path, media_dir):
         if media_dir.exists():
             for file_path in media_dir.rglob("*"):
                 if file_path.is_file():
+                    partes = set(file_path.relative_to(media_dir).parts)
+                    if partes & BACKUP_EXCLUDED_DIRS:
+                        continue
                     arc_name = Path("app") / "media" / file_path.relative_to(media_dir)
                     zipf.write(file_path, arcname=str(arc_name))
 
 
 def _copiar_para_windows_se_disponivel(zip_path):
     subdir = (os.getenv("BACKUP_WINDOWS_SUBDIR") or "").strip()
+    retention_days = int(os.getenv("BACKUP_RETENTION_DAYS", "10") or "10")
     destino_base = Path("/mnt/windows")
     if not destino_base.exists() or not subdir:
         return None
@@ -96,7 +129,7 @@ def _copiar_para_windows_se_disponivel(zip_path):
     destino_arquivo = destino / Path(zip_path).name
     subprocess.run(["cp", str(zip_path), str(destino_arquivo)], check=True)
 
-    limite = timezone.now() - timedelta(days=10)
+    limite = timezone.now() - timedelta(days=retention_days)
     for arquivo in destino.glob("backup_speed_*.zip"):
         mtime = timezone.datetime.fromtimestamp(arquivo.stat().st_mtime, tz=timezone.get_current_timezone())
         if mtime < limite:
@@ -120,6 +153,9 @@ def executar_backup():
 
     _gerar_dump_sql(str(sql_path))
     _zipar_arquivos(str(sql_path), str(zip_path), media_dir)
+
+    if not zip_path.exists() or zip_path.stat().st_size == 0:
+        raise RuntimeError("O arquivo de backup ZIP foi gerado vazio.")
 
     try:
         sql_path.unlink(missing_ok=True)

@@ -59,6 +59,15 @@ def log_etapa(inicio, mensagem):
     print(f"[{decorrido:8.1f}s] {mensagem}", flush=True)
 
 
+def progresso_visual_habilitado():
+    valor = os.getenv("LASTMILE_TQDM", "").strip().lower()
+    if valor in {"1", "true", "sim", "yes", "on"}:
+        return True
+    if valor in {"0", "false", "nao", "não", "no", "off"}:
+        return False
+    return bool(getattr(sys.stdout, "isatty", lambda: False)())
+
+
 def consultar_ixc(tabela, payload):
     url = f"{IXC_URL}/{tabela}"
     try:
@@ -71,6 +80,23 @@ def consultar_ixc(tabela, payload):
 
 def normalizar_texto(valor):
     return str(valor or '').strip()
+
+
+def obter_data_corte_env():
+    valor = normalizar_texto(os.getenv("OS_LASTMILE_LOOKBACK_DAYS"))
+    if not valor:
+        return None
+    try:
+        dias = int(valor)
+    except ValueError:
+        print(
+            f"Valor invalido em OS_LASTMILE_LOOKBACK_DAYS={valor!r}. Use um inteiro, por exemplo 10."
+        )
+        raise SystemExit(1)
+    if dias < 0:
+        print("Valor invalido em OS_LASTMILE_LOOKBACK_DAYS. A quantidade de dias nao pode ser negativa.")
+        raise SystemExit(1)
+    return datetime.now() - timedelta(days=dias)
 
 
 def obter_data_corte_args():
@@ -112,8 +138,7 @@ def obter_data_corte_args():
                         raise SystemExit(1)
                     data_corte = datetime.now() - timedelta(days=dias)
                     break
-
-    return data_corte
+    return data_corte or obter_data_corte_env()
 
 
 def obter_filtro_cliente_args():
@@ -470,9 +495,10 @@ def buscar_os_lastmile_em_lote(mapa_setores, alterado_desde=None):
     return snapshots_consolidados
 
 
-def buscar_os_lastmile_por_cliente(cliente_ixc_id, mapa_setores, alterado_desde=None, logins_permitidos=None):
+def buscar_os_lastmile_por_cliente(cliente_ixc_id, mapa_setores, alterado_desde=None, logins_permitidos=None, cliente_idx=None, total_clientes=None):
     inicio = time.perf_counter()
-    log_etapa(inicio, f"Iniciando busca por cliente IXC {cliente_ixc_id}...")
+    prefixo_cliente = f"[cliente {cliente_idx}/{total_clientes}] " if cliente_idx and total_clientes else ""
+    log_etapa(inicio, f"{prefixo_cliente}Iniciando busca por cliente IXC {cliente_ixc_id}...")
     if not cliente_ixc_id:
         return {}
 
@@ -484,42 +510,64 @@ def buscar_os_lastmile_por_cliente(cliente_ixc_id, mapa_setores, alterado_desde=
         "sortname": "id",
         "sortorder": "desc",
     })
-    log_etapa(inicio, f"Foram carregados {len(resposta_tickets)} ticket(s) do cliente {cliente_ixc_id}.")
+    log_etapa(inicio, f"{prefixo_cliente}Foram carregados {len(resposta_tickets)} ticket(s) do cliente {cliente_ixc_id}.")
 
     snapshots = {}
     logins_processados = set()
+    metricas = {
+        "tickets_sem_login": 0,
+        "tickets_fora_escopo_local": 0,
+        "tickets_login_repetido": 0,
+        "tickets_sem_id": 0,
+        "tickets_sem_os": 0,
+        "tickets_fora_data": 0,
+        "tickets_setor_diferente": 0,
+    }
     total_tickets = len(resposta_tickets)
-    pbar_tickets = tqdm(total=total_tickets, desc="Resolvendo tickets do cliente", unit="ticket")
+    pbar_tickets = tqdm(
+        total=total_tickets,
+        desc=f"Cliente IXC {cliente_ixc_id}",
+        unit="ticket",
+        disable=not progresso_visual_habilitado(),
+        leave=False,
+    )
 
     for ticket in resposta_tickets:
         login_id = normalizar_texto(ticket.get("id_login"))
         if not login_id:
+            metricas["tickets_sem_login"] += 1
             pbar_tickets.update(1)
             continue
         if logins_permitidos and login_id not in logins_permitidos:
+            metricas["tickets_fora_escopo_local"] += 1
             pbar_tickets.update(1)
             continue
         if login_id in logins_processados:
+            metricas["tickets_login_repetido"] += 1
             pbar_tickets.update(1)
             continue
 
         ticket_id = normalizar_texto(ticket.get("id"))
         if not ticket_id:
+            metricas["tickets_sem_id"] += 1
             pbar_tickets.update(1)
             continue
 
         os_atual = buscar_os_atual_por_ticket(ticket_id)
         if not os_atual:
+            metricas["tickets_sem_os"] += 1
             pbar_tickets.update(1)
             continue
         if alterado_desde:
             data_registro = extrair_data_referencia_registro(os_atual)
             if data_registro and data_registro < alterado_desde:
+                metricas["tickets_fora_data"] += 1
                 pbar_tickets.update(1)
                 continue
 
         setor_id, setor_nome = extrair_setor_registro(os_atual, mapa_setores)
         if normalizar_texto(setor_nome).lower() != ALVO_SETOR_NOME:
+            metricas["tickets_setor_diferente"] += 1
             pbar_tickets.update(1)
             continue
 
@@ -536,7 +584,20 @@ def buscar_os_lastmile_por_cliente(cliente_ixc_id, mapa_setores, alterado_desde=
         pbar_tickets.update(1)
 
     pbar_tickets.close()
-    log_etapa(inicio, f"Busca por cliente concluida com {len(snapshots)} login(s) em Comercial | Lastmile.")
+    log_etapa(
+        inicio,
+        (
+            f"{prefixo_cliente}Cliente IXC {cliente_ixc_id} concluido | "
+            f"tickets={total_tickets} | logins_lastmile={len(snapshots)} | "
+            f"sem_login={metricas['tickets_sem_login']} | "
+            f"fora_escopo_local={metricas['tickets_fora_escopo_local']} | "
+            f"login_repetido={metricas['tickets_login_repetido']} | "
+            f"sem_id={metricas['tickets_sem_id']} | "
+            f"sem_os={metricas['tickets_sem_os']} | "
+            f"fora_data={metricas['tickets_fora_data']} | "
+            f"setor_diferente={metricas['tickets_setor_diferente']}"
+        ),
+    )
     return snapshots
 
 
@@ -546,18 +607,31 @@ def buscar_os_lastmile_por_varios_clientes(cliente_ixc_ids, mapa_setores, altera
     log_etapa(inicio, f"Iniciando busca otimizada por {len(clientes_validos)} cliente(s) IXC...")
 
     snapshots = {}
-    pbar_clientes = tqdm(total=len(clientes_validos), desc="Consultando clientes IXC", unit="cliente")
+    pbar_clientes = tqdm(
+        total=len(clientes_validos),
+        desc="Clientes IXC",
+        unit="cliente",
+        disable=not progresso_visual_habilitado(),
+        leave=False,
+    )
 
-    for cliente_ixc_id in clientes_validos:
+    for idx, cliente_ixc_id in enumerate(clientes_validos, start=1):
         logins_permitidos = None
         if logins_por_cliente:
             logins_permitidos = logins_por_cliente.get(cliente_ixc_id) or None
+        quantidade_logins_local = len(logins_permitidos or [])
+        log_etapa(
+            inicio,
+            f"[cliente {idx}/{len(clientes_validos)}] Cliente IXC {cliente_ixc_id} | logins locais no escopo={quantidade_logins_local}",
+        )
 
         snapshots_cliente = buscar_os_lastmile_por_cliente(
             cliente_ixc_id,
             mapa_setores,
             alterado_desde=alterado_desde,
             logins_permitidos=logins_permitidos,
+            cliente_idx=idx,
+            total_clientes=len(clientes_validos),
         )
         snapshots.update(snapshots_cliente)
         pbar_clientes.update(1)
@@ -647,6 +721,10 @@ def sincronizar_os_comercial_lastmile(historico):
         login_id_ixc = normalizar_texto(login_id_ixc)
         if cliente_id_ixc and login_id_ixc:
             logins_por_cliente[cliente_id_ixc].add(login_id_ixc)
+    log_etapa(
+        inicio,
+        f"Clientes IXC no escopo local com login mapeado: {len(logins_por_cliente)}."
+    )
 
     if cliente_ixc_id_arg:
         snapshots_lastmile = buscar_os_lastmile_por_cliente(

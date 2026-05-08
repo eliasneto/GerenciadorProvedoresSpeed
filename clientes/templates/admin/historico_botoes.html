@@ -177,11 +177,17 @@
     color: #062c2b;
   }
 
+  .object-tools a.sync-launcher__stop {
+    background: #dc2626;
+    color: #fff;
+  }
+
   .object-tools a.sync-launcher__faxina,
   .object-tools a.sync-launcher__incremental,
   .object-tools a.sync-launcher__total,
   .object-tools a.sync-launcher__backup,
-  .object-tools a.sync-launcher__email {
+  .object-tools a.sync-launcher__email,
+  .object-tools a.sync-launcher__stop {
     min-height: 32px;
     display: inline-flex;
     align-items: center;
@@ -214,6 +220,13 @@
     <li class="sync-launcher__trigger">
         <a href="#" id="open-os-lastmile-panel">OS Comercial | Lastmile</a>
     </li>
+    {% if rotina_os_lastmile_ativa %}
+    <li>
+        <a href="parar-os-comercial-lastmile/" class="addlink sync-launcher__stop">
+            Parar OS Lastmile
+        </a>
+    </li>
+    {% endif %}
     <li>
         <a href="rodar-faxina/" class="addlink sync-launcher__faxina">
             Rodar Faxina
@@ -254,6 +267,11 @@
                     A execução continua em segundo plano e a auditoria aparece nesta lista.
                 </p>
             </div>
+            {% if rotina_os_lastmile_ativa %}
+            <p class="sync-launcher__subtitle" style="margin:8px 0 0; color:#fca5a5;">
+                Rotina em execuÃ§Ã£o: {{ rotina_os_lastmile_descricao }}
+            </p>
+            {% endif %}
             <button type="button" id="close-os-lastmile-panel" class="sync-launcher__close">Fechar</button>
         </div>
 

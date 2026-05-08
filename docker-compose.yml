@@ -68,6 +68,7 @@ services:
       - DB_PASSWORD=${DB_PASSWORD}
       - DB_HOST=${DB_HOST}
       - DB_PORT=${DB_PORT}
+      - OS_LASTMILE_LOOKBACK_DAYS=${OS_LASTMILE_LOOKBACK_DAYS:-10}
     volumes:
       - ./media:/app/media
     depends_on:
@@ -107,7 +108,7 @@ services:
 
         if [ \"$$HORA_AGORA\" = \"03\" ] && [ \"$$MINUTO_AGORA\" = \"00\" ] && [ \"$$DATA_HOJE\" != \"$$ULTIMA_DATA_OS_LASTMILE\" ]; then
           echo ' ['$$(date +%H:%M)'] Iniciando atualizacao diaria de OS Comercial | Lastmile (03h)...';
-          python scripts/integracoes/ixc_os_comercial_lastmile.py --os-alterada-nos-ultimos-dias=10;
+          python scripts/integracoes/ixc_os_comercial_lastmile.py;
           ULTIMA_DATA_OS_LASTMILE=$$DATA_HOJE;
         fi
 
@@ -132,7 +133,7 @@ services:
       done"
 
   speed_backup:
-    image: ubuntu:22.04
+    build: .
     container_name: speed_backup_diario
     profiles:
       - backup
@@ -142,17 +143,22 @@ services:
       - speed_db
     environment:
       - TZ=America/Fortaleza
+      - TIME_ZONE=America/Fortaleza
+      - USE_AD_AUTH=false
+      - DB_NAME=${DB_NAME}
+      - DB_USER=${DB_USER}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - DB_HOST=${DB_HOST}
+      - DB_PORT=${DB_PORT}
       - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}
       - MYSQL_DATABASE=${MYSQL_DATABASE}
       - BACKUP_WINDOWS_SUBDIR=${BACKUP_WINDOWS_SUBDIR}
+      - BACKUP_RETENTION_DAYS=${BACKUP_RETENTION_DAYS:-10}
     volumes:
       - ./media:/app/media
       - backup_windows:/mnt/windows
     command: >
       sh -c "
-      echo 'Configurando ferramentas de backup...';
-      apt-get update && apt-get install -y mysql-client zip tzdata;
-
       echo 'Servico de backup iniciado. Aguardando 00h00...';
       while true; do
         HORA=$$(date +%H);
@@ -161,22 +167,8 @@ services:
         if [ \"$$HORA\" = \"00\" ] && [ \"$$MINUTO\" = \"00\" ]; then
           DATA=$$(date +%Y-%m-%d_%H-%M);
           echo \"[$$DATA] Iniciando backup automatico...\";
-          mkdir -p /app/media/backups;
-
-          mysqldump -h speed_db -u root -p$$MYSQL_ROOT_PASSWORD --no-tablespaces $$MYSQL_DATABASE > /tmp/banco_$$DATA.sql;
-
-          zip -r /tmp/backup_speed_$$DATA.zip /app/media /tmp/banco_$$DATA.sql > /dev/null;
-          cp /tmp/backup_speed_$$DATA.zip /app/media/backups/backup_speed_$$DATA.zip;
-
-          mkdir -p /mnt/windows/$$BACKUP_WINDOWS_SUBDIR;
-          cp /tmp/backup_speed_$$DATA.zip /mnt/windows/$$BACKUP_WINDOWS_SUBDIR/;
-
-          rm /tmp/banco_$$DATA.sql /tmp/backup_speed_$$DATA.zip;
-
-          find /mnt/windows/$$BACKUP_WINDOWS_SUBDIR -name 'backup_speed_*.zip' -mtime +10 -delete;
-          find /app/media/backups -name 'backup_speed_*.zip' -mtime +10 -delete;
-
-          echo \"[$$DATA] Backup finalizado e salvo no Windows com sucesso!\";
+          python scripts/integracoes/backup_manual.py;
+          echo \"[$$DATA] Backup automatico finalizado.\";
           sleep 60;
         fi;
         sleep 30;
