@@ -81,6 +81,14 @@ UF_POR_NOME = {
     'TOCANTINS': 'TO',
 }
 
+UF_POR_CODIGO_IBGE = {
+    '12': 'AC', '27': 'AL', '16': 'AP', '13': 'AM', '29': 'BA', '23': 'CE',
+    '53': 'DF', '32': 'ES', '52': 'GO', '21': 'MA', '51': 'MT', '50': 'MS',
+    '31': 'MG', '15': 'PA', '25': 'PB', '41': 'PR', '26': 'PE', '22': 'PI',
+    '33': 'RJ', '24': 'RN', '43': 'RS', '11': 'RO', '14': 'RR', '42': 'SC',
+    '35': 'SP', '28': 'SE', '17': 'TO',
+}
+
 
 def extrair_campos_tecnicos_obs(obs_texto):
     campos = {
@@ -146,6 +154,13 @@ def normalizar_uf(valor, padrao='', mapa_estados=None):
     return padrao
 
 
+def resolver_uf_por_ibge(valor):
+    codigo = ''.join(ch for ch in str(valor or '').strip() if ch.isdigit())
+    if len(codigo) >= 2:
+        return UF_POR_CODIGO_IBGE.get(codigo[:2], '')
+    return ''
+
+
 def resolver_cidade_ixc(valor_cidade, mapa_cidades, mapa_estados=None):
     cidade_bruta = str(valor_cidade or '').strip()
     if not cidade_bruta:
@@ -154,7 +169,10 @@ def resolver_cidade_ixc(valor_cidade, mapa_cidades, mapa_estados=None):
     if cidade_bruta.isdigit():
         cidade_info = mapa_cidades.get(cidade_bruta) or {}
         cidade_nome = str(cidade_info.get('nome') or '').strip()
-        cidade_uf = normalizar_uf(cidade_info.get('uf'), mapa_estados=mapa_estados)
+        cidade_uf = (
+            normalizar_uf(cidade_info.get('uf'), mapa_estados=mapa_estados)
+            or resolver_uf_por_ibge(cidade_info.get('ibge'))
+        )
         if cidade_nome:
             return cidade_nome, cidade_bruta, cidade_uf
 
@@ -168,12 +186,23 @@ def resolver_cidade_ixc(valor_cidade, mapa_cidades, mapa_estados=None):
                 or ''
             )
             cidade_nome = str(cidade_nome).strip()
-            cidade_uf = normalizar_uf(
-                cidade_detalhe.get('uf') or cidade_detalhe.get('estado'),
-                mapa_estados=mapa_estados,
+            cidade_uf = (
+                normalizar_uf(
+                    cidade_detalhe.get('uf') or cidade_detalhe.get('estado'),
+                    mapa_estados=mapa_estados,
+                )
+                or resolver_uf_por_ibge(
+                    cidade_detalhe.get('cod_ibge')
+                    or cidade_detalhe.get('codigo_ibge')
+                    or cidade_detalhe.get('ibge')
+                )
             )
             if cidade_nome:
-                mapa_cidades[cidade_bruta] = {'nome': cidade_nome, 'uf': cidade_uf}
+                mapa_cidades[cidade_bruta] = {
+                    'nome': cidade_nome,
+                    'uf': cidade_uf,
+                    'ibge': cidade_detalhe.get('cod_ibge') or cidade_detalhe.get('codigo_ibge') or cidade_detalhe.get('ibge') or '',
+                }
                 return cidade_nome, cidade_bruta, cidade_uf
 
         return '', cidade_bruta, ''
@@ -283,7 +312,10 @@ def buscar_mapa_cidades(mapa_estados=None):
                     'uf': normalizar_uf(
                         cidade.get('uf') or cidade.get('estado'),
                         mapa_estados=mapa_estados,
+                    ) or resolver_uf_por_ibge(
+                        cidade.get('cod_ibge') or cidade.get('codigo_ibge') or cidade.get('ibge')
                     ),
+                    'ibge': cidade.get('cod_ibge') or cidade.get('codigo_ibge') or cidade.get('ibge') or '',
                 }
     return mapa
 
