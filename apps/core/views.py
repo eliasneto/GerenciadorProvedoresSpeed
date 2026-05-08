@@ -1,5 +1,6 @@
 import csv
 import logging
+import time as time_module
 from datetime import datetime, time
 from email.utils import parseaddr
 
@@ -13,6 +14,7 @@ from django.core.files.base import ContentFile
 from django.core.mail import EmailMessage, get_connection
 from django.core.paginator import Paginator
 from django.core.validators import validate_email
+from django.db import connection
 from django.db.models import OuterRef, Q, Subquery
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -31,6 +33,12 @@ logger = logging.getLogger(__name__)
 
 EMAIL_ATTACHMENT_TOTAL_LIMIT_BYTES = 10 * 1024 * 1024
 EMAIL_ATTACHMENT_TOTAL_LIMIT_MB = EMAIL_ATTACHMENT_TOTAL_LIMIT_BYTES // (1024 * 1024)
+HEALTHCHECK_DB_TTL_SECONDS = 30
+_HEALTHCHECK_CACHE = {
+    'checked_at': 0.0,
+    'db_ok': True,
+    'error': '',
+}
 
 
 def _resolve_sort(request, allowed_fields, default_field):
@@ -345,6 +353,45 @@ def _validate_email_attachments(files):
         )
 
     return anexos
+
+
+def _get_cached_system_health():
+    now = time_module.monotonic()
+    last_check = float(_HEALTHCHECK_CACHE.get('checked_at') or 0.0)
+
+    if now - last_check < HEALTHCHECK_DB_TTL_SECONDS:
+        return bool(_HEALTHCHECK_CACHE.get('db_ok')), str(_HEALTHCHECK_CACHE.get('error') or '')
+
+    db_ok = True
+    error_message = ''
+    try:
+        connection.ensure_connection()
+        with connection.cursor() as cursor:
+            cursor.execute('SELECT 1')
+            cursor.fetchone()
+    except Exception as exc:
+        db_ok = False
+        error_message = str(exc)
+
+    _HEALTHCHECK_CACHE.update({
+        'checked_at': now,
+        'db_ok': db_ok,
+        'error': error_message,
+    })
+    return db_ok, error_message
+
+
+def system_health(request):
+    db_ok, error_message = _get_cached_system_health()
+    payload = {
+        'ok': db_ok,
+        'app': 'online',
+        'db': 'online' if db_ok else 'offline',
+        'checked_at': timezone.now().isoformat(),
+    }
+    if error_message:
+        payload['error'] = error_message
+    return JsonResponse(payload, status=200 if db_ok else 503)
 
 
 @login_required

@@ -4,6 +4,7 @@ import requests
 import json
 import base64
 import urllib3
+import unicodedata
 from datetime import datetime, timedelta
 from tqdm import tqdm
 import traceback
@@ -44,6 +45,42 @@ HEADERS = {
     'ixcsoft': 'listar'
 }
 
+UF_SIGLAS_VALIDAS = {
+    'AC', 'AL', 'AP', 'AM', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA',
+    'MT', 'MS', 'MG', 'PA', 'PB', 'PR', 'PE', 'PI', 'RJ', 'RN',
+    'RS', 'RO', 'RR', 'SC', 'SP', 'SE', 'TO',
+}
+
+UF_POR_NOME = {
+    'ACRE': 'AC',
+    'ALAGOAS': 'AL',
+    'AMAPA': 'AP',
+    'AMAZONAS': 'AM',
+    'BAHIA': 'BA',
+    'CEARA': 'CE',
+    'DISTRITO FEDERAL': 'DF',
+    'ESPIRITO SANTO': 'ES',
+    'GOIAS': 'GO',
+    'MARANHAO': 'MA',
+    'MATO GROSSO': 'MT',
+    'MATO GROSSO DO SUL': 'MS',
+    'MINAS GERAIS': 'MG',
+    'PARA': 'PA',
+    'PARAIBA': 'PB',
+    'PARANA': 'PR',
+    'PERNAMBUCO': 'PE',
+    'PIAUI': 'PI',
+    'RIO DE JANEIRO': 'RJ',
+    'RIO GRANDE DO NORTE': 'RN',
+    'RIO GRANDE DO SUL': 'RS',
+    'RONDONIA': 'RO',
+    'RORAIMA': 'RR',
+    'SANTA CATARINA': 'SC',
+    'SAO PAULO': 'SP',
+    'SERGIPE': 'SE',
+    'TOCANTINS': 'TO',
+}
+
 
 def extrair_campos_tecnicos_obs(obs_texto):
     campos = {
@@ -78,12 +115,38 @@ def extrair_campos_tecnicos_obs(obs_texto):
     return campos
 
 
-def normalizar_uf(valor, padrao=''):
-    uf = str(valor or '').strip().upper()
-    return uf[:2] if uf else padrao
+def remover_acentos(valor):
+    texto = str(valor or '').strip()
+    if not texto:
+        return ''
+    return ''.join(
+        caractere for caractere in unicodedata.normalize('NFKD', texto)
+        if not unicodedata.combining(caractere)
+    )
 
 
-def resolver_cidade_ixc(valor_cidade, mapa_cidades):
+def normalizar_uf(valor, padrao='', mapa_estados=None):
+    bruto = str(valor or '').strip()
+    if not bruto:
+        return padrao
+
+    uf = bruto.upper()
+    if uf in UF_SIGLAS_VALIDAS:
+        return uf
+
+    if bruto.isdigit() and mapa_estados:
+        uf_mapeada = str(mapa_estados.get(bruto) or '').strip().upper()
+        if uf_mapeada in UF_SIGLAS_VALIDAS:
+            return uf_mapeada
+
+    uf_por_nome = UF_POR_NOME.get(remover_acentos(bruto).upper())
+    if uf_por_nome:
+        return uf_por_nome
+
+    return padrao
+
+
+def resolver_cidade_ixc(valor_cidade, mapa_cidades, mapa_estados=None):
     cidade_bruta = str(valor_cidade or '').strip()
     if not cidade_bruta:
         return '', '', ''
@@ -91,7 +154,7 @@ def resolver_cidade_ixc(valor_cidade, mapa_cidades):
     if cidade_bruta.isdigit():
         cidade_info = mapa_cidades.get(cidade_bruta) or {}
         cidade_nome = str(cidade_info.get('nome') or '').strip()
-        cidade_uf = normalizar_uf(cidade_info.get('uf'))
+        cidade_uf = normalizar_uf(cidade_info.get('uf'), mapa_estados=mapa_estados)
         if cidade_nome:
             return cidade_nome, cidade_bruta, cidade_uf
 
@@ -105,7 +168,10 @@ def resolver_cidade_ixc(valor_cidade, mapa_cidades):
                 or ''
             )
             cidade_nome = str(cidade_nome).strip()
-            cidade_uf = normalizar_uf(cidade_detalhe.get('uf') or cidade_detalhe.get('estado'))
+            cidade_uf = normalizar_uf(
+                cidade_detalhe.get('uf') or cidade_detalhe.get('estado'),
+                mapa_estados=mapa_estados,
+            )
             if cidade_nome:
                 mapa_cidades[cidade_bruta] = {'nome': cidade_nome, 'uf': cidade_uf}
                 return cidade_nome, cidade_bruta, cidade_uf
@@ -115,7 +181,7 @@ def resolver_cidade_ixc(valor_cidade, mapa_cidades):
     return cidade_bruta, '', ''
 
 
-def resolver_endereco_login(login_data, contrato_data, mapa_cidades):
+def resolver_endereco_login(login_data, contrato_data, mapa_cidades, mapa_estados=None):
     endereco_login = str(login_data.get('endereco') or '').strip()
     numero_login = str(login_data.get('numero') or '').strip()
     bairro_login = str(login_data.get('bairro') or '').strip()
@@ -128,7 +194,11 @@ def resolver_endereco_login(login_data, contrato_data, mapa_cidades):
     )
 
     if usa_endereco_login:
-        cidade_nome, cidade_id_ixc, cidade_uf = resolver_cidade_ixc(cidade_login, mapa_cidades)
+        cidade_nome, cidade_id_ixc, cidade_uf = resolver_cidade_ixc(
+            cidade_login,
+            mapa_cidades,
+            mapa_estados=mapa_estados,
+        )
         return {
             'cep': cep_login,
             'logradouro': endereco_login or 'Nao informado',
@@ -136,10 +206,14 @@ def resolver_endereco_login(login_data, contrato_data, mapa_cidades):
             'bairro': bairro_login,
             'cidade': cidade_nome,
             'cidade_id_ixc': cidade_id_ixc,
-            'estado': normalizar_uf(estado_login) or cidade_uf or 'CE',
+            'estado': normalizar_uf(estado_login, mapa_estados=mapa_estados) or cidade_uf or 'CE',
         }
 
-    cidade_nome_contrato, cidade_id_ixc_contrato, cidade_uf_contrato = resolver_cidade_ixc(contrato_data.get('cidade', ''), mapa_cidades)
+    cidade_nome_contrato, cidade_id_ixc_contrato, cidade_uf_contrato = resolver_cidade_ixc(
+        contrato_data.get('cidade', ''),
+        mapa_cidades,
+        mapa_estados=mapa_estados,
+    )
     return {
         'cep': str(contrato_data.get('cep') or '').strip(),
         'logradouro': contrato_data.get('endereco') or 'Nao informado',
@@ -147,7 +221,7 @@ def resolver_endereco_login(login_data, contrato_data, mapa_cidades):
         'bairro': contrato_data.get('bairro', ''),
         'cidade': cidade_nome_contrato,
         'cidade_id_ixc': cidade_id_ixc_contrato,
-        'estado': normalizar_uf(contrato_data.get('uf')) or cidade_uf_contrato or 'CE',
+        'estado': normalizar_uf(contrato_data.get('uf'), mapa_estados=mapa_estados) or cidade_uf_contrato or 'CE',
     }
 
 
@@ -172,7 +246,23 @@ def buscar_mapa_filiais():
     return mapa
 
 
-def buscar_mapa_cidades():
+def buscar_mapa_estados():
+    print("Mapeando siglas dos estados no IXC...")
+    payload = {"qtype": "id", "query": "0", "oper": ">", "page": "1", "rp": "100"}
+    res = consultar_ixc("estado", payload)
+    mapa = {}
+    if res and 'registros' in res:
+        for estado in res['registros']:
+            estado_id = str(estado.get('id') or '').strip()
+            sigla = normalizar_uf(
+                estado.get('uf') or estado.get('sigla') or estado.get('abreviacao'),
+            ) or normalizar_uf(estado.get('estado') or estado.get('nome'))
+            if estado_id and sigla:
+                mapa[estado_id] = sigla
+    return mapa
+
+
+def buscar_mapa_cidades(mapa_estados=None):
     print("Mapeando nomes das cidades no IXC...")
     payload = {"qtype": "id", "query": "0", "oper": ">", "page": "1", "rp": "10000"}
     res = consultar_ixc("cidade", payload)
@@ -190,7 +280,10 @@ def buscar_mapa_cidades():
             if cidade_id:
                 mapa[cidade_id] = {
                     'nome': str(cidade_nome).strip(),
-                    'uf': normalizar_uf(cidade.get('uf') or cidade.get('estado')),
+                    'uf': normalizar_uf(
+                        cidade.get('uf') or cidade.get('estado'),
+                        mapa_estados=mapa_estados,
+                    ),
                 }
     return mapa
 
@@ -274,7 +367,7 @@ def extrair_clientes_recentes(historico, dias_retroativos=0):
     return base_de_dados_local
 
 
-def salvar_clientes_no_django(dados_ixc, mapa_filiais, mapa_cidades, historico):
+def salvar_clientes_no_django(dados_ixc, mapa_filiais, mapa_cidades, historico, mapa_estados=None):
     if not dados_ixc:
         return
 
@@ -311,7 +404,12 @@ def salvar_clientes_no_django(dados_ixc, mapa_filiais, mapa_cidades, historico):
             circuit_id_novo = lg.get('agent_circuit_id', '')
             con_pai = next((c for c in dado['contratos'] if str(c['id_contrato']) == str(lg['id_contrato'])), {})
             campos_tecnicos = extrair_campos_tecnicos_obs(lg.get('obs'))
-            endereco_resolvido = resolver_endereco_login(lg, con_pai, mapa_cidades)
+            endereco_resolvido = resolver_endereco_login(
+                lg,
+                con_pai,
+                mapa_cidades,
+                mapa_estados=mapa_estados,
+            )
 
             status_login_ixc = str(lg.get('ativo', 'S')).strip().upper()
             status_con_ixc = str(con_pai.get('status', 'A')).strip().upper()
@@ -380,12 +478,13 @@ if __name__ == "__main__":
 
     try:
         mapa_f = buscar_mapa_filiais()
-        mapa_c = buscar_mapa_cidades()
+        mapa_e = buscar_mapa_estados()
+        mapa_c = buscar_mapa_cidades(mapa_e)
         dias = int(sys.argv[2]) if len(sys.argv) > 2 and sys.argv[2].isdigit() else 0
         meus_dados = extrair_clientes_recentes(historico, dias_retroativos=dias)
 
         if meus_dados:
-            salvar_clientes_no_django(meus_dados, mapa_f, mapa_c, historico)
+            salvar_clientes_no_django(meus_dados, mapa_f, mapa_c, historico, mapa_estados=mapa_e)
             historico.registros_processados = len(meus_dados)
             historico.detalhes = f"Sincronizacao {origem_detectada} concluida. {len(meus_dados)} clientes atualizados."
         else:
