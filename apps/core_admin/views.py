@@ -320,12 +320,34 @@ def restore_backup(request):
                     {"form": form, "backups_disponiveis": backup_choices},
                 )
 
+            if sql_file.stat().st_size == 0:
+                messages.error(request, "O ZIP contem um arquivo .sql vazio. Este backup nao pode ser restaurado com seguranca.")
+                return render(
+                    request,
+                    "core_admin/restore_backup_form.html",
+                    {"form": form, "backups_disponiveis": backup_choices},
+                )
+
+            # A sessao atual pode desaparecer durante o restore do banco.
+            # Encerrar antes evita o Bad Request do Django ao finalizar a resposta.
+            request.session.flush()
+
             db_conf = settings.DATABASES["default"]
             mysql_host = db_conf.get("HOST") or "localhost"
             mysql_port = str(db_conf.get("PORT") or 3306)
             mysql_name = db_conf.get("NAME")
-            mysql_user = os.getenv("DB_ADMIN_USER", "root")
-            mysql_password = os.getenv("DB_ADMIN_PASSWORD", os.getenv("MYSQL_ROOT_PASSWORD", ""))
+            mysql_user = (
+                os.getenv("DB_ADMIN_USER")
+                or db_conf.get("USER")
+                or os.getenv("DB_USER")
+                or "root"
+            )
+            mysql_password = (
+                os.getenv("DB_ADMIN_PASSWORD")
+                or db_conf.get("PASSWORD")
+                or os.getenv("DB_PASSWORD")
+                or os.getenv("MYSQL_ROOT_PASSWORD", "")
+            )
 
             env = os.environ.copy()
             env["MYSQL_PWD"] = mysql_password
@@ -366,16 +388,27 @@ def restore_backup(request):
                         shutil.copy2(item, destino)
                 media_restaurado = True
 
-            messages.success(
-                request,
-                "Backup restaurado com sucesso. Banco de dados atualizado" + (" e midia sincronizada." if media_restaurado else "."),
+            detalhe_midia = " e a pasta media foi sincronizada" if media_restaurado else ""
+            return HttpResponse(
+                (
+                    "<html><head><meta charset='utf-8'><title>Restore concluido</title></head>"
+                    "<body style=\"font-family: Arial, sans-serif; padding: 32px; background: #f8f9fa; color: #111827;\">"
+                    "<div style=\"max-width: 720px; margin: 0 auto; background: white; border-radius: 24px; padding: 32px; border: 1px solid #e5e7eb;\">"
+                    "<h1 style=\"margin: 0 0 16px; font-size: 28px;\">Backup restaurado com sucesso</h1>"
+                    f"<p style=\"margin: 0 0 12px; font-size: 15px;\">O banco de dados foi restaurado{detalhe_midia}.</p>"
+                    "<p style=\"margin: 0 0 20px; font-size: 14px; color: #4b5563;\">Por seguranca, entre novamente no sistema para continuar usando a aplicacao.</p>"
+                    "<a href=\"/login/\" style=\"display: inline-block; padding: 12px 18px; border-radius: 14px; background: #111827; color: #fbbf24; text-decoration: none; font-weight: 700;\">Ir para o login</a>"
+                    "</div></body></html>"
+                )
             )
-            return redirect("import_prospects")
         except Exception as exc:
             messages.error(request, f"Falha ao restaurar backup: {exc}")
         finally:
             if temp_dir and os.path.isdir(temp_dir):
                 shutil.rmtree(temp_dir, ignore_errors=True)
+
+    if request.method == "POST" and not form.is_valid():
+        messages.error(request, "Revise os campos do restore e tente novamente.")
 
     return render(
         request,

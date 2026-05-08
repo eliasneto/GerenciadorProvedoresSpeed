@@ -62,10 +62,23 @@ class HistoricoSincronizacaoAdmin(admin.ModelAdmin):
             path('rodar-incremental/', self.admin_site.admin_view(self.btn_rodar_incremental), name='rodar-incremental'),
             path('rodar-faxina/', self.admin_site.admin_view(self.btn_rodar_faxina), name='rodar-faxina'),
             path('rodar-os-comercial-lastmile/', self.admin_site.admin_view(self.btn_rodar_os_comercial_lastmile), name='rodar-os-comercial-lastmile'),
+            path('parar-os-comercial-lastmile/', self.admin_site.admin_view(self.btn_parar_os_comercial_lastmile), name='parar-os-comercial-lastmile'),
             path('rodar-respostas-email-cotacao/', self.admin_site.admin_view(self.btn_rodar_respostas_email_cotacao), name='rodar-respostas-email-cotacao'),
             path('rodar-backup/', self.admin_site.admin_view(self.btn_rodar_backup), name='rodar-backup'),
         ]
         return custom_urls + urls
+
+    def changelist_view(self, request, extra_context=None):
+        extra_context = extra_context or {}
+        rotina_os_lastmile_ativa = buscar_rotina_em_execucao('os_comercial_lastmile')
+        extra_context.update({
+            'rotina_os_lastmile_ativa': rotina_os_lastmile_ativa,
+            'rotina_os_lastmile_descricao': (
+                descrever_rotina_em_execucao('os_comercial_lastmile', rotina_os_lastmile_ativa)
+                if rotina_os_lastmile_ativa else ''
+            ),
+        })
+        return super().changelist_view(request, extra_context=extra_context)
 
     def btn_rodar_carga_total(self, request):
         rotina_ativa = buscar_rotina_em_execucao('total')
@@ -137,6 +150,25 @@ class HistoricoSincronizacaoAdmin(admin.ModelAdmin):
             mensagem += " Filtros: " + ", ".join(detalhes) + "."
 
         self.message_user(request, mensagem, messages.SUCCESS)
+        return HttpResponseRedirect("../?" + urlencode({"tipo__exact": "os_comercial_lastmile"}))
+
+    def btn_parar_os_comercial_lastmile(self, request):
+        rotina_ativa = buscar_rotina_em_execucao('os_comercial_lastmile')
+        if not rotina_ativa:
+            self.message_user(
+                request,
+                "Nenhuma rotina de OS Comercial | Lastmile em execução foi encontrada.",
+                messages.WARNING,
+            )
+            return HttpResponseRedirect("../?" + urlencode({"tipo__exact": "os_comercial_lastmile"}))
+
+        rotina_ativa.detalhes = "STOP"
+        rotina_ativa.save(update_fields=["detalhes"])
+        self.message_user(
+            request,
+            f"Sinal de parada enviado para a rotina de OS Comercial | Lastmile #{rotina_ativa.id}.",
+            messages.WARNING,
+        )
         return HttpResponseRedirect("../?" + urlencode({"tipo__exact": "os_comercial_lastmile"}))
 
     def btn_rodar_backup(self, request):

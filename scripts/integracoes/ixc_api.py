@@ -77,15 +77,22 @@ def extrair_campos_tecnicos_obs(obs_texto):
     return campos
 
 
+def normalizar_uf(valor, padrao=''):
+    uf = str(valor or '').strip().upper()
+    return uf[:2] if uf else padrao
+
+
 def resolver_cidade_ixc(valor_cidade, mapa_cidades):
     cidade_bruta = str(valor_cidade or '').strip()
     if not cidade_bruta:
-        return '', ''
+        return '', '', ''
 
     if cidade_bruta.isdigit():
-        cidade_nome = mapa_cidades.get(cidade_bruta, '').strip()
+        cidade_info = mapa_cidades.get(cidade_bruta) or {}
+        cidade_nome = str(cidade_info.get('nome') or '').strip()
+        cidade_uf = normalizar_uf(cidade_info.get('uf'))
         if cidade_nome:
-            return cidade_nome, cidade_bruta
+            return cidade_nome, cidade_bruta, cidade_uf
 
         cidade_detalhe = consultar_ixc(f"cidade/{cidade_bruta}", {})
         if cidade_detalhe:
@@ -97,13 +104,14 @@ def resolver_cidade_ixc(valor_cidade, mapa_cidades):
                 or ''
             )
             cidade_nome = str(cidade_nome).strip()
+            cidade_uf = normalizar_uf(cidade_detalhe.get('uf') or cidade_detalhe.get('estado'))
             if cidade_nome:
-                mapa_cidades[cidade_bruta] = cidade_nome
-                return cidade_nome, cidade_bruta
+                mapa_cidades[cidade_bruta] = {'nome': cidade_nome, 'uf': cidade_uf}
+                return cidade_nome, cidade_bruta, cidade_uf
 
-        return '', cidade_bruta
+        return '', cidade_bruta, ''
 
-    return cidade_bruta, ''
+    return cidade_bruta, '', ''
 
 
 def resolver_endereco_login(login_data, contrato_data, mapa_cidades):
@@ -119,7 +127,7 @@ def resolver_endereco_login(login_data, contrato_data, mapa_cidades):
     )
 
     if usa_endereco_login:
-        cidade_nome, cidade_id_ixc = resolver_cidade_ixc(cidade_login, mapa_cidades)
+        cidade_nome, cidade_id_ixc, cidade_uf = resolver_cidade_ixc(cidade_login, mapa_cidades)
         return {
             'cep': cep_login,
             'logradouro': endereco_login or 'Nao informado',
@@ -127,10 +135,10 @@ def resolver_endereco_login(login_data, contrato_data, mapa_cidades):
             'bairro': bairro_login,
             'cidade': cidade_nome,
             'cidade_id_ixc': cidade_id_ixc,
-            'estado': (estado_login[:2].upper() if estado_login else 'CE'),
+            'estado': normalizar_uf(estado_login) or cidade_uf or 'CE',
         }
 
-    cidade_nome_contrato, cidade_id_ixc_contrato = resolver_cidade_ixc(contrato_data.get('cidade', ''), mapa_cidades)
+    cidade_nome_contrato, cidade_id_ixc_contrato, cidade_uf_contrato = resolver_cidade_ixc(contrato_data.get('cidade', ''), mapa_cidades)
     return {
         'cep': str(contrato_data.get('cep') or '').strip(),
         'logradouro': contrato_data.get('endereco') or 'Nao informado',
@@ -138,7 +146,7 @@ def resolver_endereco_login(login_data, contrato_data, mapa_cidades):
         'bairro': contrato_data.get('bairro', ''),
         'cidade': cidade_nome_contrato,
         'cidade_id_ixc': cidade_id_ixc_contrato,
-        'estado': str(contrato_data.get('uf', 'CE'))[:2].upper(),
+        'estado': normalizar_uf(contrato_data.get('uf')) or cidade_uf_contrato or 'CE',
     }
 
 
@@ -179,7 +187,10 @@ def buscar_mapa_cidades():
                 or ''
             )
             if cidade_id:
-                mapa[cidade_id] = str(cidade_nome).strip()
+                mapa[cidade_id] = {
+                    'nome': str(cidade_nome).strip(),
+                    'uf': normalizar_uf(cidade.get('uf') or cidade.get('estado')),
+                }
     return mapa
 
 

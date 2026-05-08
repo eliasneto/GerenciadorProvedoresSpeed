@@ -37,6 +37,11 @@ mkdir -p "$MOUNT_POINT"
 echo "Extraindo banco de dados MySQL..."
 docker exec speed_mysql mysqldump -u root -p"$MYSQL_ROOT_PASSWORD" "$MYSQL_DATABASE" > "$BACKUP_TMP/banco_$DATA.sql"
 
+if [ ! -s "$BACKUP_TMP/banco_$DATA.sql" ]; then
+  echo "Dump SQL gerado vazio. Backup abortado para evitar ZIP inconsistente."
+  exit 1
+fi
+
 echo "Compactando arquivos..."
 cd "$PROJECT_DIR"
 zip -r "$BACKUP_TMP/$ARQUIVO_ZIP" media/ "$BACKUP_TMP/banco_$DATA.sql" \
@@ -45,6 +50,11 @@ zip -r "$BACKUP_TMP/$ARQUIVO_ZIP" media/ "$BACKUP_TMP/banco_$DATA.sql" \
      "media/importacoes_leads/*" \
      "media/**/__pycache__/*" \
   > /dev/null
+
+if [ ! -s "$BACKUP_TMP/$ARQUIVO_ZIP" ]; then
+  echo "ZIP final gerado vazio. Backup abortado."
+  exit 1
+fi
 
 echo "Conectando ao compartilhamento Windows..."
 mount -t cifs "$WIN_SHARE" "$MOUNT_POINT" -o "username=$WIN_USER,password=$WIN_PASS,vers=3.0,iocharset=utf8"
