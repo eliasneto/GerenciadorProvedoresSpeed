@@ -44,6 +44,7 @@ INSTALLED_APPS = [
     
     # Suas Apps
     'core',
+    'auditoria',
     'leads',
     'partners',
     'clientes',

@@ -28,6 +28,7 @@ from django.utils.datastructures import MultiValueDictKeyError
 
 from core.views import grupo_Administrador_required
 from core_admin.models import ConfiguracaoEmailEnvio
+from auditoria.models import RestoreBackupAuditoria
 
 from .forms import BackupRestoreForm, ExcelUploadForm, SMTPTestForm
 from .import_services import (
@@ -245,10 +246,40 @@ def _resolver_backup_existente(nome_arquivo):
     return arquivo
 
 
+def _extrair_ip_request(request):
+    forwarded_for = (request.META.get("HTTP_X_FORWARDED_FOR") or "").strip()
+    if forwarded_for:
+        return forwarded_for.split(",")[0].strip()
+    return (request.META.get("REMOTE_ADDR") or "").strip()
+
+
+def _registrar_auditoria_restore(
+    *,
+    request,
+    arquivo_nome,
+    origem,
+    sucesso,
+    media_restaurada=False,
+    detalhes="",
+):
+    RestoreBackupAuditoria.objects.create(
+        usuario=request.user if getattr(request.user, "is_authenticated", False) else None,
+        origem=origem,
+        arquivo_nome=(arquivo_nome or "")[:255],
+        sucesso=bool(sucesso),
+        media_restaurada=bool(media_restaurada),
+        endereco_ip=_extrair_ip_request(request) or None,
+        user_agent=(request.META.get("HTTP_USER_AGENT") or "")[:500],
+        detalhes=detalhes or "",
+    )
+
+
 @user_passes_test(grupo_Administrador_required)
 @login_required
 def restore_backup(request):
     backup_choices = _listar_backups_disponiveis()
+    nome_arquivo_restore = ""
+    origem_restore = ""
 
     if request.method == "GET" and request.GET.get("restore_error") == "1":
         detalhe = (request.GET.get("restore_error_detail") or "").strip()
@@ -291,6 +322,8 @@ def restore_backup(request):
 
             if backup_selecionado:
                 temp_zip = _resolver_backup_existente(backup_selecionado)
+                nome_arquivo_restore = temp_zip.name
+                origem_restore = "servidor"
             else:
                 if not backup_zip or not backup_zip.name.lower().endswith(".zip"):
                     messages.error(request, "Envie um arquivo .zip valido.")
@@ -301,6 +334,8 @@ def restore_backup(request):
                     )
 
                 temp_zip = Path(temp_dir) / backup_zip.name
+                nome_arquivo_restore = backup_zip.name
+                origem_restore = "upload"
                 with open(temp_zip, "wb") as handler:
                     for chunk in backup_zip.chunks():
                         handler.write(chunk)
@@ -389,6 +424,14 @@ def restore_backup(request):
                 media_restaurado = True
 
             detalhe_midia = " e a pasta media foi sincronizada" if media_restaurado else ""
+            _registrar_auditoria_restore(
+                request=request,
+                arquivo_nome=nome_arquivo_restore or temp_zip.name,
+                origem=origem_restore or "upload",
+                sucesso=True,
+                media_restaurada=media_restaurado,
+                detalhes=f"Restore concluido com sucesso. Banco restaurado{detalhe_midia}.",
+            )
             return HttpResponse(
                 (
                     "<html><head><meta charset='utf-8'><title>Restore concluido</title></head>"
@@ -402,6 +445,14 @@ def restore_backup(request):
                 )
             )
         except Exception as exc:
+            _registrar_auditoria_restore(
+                request=request,
+                arquivo_nome=nome_arquivo_restore or getattr(locals().get("temp_zip", None), "name", "") or "",
+                origem=origem_restore or "upload",
+                sucesso=False,
+                media_restaurada=False,
+                detalhes=str(exc),
+            )
             messages.error(request, f"Falha ao restaurar backup: {exc}")
         finally:
             if temp_dir and os.path.isdir(temp_dir):

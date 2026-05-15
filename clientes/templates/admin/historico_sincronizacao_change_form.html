@@ -1,0 +1,36 @@
+{% extends "admin/change_form.html" %}
+
+{% block extrastyle %}
+{{ block.super }}
+<style>
+  .sync-live-banner {
+    margin: 0 0 16px;
+    padding: 14px 16px;
+    border-radius: 14px;
+    border: 1px solid #f59e0b;
+    background: #fff7ed;
+    color: #9a3412;
+    font-weight: 700;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+{% if original and original.status == "rodando" %}
+<div class="sync-live-banner">
+  Execucao em andamento. Esta tela sera atualizada automaticamente a cada 5 segundos para mostrar os logs mais recentes.
+</div>
+{% endif %}
+{{ block.super }}
+{% endblock %}
+
+{% block admin_change_form_document_ready %}
+{{ block.super }}
+{% if original and original.status == "rodando" %}
+<script>
+  window.setTimeout(function () {
+    window.location.reload();
+  }, 5000);
+</script>
+{% endif %}
+{% endblock %}

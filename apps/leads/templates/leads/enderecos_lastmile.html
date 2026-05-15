@@ -193,7 +193,7 @@
 </div>
 
 <div id="partnerProposalModal" class="fixed inset-0 bg-black/60 z-[80] hidden flex items-center justify-center backdrop-blur-sm p-4">
-    <div class="bg-white rounded-[2rem] p-6 md:p-8 max-w-5xl w-full shadow-2xl border border-gray-100 max-h-[92vh] overflow-hidden flex flex-col">
+    <div class="bg-white rounded-[2rem] p-5 md:p-6 max-w-5xl w-full shadow-2xl border border-gray-100 max-h-[90vh] overflow-hidden flex flex-col">
         <div class="flex items-start justify-between gap-4 mb-6">
             <div>
                 <div class="flex items-center gap-3 mb-3">
@@ -217,7 +217,7 @@
         </div>
 
         <div class="flex-1 min-h-0 overflow-y-auto pr-1 -mr-1">
-        <div class="space-y-5 mb-5">
+        <div class="space-y-4 mb-4">
             <section class="border border-gray-100 rounded-[1.5rem] p-4 bg-gray-50/40 transition-all duration-200">
                 <div class="grid grid-cols-1 md:grid-cols-[minmax(0,1.8fr)_minmax(0,0.8fr)_110px_auto] gap-3 mb-3">
                     <input type="text" id="leadAddressGridQuery" placeholder="Buscar prospecção, endereço, bairro, cidade ou CEP..."
@@ -253,26 +253,31 @@
                     <span>Endereço</span>
                     <span class="text-right">Sel.</span>
                 </div>
-                <div id="leadAddressGridList" class="max-h-[62vh] overflow-y-auto border border-gray-100 border-t-0 rounded-b-[1.5rem] bg-white divide-y divide-gray-100">
+                <div id="leadAddressGridList" class="max-h-[38vh] overflow-y-auto border border-gray-100 border-t-0 rounded-b-[1.5rem] bg-white divide-y divide-gray-100">
                     <div class="px-4 py-8 text-center text-sm font-bold text-gray-400 uppercase">Carregando...</div>
                 </div>
             </section>
         </div>
         </div>
 
-        <form id="partnerProposalCreateForm" method="POST" class="flex flex-col min-h-0 border-t border-gray-100 pt-5 mt-1 bg-white">
+        <form id="partnerProposalCreateForm" method="POST" class="flex flex-col min-h-0 border-t border-gray-100 pt-4 mt-1 bg-white">
             {% csrf_token %}
             <input type="hidden" name="next" value="{{ request.get_full_path }}">
             <div id="selectedLeadAddressInputs"></div>
             <div id="selectedPartnerInputs"></div>
             <input type="hidden" name="force_lead_partner_fallback" id="partnerProposalLeadFallbackMode" value="0">
             <input type="hidden" name="lead_endereco_id" id="selectedLeadAddressId">
-            <div id="partnerCoverageSummary" class="text-[11px] font-bold text-gray-500 mb-2">Analisando cobertura regional dos parceiros...</div>
-            <div id="partnerProposalSummary" class="text-[11px] font-bold text-gray-500 mb-2">Selecione pelo menos um endereço da prospecção para calcular os parceiros elegíveis.</div>
-
-            <div class="flex items-center justify-between gap-4 pt-5 mt-5">
-                <p class="text-[11px] font-bold text-gray-400">Regra de bloqueio: o sistema só impede nova cotação quando o mesmo provedor já possui uma cotação em Em negociação para este mesmo endereço operacional.</p>
-                <div class="flex items-center gap-3">
+            <div class="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-4">
+                <div class="min-w-0 flex-1">
+                    <label class="inline-flex items-center gap-3 px-4 py-3 bg-white border border-gray-100 rounded-2xl cursor-pointer mb-2 w-fit">
+                        <input type="checkbox" id="partnerExpandSearchToggle" class="w-4 h-4 rounded border-gray-300 text-ageis-yellow focus:ring-ageis-yellow">
+                        <span class="text-[11px] font-black uppercase tracking-[0.14em] text-gray-600">Buscar fora da regiao</span>
+                    </label>
+                    <p id="partnerFilterHelpText" class="text-[11px] font-bold text-gray-500 mb-1">Quando marcada, a busca usa os filtros de prospeccao, cidade e UF acima sem prender os parceiros a cobertura regional padrao.</p>
+                    <div id="partnerCoverageSummary" class="text-[11px] font-bold text-gray-500 mb-1">Analisando cobertura regional dos parceiros...</div>
+                    <div id="partnerProposalSummary" class="text-[11px] font-bold text-gray-500">Selecione pelo menos um endereço da prospecção para calcular os parceiros elegíveis.</div>
+                </div>
+                <div class="flex items-center justify-end gap-3 shrink-0">
                     <button type="button" onclick="closePartnerProposalModal()" class="px-5 py-3 rounded-2xl font-bold text-gray-500 hover:bg-gray-50 transition">
                         Cancelar
                     </button>
@@ -281,6 +286,7 @@
                     </button>
                 </div>
             </div>
+            <p class="text-[10px] font-bold text-gray-400 mt-3">Regra de bloqueio: o sistema só impede nova cotação quando o mesmo provedor já possui uma cotação em Em negociação para este mesmo endereço operacional.</p>
         </form>
     </div>
 </div>
@@ -304,6 +310,20 @@ function partnerSearchUrl(addressId) {
 
 function partnerCreateUrl(addressId) {
     return `/provedores/enderecos/${addressId}/cotacoes/criar/`;
+}
+
+function setPartnerExpandedSearchMode(enabled) {
+    const toggle = document.getElementById('partnerExpandSearchToggle');
+    const helpText = document.getElementById('partnerFilterHelpText');
+
+    if (toggle) {
+        toggle.checked = enabled;
+    }
+    if (helpText) {
+        helpText.innerText = enabled
+            ? 'Busca ampla ativa. Os filtros de busca, cidade e UF acima passam a procurar parceiros fora da cobertura regional padrao.'
+            : 'Quando marcada, a busca usa os filtros de prospeccao, cidade e UF acima sem prender os parceiros a cobertura regional padrao.';
+    }
 }
 
 function setPartnerProposalSubmitState(disabled) {
@@ -337,6 +357,7 @@ function openPartnerProposalModal(button) {
     document.getElementById('leadAddressGridQuery').value = '';
     document.getElementById('leadAddressGridCidade').value = cidade || '';
     document.getElementById('leadAddressGridUf').value = (estado || '').toUpperCase();
+    setPartnerExpandedSearchMode(false);
     document.getElementById('partnerProposalLeadFallbackMode').value = '0';
     document.getElementById('leadAddressGridList').innerHTML = '<div class="px-4 py-8 text-center text-sm font-bold text-gray-400 uppercase">Carregando...</div>';
     document.getElementById('leadAddressGridSummary').innerText = 'Carregando endereços...';
@@ -357,6 +378,7 @@ function closePartnerProposalModal() {
     document.getElementById('selectedLeadAddressId').value = '';
     document.getElementById('selectedLeadAddressInputs').innerHTML = '';
     document.getElementById('selectedPartnerInputs').innerHTML = '';
+    setPartnerExpandedSearchMode(false);
     document.getElementById('partnerProposalLeadFallbackMode').value = '0';
     document.getElementById('partnerProposalClienteBadge').innerText = 'Cliente --';
     partnerProposalAddressId = null;
@@ -455,6 +477,8 @@ async function loadPartnerProposalOptions() {
     if (!partnerProposalAddressId) return;
 
     const requestId = ++partnerProposalOptionsRequestId;
+    const buscaAmpla = document.getElementById('partnerExpandSearchToggle')?.checked;
+    const q = document.getElementById('leadAddressGridQuery').value.trim();
     const estado = document.getElementById('leadAddressGridUf').value.trim().toUpperCase();
     const cidade = document.getElementById('leadAddressGridCidade').value.trim();
     const leadEnderecoIds = Array.from(selectedLeadAddressIds);
@@ -464,7 +488,9 @@ async function loadPartnerProposalOptions() {
 
     partnerProposalOptionsLoading = true;
     setPartnerProposalSubmitState(true);
-    coverage.innerText = 'Analisando cobertura regional dos parceiros...';
+    coverage.innerText = buscaAmpla
+        ? 'Busca ampla ativa para encontrar parceiros fora da cobertura regional padrao...'
+        : 'Analisando cobertura regional dos parceiros...';
     if (!leadEnderecoIds.length) {
         if (requestId !== partnerProposalOptionsRequestId) return;
         summary.innerText = 'Selecione pelo menos um endereço da prospecção para calcular os parceiros elegíveis.';
@@ -478,8 +504,17 @@ async function loadPartnerProposalOptions() {
     selectedPartnerInputs.innerHTML = '';
 
     const url = new URL(partnerSearchUrl(partnerProposalAddressId), window.location.origin);
-    if (estado) url.searchParams.set('estado', estado);
-    if (cidade) url.searchParams.set('cidade', cidade);
+    if (buscaAmpla) {
+        url.searchParams.set('busca_ampla', '1');
+        if (estado) url.searchParams.set('estado', estado);
+        if (cidade) url.searchParams.set('cidade', cidade);
+    } else {
+        if (estado) url.searchParams.set('estado', estado);
+        if (cidade) url.searchParams.set('cidade', cidade);
+    }
+    if (q) {
+        url.searchParams.set('q', q);
+    }
     try {
         const response = await fetch(url.toString(), {
             headers: { 'X-Requested-With': 'XMLHttpRequest' }
@@ -488,6 +523,7 @@ async function loadPartnerProposalOptions() {
         if (requestId !== partnerProposalOptionsRequestId) return;
 
         const resultados = data.resultados || [];
+        const buscaAmplaAtiva = Boolean(data.busca_ampla_ativa);
         const parceirosDisponiveis = resultados.filter((partner) => !partner.ja_possui_cotacao_aberta);
         const parceirosBloqueados = resultados.filter((partner) => partner.ja_possui_cotacao_aberta);
         const nomesBloqueados = parceirosBloqueados.map((partner) => partner.nome).join(', ');
@@ -506,22 +542,30 @@ async function loadPartnerProposalOptions() {
             ? 'Estado nao informado'
             : `${estadoCobertura.nome || 'Estado'}: ${estadoCobertura.count} parceiro(s)`;
 
-        coverage.innerText = `Cobertura conhecida para este endereco - ${bairroTexto} | ${cidadeTexto} | ${estadoTexto}.`;
+        coverage.innerText = buscaAmplaAtiva
+            ? 'Busca ampla ativa. A lista abaixo pode trazer parceiros fora da cobertura conhecida deste endereco.'
+            : `Cobertura conhecida para este endereco - ${bairroTexto} | ${cidadeTexto} | ${estadoTexto}.`;
         document.getElementById('partnerProposalLeadFallbackMode').value = '0';
 
-        summary.innerText = `${parceirosDisponiveis.length} provedor(es) foram encontrados pela cobertura conhecida para esta região. Ao criar, o sistema abrirá cotações apenas para os provedores selecionados na prospecção.`;
+        summary.innerText = buscaAmplaAtiva
+            ? `${parceirosDisponiveis.length} provedor(es) foram encontrados na busca ampla com os filtros informados. Ao criar, o sistema abrira cotacoes apenas para os provedores elegiveis desta busca.`
+            : `${parceirosDisponiveis.length} provedor(es) foram encontrados pela cobertura conhecida para esta regiao. Ao criar, o sistema abrira cotacoes apenas para os provedores selecionados na prospeccao.`;
 
         if (!parceirosDisponiveis.length) {
             if (leadEnderecoIds.length) {
-                summary.innerText = `Nenhum provedor elegível foi encontrado pela cobertura conhecida para os endereços da prospecção selecionados. Se quiser prosseguir mesmo assim, clique em Criar Cotações para abrir usando apenas os provedores desta prospecção.`;
+                summary.innerText = buscaAmplaAtiva
+                    ? 'Nenhum provedor elegivel foi encontrado na busca ampla com os filtros informados. Ajuste a busca, cidade ou UF, ou siga com Criar Cotacoes para usar apenas os provedores ja ligados a esta prospeccao.'
+                    : 'Nenhum provedor elegivel foi encontrado pela cobertura conhecida para os enderecos da prospeccao selecionados. Se quiser prosseguir mesmo assim, clique em Criar Cotacoes para abrir usando apenas os provedores desta prospeccao.';
                 document.getElementById('partnerProposalLeadFallbackMode').value = '1';
                 selectedPartnerInputs.innerHTML = '';
                 return;
             }
 
             summary.innerText = nomesBloqueados
-                ? `Nenhuma cotação foi criada porque estes provedores já possuem cotação em Em negociação neste mesmo endereço operacional: ${nomesBloqueados}.`
-                : 'Nenhum provedor elegível foi encontrado para os endereços da prospecção selecionados, e não há provedores disponíveis para prosseguir fora da cobertura conhecida.';
+                ? `Nenhuma cotacao foi criada porque estes provedores ja possuem cotacao em Em negociacao neste mesmo endereco operacional: ${nomesBloqueados}.`
+                : buscaAmplaAtiva
+                    ? 'Nenhum provedor elegivel foi encontrado nessa busca ampla.'
+                    : 'Nenhum provedor elegivel foi encontrado para os enderecos da prospeccao selecionados, e nao ha provedores disponiveis para prosseguir fora da cobertura conhecida.';
             return;
         }
 
@@ -550,6 +594,7 @@ document.getElementById('leadAddressGridQuery').addEventListener('keydown', func
     if (event.key === 'Enter') {
         event.preventDefault();
         loadLeadAddressGrid();
+        loadPartnerProposalOptions();
     }
 });
 
@@ -557,6 +602,7 @@ document.getElementById('leadAddressGridCidade').addEventListener('keydown', fun
     if (event.key === 'Enter') {
         event.preventDefault();
         loadLeadAddressGrid();
+        loadPartnerProposalOptions();
     }
 });
 
@@ -564,7 +610,13 @@ document.getElementById('leadAddressGridUf').addEventListener('keydown', functio
     if (event.key === 'Enter') {
         event.preventDefault();
         loadLeadAddressGrid();
+        loadPartnerProposalOptions();
     }
+});
+
+document.getElementById('partnerExpandSearchToggle').addEventListener('change', function () {
+    setPartnerExpandedSearchMode(this.checked);
+    loadPartnerProposalOptions();
 });
 
 document.getElementById('partnerProposalCreateForm').addEventListener('submit', function (event) {

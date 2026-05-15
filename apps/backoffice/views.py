@@ -15,6 +15,26 @@ from scripts.integracoes.backoffice.cria_login_atendimento import (
     executar_cadastro_ixc,
 )
 
+ATENDIMENTO_COLUNAS = [
+    "Cliente_ID",
+    "Login_ID",
+    "Contrato_ID",
+    "Filial_ID",
+    "Assunto_ID",
+    "Departamento_ID",
+    "Assunto_Descricao",
+    "Descricao",
+]
+
+ATENDIMENTO_COLUNAS_ID = [
+    "Cliente_ID",
+    "Login_ID",
+    "Contrato_ID",
+    "Filial_ID",
+    "Assunto_ID",
+    "Departamento_ID",
+]
+
 
 def grupo_backoffice_required(user):
     if not user.is_authenticated:
@@ -22,6 +42,39 @@ def grupo_backoffice_required(user):
     if user.groups.filter(name="Backoffice").exists() or user.is_superuser:
         return True
     raise PermissionDenied
+
+
+def aplicar_validacao_campos_id(workbook, worksheet, colunas, campos_id):
+    header_format = workbook.add_format({"bold": True, "bg_color": "#D7E4BC", "border": 1})
+    inteiro_format = workbook.add_format({"num_format": "0"})
+
+    for col_num, value in enumerate(colunas):
+        worksheet.write(0, col_num, value, header_format)
+        worksheet.set_column(col_num, col_num, 24, inteiro_format if value in campos_id else None)
+
+        if value not in campos_id:
+            continue
+
+        worksheet.data_validation(
+            1,
+            col_num,
+            5000,
+            col_num,
+            {
+                "validate": "integer",
+                "criteria": ">=",
+                "value": 0,
+                "ignore_blank": True,
+                "input_title": f"{value} numerico",
+                "input_message": "Informe apenas o ID numerico do IXC.",
+                "error_title": "Valor invalido",
+                "error_message": f"O campo {value} aceita somente numeros inteiros.",
+            },
+        )
+
+
+def serializar_linha_para_auditoria(dataframe, index):
+    return {str(k).strip(): dataframe.at[index, k] for k in dataframe.columns}
 
 
 @user_passes_test(grupo_backoffice_required)
@@ -74,7 +127,7 @@ def cotacao_import(request):
                             "status": "sucesso" if status else "erro",
                             "mensagem": mensagem,
                             "id_ixc": id_ixc or "",
-                            "dados_json": {str(k).strip(): linha[k] for k in df.columns if k in linha},
+                            "dados_json": serializar_linha_para_auditoria(df, index),
                         }
                     )
 
@@ -221,21 +274,55 @@ def download_modelo_cotacao(request):
 @user_passes_test(grupo_backoffice_required)
 @login_required
 def download_modelo_atendimento(request):
-    colunas = [
-        "Cliente_ID",
-        "Login_ID",
-        "Contrato_ID",
-        "Filial_ID",
-        "Assunto_ID",
-        "Departamento_ID",
-        "Assunto_Descricao",
-        "Descricao",
-    ]
-    df = pd.DataFrame(columns=colunas)
+    instrucoes = {
+        "Campo": ATENDIMENTO_COLUNAS,
+        "O que colocar?": [
+            "ID numerico do cliente no IXC",
+            "ID numerico do login no IXC. Nao usar endereco, nome ou texto.",
+            "ID numerico do contrato no IXC, se houver",
+            "ID numerico da filial no IXC",
+            "ID numerico do assunto no IXC",
+            "ID numerico do departamento no IXC",
+            "Titulo do atendimento",
+            "Descricao detalhada do atendimento",
+        ],
+        "Obrigatorio?": [
+            "Sim",
+            "Sim",
+            "Nao",
+            "Sim",
+            "Sim",
+            "Sim",
+            "Nao",
+            "Sim",
+        ],
+        "Aceita apenas numero?": [
+            "Sim",
+            "Sim",
+            "Sim",
+            "Sim",
+            "Sim",
+            "Sim",
+            "Nao",
+            "Nao",
+        ],
+    }
+    df_modelo = pd.DataFrame(columns=ATENDIMENTO_COLUNAS)
+    df_ajuda = pd.DataFrame(instrucoes)
 
     output = BytesIO()
     with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
-        df.to_excel(writer, index=False, sheet_name="Modelo_OS")
+        df_modelo.to_excel(writer, index=False, sheet_name="Modelo_OS")
+        df_ajuda.to_excel(writer, index=False, sheet_name="Instrucoes_Ajuda")
+
+        workbook = writer.book
+        worksheet_modelo = writer.sheets["Modelo_OS"]
+        aplicar_validacao_campos_id(
+            workbook,
+            worksheet_modelo,
+            ATENDIMENTO_COLUNAS,
+            ATENDIMENTO_COLUNAS_ID,
+        )
 
     output.seek(0)
     registrar_auditoria_integracao(
@@ -243,7 +330,7 @@ def download_modelo_atendimento(request):
         action="download_modelo",
         usuario=request.user,
         arquivo_nome="Modelo_Importacao_OS_IXC.xlsx",
-        detalhes={"colunas": colunas},
+        detalhes={"colunas": ATENDIMENTO_COLUNAS, "campos_id_numericos": ATENDIMENTO_COLUNAS_ID},
     )
     response = HttpResponse(
         output.read(),
@@ -296,7 +383,10 @@ def atendimento_import(request):
 
             for index, linha in df.iterrows():
                 if pd.notna(linha.get("Cliente_ID")):
-                    status, mensagem = executar_abertura_atendimento(linha)
+                    status, mensagem = executar_abertura_atendimento(
+                        linha,
+                        usuario_sistema=request.user,
+                    )
 
                     if status:
                         sucessos += 1
@@ -312,7 +402,7 @@ def atendimento_import(request):
                             "status": "sucesso" if status else "erro",
                             "mensagem": mensagem,
                             "id_ixc": "",
-                            "dados_json": {str(k).strip(): linha[k] for k in df.columns if k in linha},
+                            "dados_json": serializar_linha_para_auditoria(df, index),
                         }
                     )
 

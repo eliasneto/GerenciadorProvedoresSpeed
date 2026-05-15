@@ -252,7 +252,14 @@
                     <input type="hidden" id="partnerFilterEstado">
                     <input type="hidden" id="partnerFilterCidade">
                     <p class="text-[11px] font-black uppercase tracking-[0.18em] text-gray-400 mb-3">3. Parceiros</p>
-                    <p class="text-[11px] font-bold text-gray-500">Os parceiros disponiveis ja sao carregados automaticamente para este endereco.</p>
+                    <div class="grid grid-cols-1 xl:grid-cols-[260px_minmax(0,1fr)] gap-3">
+                        <label class="flex items-center gap-3 px-4 py-3 bg-white border border-gray-100 rounded-2xl cursor-pointer">
+                            <input type="checkbox" id="partnerExpandSearchToggle" class="w-4 h-4 rounded border-gray-300 text-ageis-yellow focus:ring-ageis-yellow">
+                            <span class="text-[11px] font-black uppercase tracking-[0.14em] text-gray-600">Buscar fora da regiao</span>
+                        </label>
+                        <input type="text" id="partnerFilterQuery" placeholder="Ex: nome do provedor, Fortaleza ou CE" disabled class="w-full px-4 py-3 bg-white border border-gray-100 rounded-2xl outline-none focus:ring-2 focus:ring-ageis-yellow transition-all font-bold text-gray-800 uppercase disabled:bg-gray-100 disabled:text-gray-400">
+                    </div>
+                    <p id="partnerFilterHelpText" class="text-[11px] font-bold text-gray-500 mt-3">Por padrao, os parceiros sao filtrados pela regiao do endereco. Se nao aparecer ninguem, marque a opcao acima para buscar por nome, cidade, UF ou bairro.</p>
                 </section>
             </div>
         </div>
@@ -287,6 +294,7 @@
 let partnerProposalAddressId = null;
 let selectedLeadEmpresaId = null;
 let selectedLeadAddressIds = new Set();
+let partnerProposalSearchTimer = null;
 
 function leadSearchUrl() {
     return '/provedores/api/empresas/search/';
@@ -302,6 +310,27 @@ function partnerSearchUrl(addressId) {
 
 function partnerCreateUrl(addressId) {
     return `/provedores/enderecos/${addressId}/cotacoes/criar/`;
+}
+
+function setPartnerExpandedSearchMode(enabled) {
+    const toggle = document.getElementById('partnerExpandSearchToggle');
+    const input = document.getElementById('partnerFilterQuery');
+    const helpText = document.getElementById('partnerFilterHelpText');
+
+    if (toggle) {
+        toggle.checked = enabled;
+    }
+    if (input) {
+        input.disabled = !enabled;
+        if (!enabled) {
+            input.value = '';
+        }
+    }
+    if (helpText) {
+        helpText.innerText = enabled
+            ? 'Busca ampla ativa. Agora voce pode procurar por nome do provedor ou por referencias de regiao como cidade, UF ou bairro.'
+            : 'Por padrao, os parceiros sao filtrados pela regiao do endereco. Se nao aparecer ninguem, marque a opcao acima para buscar por nome, cidade, UF ou bairro.';
+    }
 }
 
 function syncLeadAddressInputs() {
@@ -352,10 +381,7 @@ function openPartnerProposalModal(button) {
     document.getElementById('partnerFilterEstado').value = estado;
     document.getElementById('partnerFilterCidade').value = cidade;
     selectedLeadAddressIds = new Set();
-    const partnerFilterInput = document.getElementById('partnerFilterQuery');
-    if (partnerFilterInput) {
-        partnerFilterInput.value = '';
-    }
+    setPartnerExpandedSearchMode(false);
     document.getElementById('leadFilterQuery').value = '';
     document.getElementById('selectedLeadAddressId').value = '';
     document.getElementById('leadSelectedBadge').innerText = '--';
@@ -383,6 +409,7 @@ function closePartnerProposalModal() {
     document.getElementById('selectedLeadAddressInputs').innerHTML = '';
     document.getElementById('leadAddressSection').classList.add('hidden');
     document.getElementById('leadSelectedBadge').innerText = '--';
+    setPartnerExpandedSearchMode(false);
     selectedLeadEmpresaId = null;
     partnerProposalAddressId = null;
     selectedLeadAddressIds = new Set();
@@ -505,6 +532,7 @@ function selectLeadAddress(leadEnderecoId) {
 async function loadPartnerProposalOptions() {
     if (!partnerProposalAddressId) return;
 
+    const buscaAmpla = document.getElementById('partnerExpandSearchToggle')?.checked;
     const estado = document.getElementById('partnerFilterEstado').value.trim();
     const cidade = document.getElementById('partnerFilterCidade').value.trim();
     const partnerFilterInput = document.getElementById('partnerFilterQuery');
@@ -516,8 +544,12 @@ async function loadPartnerProposalOptions() {
     list.innerHTML = '<div class="px-4 py-10 text-center text-sm font-bold text-gray-400 uppercase">Carregando...</div>';
 
     const url = new URL(partnerSearchUrl(partnerProposalAddressId), window.location.origin);
-    if (estado) url.searchParams.set('estado', estado);
-    if (cidade) url.searchParams.set('cidade', cidade);
+    if (buscaAmpla) {
+        url.searchParams.set('busca_ampla', '1');
+    } else {
+        if (estado) url.searchParams.set('estado', estado);
+        if (cidade) url.searchParams.set('cidade', cidade);
+    }
     if (q) url.searchParams.set('q', q);
 
     const response = await fetch(url.toString(), {
@@ -525,14 +557,25 @@ async function loadPartnerProposalOptions() {
     });
     const data = await response.json();
     const resultados = data.resultados || [];
+    const buscaAmplaAtiva = Boolean(data.busca_ampla_ativa);
 
-    summary.innerText = `${resultados.length} parceiro(s) encontrado(s).`;
+    if (buscaAmplaAtiva) {
+        summary.innerText = q
+            ? `${resultados.length} parceiro(s) encontrado(s) na busca ampla por "${q}".`
+            : `${resultados.length} parceiro(s) encontrado(s) na busca ampla.`;
+    } else {
+        summary.innerText = `${resultados.length} parceiro(s) encontrado(s) para a regiao deste endereco.`;
+    }
 
     if (!resultados.length) {
         list.innerHTML = `
             <div class="px-4 py-10 text-center">
                 <p class="text-sm font-black uppercase italic text-gray-500">Nenhum parceiro encontrado</p>
-                <p class="text-xs font-bold text-gray-400 mt-2">Ajuste a busca para encontrar o parceiro correto.</p>
+                <p class="text-xs font-bold text-gray-400 mt-2">${
+                    buscaAmplaAtiva
+                        ? 'Tente buscar por outro nome, cidade, UF ou bairro.'
+                        : 'Marque "Buscar fora da regiao" para procurar por nome do provedor ou outra regiao.'
+                }</p>
             </div>
         `;
         return;
@@ -564,6 +607,26 @@ async function loadPartnerProposalOptions() {
 document.getElementById('leadFilterQuery').addEventListener('input', function () {
     window.clearTimeout(window.leadProposalSearchTimer);
     window.leadProposalSearchTimer = window.setTimeout(() => loadLeadProposalOptions(), 250);
+});
+
+document.getElementById('partnerExpandSearchToggle').addEventListener('change', function () {
+    setPartnerExpandedSearchMode(this.checked);
+    loadPartnerProposalOptions();
+    if (this.checked) {
+        document.getElementById('partnerFilterQuery').focus();
+    }
+});
+
+document.getElementById('partnerFilterQuery').addEventListener('input', function () {
+    window.clearTimeout(partnerProposalSearchTimer);
+    partnerProposalSearchTimer = window.setTimeout(() => loadPartnerProposalOptions(), 250);
+});
+
+document.getElementById('partnerFilterQuery').addEventListener('keydown', function (event) {
+    if (event.key === 'Enter') {
+        event.preventDefault();
+        loadPartnerProposalOptions();
+    }
 });
 
 document.getElementById('partnerProposalCreateForm').addEventListener('submit', function (event) {

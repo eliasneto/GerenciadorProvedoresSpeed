@@ -1,6 +1,7 @@
 import subprocess
 
 from django.contrib import admin, messages
+from django.contrib.admin.sites import NotRegistered
 from django.http import HttpResponseRedirect
 from django.urls import path
 from django.utils.http import urlencode
@@ -53,6 +54,7 @@ class HistoricoSincronizacaoAdmin(admin.ModelAdmin):
     list_filter = ('status', 'tipo', 'origem')
     readonly_fields = ('data_inicio', 'data_fim', 'status', 'origem', 'executado_por', 'registros_processados', 'detalhes')
     change_list_template = "admin/historico_botoes.html"
+    change_form_template = "admin/historico_sincronizacao_change_form.html"
     actions = ['parar_sincronizacao']
 
     def get_urls(self):
@@ -255,3 +257,13 @@ class EnderecoExcluidoAdmin(admin.ModelAdmin):
     search_fields = ('cliente_excluido__razao_social', 'login_ixc', 'agent_circuit_id')
     readonly_fields = ('cliente_excluido', 'login_ixc', 'agent_circuit_id', 'detalhes_json')
     ordering = ('-id',)
+
+
+for modelo in (
+    HistoricoSincronizacao,
+    LogAlteracaoIXC,
+):
+    try:
+        admin.site.unregister(modelo)
+    except NotRegistered:
+        pass
