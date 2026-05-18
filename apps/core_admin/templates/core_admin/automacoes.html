@@ -137,12 +137,60 @@
             </form>
         </div>
 
-        <div class="bg-gray-50 p-8 rounded-[2rem] border border-gray-200 border-dashed flex flex-col items-center justify-center text-center opacity-70 hidden lg:flex">
-            <div class="w-12 h-12 bg-gray-200 rounded-2xl flex items-center justify-center mb-4">
-                <i data-lucide="zap" class="w-6 h-6 text-gray-400"></i>
+        <div class="bg-white p-8 rounded-[2rem] shadow-xl border border-gray-100 flex flex-col relative overflow-hidden transition-all hover:shadow-2xl">
+            <div class="flex items-center gap-4 mb-6">
+                <div class="w-12 h-12 bg-gray-900 rounded-2xl flex items-center justify-center shadow-md">
+                    <i data-lucide="user-round-plus" class="w-6 h-6 text-ageis-yellow"></i>
+                </div>
+                <div>
+                    <h2 class="text-lg font-black text-gray-900 uppercase italic tracking-tight">Cadastro de Cliente IXC</h2>
+                    <p class="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Criacao administrativa em massa</p>
+                </div>
             </div>
-            <h2 class="text-sm font-black text-gray-400 uppercase italic tracking-tight mb-2">Novo Recurso</h2>
-            <p class="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Em desenvolvimento</p>
+
+            <div class="border-2 border-dashed border-gray-200 rounded-2xl p-4 text-center mb-6 bg-gray-50/50">
+                <a href="{% url 'download_template_cadastro_cliente_ixc' %}" class="inline-flex items-center gap-2 text-[10px] font-black text-gray-900 hover:text-ageis-yellow transition-colors uppercase tracking-widest">
+                    <i data-lucide="download" class="w-3 h-3"></i> Baixar Planilha Modelo
+                </a>
+                <p class="mt-3 text-[10px] font-bold uppercase tracking-widest text-gray-400">
+                    {% if ultimo_cadastro_cliente_ixc %}
+                        Ultima auditoria: {{ ultimo_cadastro_cliente_ixc.total_sucessos }} sucessos e {{ ultimo_cadastro_cliente_ixc.total_erros }} erros.
+                    {% else %}
+                        Razao_Social, CNPJ_CPF e confirmacao obrigatorios.
+                    {% endif %}
+                </p>
+            </div>
+
+            <form id="cadastroClienteIxcForm" method="POST" enctype="multipart/form-data" class="space-y-6 flex-1 flex flex-col justify-end" action="{% url 'cadastrar_clientes_ixc' %}">
+                {% csrf_token %}
+
+                <div>
+                    <label class="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Arquivo de Clientes</label>
+                    <input type="file" name="arquivo_cadastro_cliente_ixc" id="cadastroClienteIxcFile" accept=".xlsx,.xls,.csv" required class="hidden">
+
+                    <label for="cadastroClienteIxcFile" class="flex items-center w-full bg-gray-50 border border-gray-100 rounded-xl cursor-pointer hover:bg-gray-100 transition-all overflow-hidden group">
+                        <div class="bg-gray-900 text-ageis-yellow group-hover:text-white text-[10px] font-black uppercase tracking-wider py-3 px-4 shadow-sm transition-all flex items-center gap-2">
+                            <i data-lucide="upload-cloud" class="w-3 h-3"></i> Planilha
+                        </div>
+                        <span id="cadastroClienteIxcFileName" class="text-xs font-medium text-gray-500 px-4 truncate flex-1">Nenhum arquivo...</span>
+                    </label>
+                </div>
+
+                <div id="cadastroClienteIxcLoading" class="hidden flex flex-col items-center justify-center gap-3 mt-4 py-2">
+                    <div class="w-6 h-6 border-4 border-gray-100 border-t-ageis-yellow rounded-full animate-spin"></div>
+                    <span class="text-[10px] font-black uppercase tracking-widest text-gray-500">Cadastrando Clientes...</span>
+                </div>
+
+                <div id="cadastroClienteIxcSuccess" class="hidden flex items-center justify-center gap-2 mt-4 bg-green-50 border border-green-100 py-3 px-4 rounded-xl">
+                    <i data-lucide="check-circle" class="w-5 h-5 text-green-500"></i>
+                    <span class="text-[10px] font-black uppercase tracking-widest text-green-700">Relatorio Baixado!</span>
+                </div>
+
+                <button id="cadastroClienteIxcSubmit" type="submit" class="w-full bg-ageis-black hover:bg-gray-900 text-ageis-yellow font-black uppercase italic tracking-widest py-4 rounded-2xl shadow-lg transition-all flex items-center justify-center gap-2 group mt-auto">
+                    <i data-lucide="play" class="w-4 h-4 group-hover:scale-110 transition-transform"></i>
+                    Cadastrar Clientes
+                </button>
+            </form>
         </div>
 
     </div>
@@ -212,6 +260,12 @@
         const desativacaoSubmit = document.getElementById('desativacaoSubmit');
         const desativacaoLoading = document.getElementById('desativacaoLoading');
         const desativacaoSuccess = document.getElementById('desativacaoSuccess');
+        const cadastroClienteIxcForm = document.getElementById('cadastroClienteIxcForm');
+        const cadastroClienteIxcFile = document.getElementById('cadastroClienteIxcFile');
+        const cadastroClienteIxcFileName = document.getElementById('cadastroClienteIxcFileName');
+        const cadastroClienteIxcSubmit = document.getElementById('cadastroClienteIxcSubmit');
+        const cadastroClienteIxcLoading = document.getElementById('cadastroClienteIxcLoading');
+        const cadastroClienteIxcSuccess = document.getElementById('cadastroClienteIxcSuccess');
 
         if (leadImportFile && leadImportFileName) {
             leadImportFile.addEventListener('change', function (e) {
@@ -222,6 +276,12 @@
         if (desativacaoFile && desativacaoFileName) {
             desativacaoFile.addEventListener('change', function (e) {
                 desativacaoFileName.textContent = e.target.files[0] ? e.target.files[0].name : 'Nenhum arquivo...';
+            });
+        }
+
+        if (cadastroClienteIxcFile && cadastroClienteIxcFileName) {
+            cadastroClienteIxcFile.addEventListener('change', function (e) {
+                cadastroClienteIxcFileName.textContent = e.target.files[0] ? e.target.files[0].name : 'Nenhum arquivo...';
             });
         }
 
@@ -299,6 +359,56 @@
                     setTimeout(() => {
                         desativacaoSuccess.classList.add('hidden');
                         desativacaoSubmit.classList.remove('hidden');
+                    }, 5000);
+                } catch (error) {
+                    window.location.reload();
+                }
+            });
+        }
+
+        if (cadastroClienteIxcForm && cadastroClienteIxcFile && cadastroClienteIxcSubmit) {
+            cadastroClienteIxcForm.addEventListener('submit', async function (e) {
+                e.preventDefault();
+                if (!cadastroClienteIxcFile.files || !cadastroClienteIxcFile.files.length) {
+                    return;
+                }
+
+                cadastroClienteIxcSubmit.classList.add('hidden');
+                cadastroClienteIxcSuccess.classList.add('hidden');
+                cadastroClienteIxcLoading.classList.remove('hidden');
+
+                try {
+                    const formData = new FormData(cadastroClienteIxcForm);
+                    const response = await fetch(cadastroClienteIxcForm.action, {
+                        method: 'POST',
+                        body: formData,
+                        headers: { 'X-Requested-With': 'XMLHttpRequest' }
+                    });
+
+                    const contentType = response.headers.get('content-type') || '';
+                    if (!response.ok || !contentType.includes('spreadsheetml')) {
+                        window.location.reload();
+                        return;
+                    }
+
+                    const blob = await response.blob();
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = 'Relatorio_Cadastro_Clientes_IXC.xlsx';
+                    document.body.appendChild(a);
+                    a.click();
+                    a.remove();
+                    window.URL.revokeObjectURL(url);
+
+                    cadastroClienteIxcLoading.classList.add('hidden');
+                    cadastroClienteIxcSuccess.classList.remove('hidden');
+                    cadastroClienteIxcForm.reset();
+                    cadastroClienteIxcFileName.textContent = 'Nenhum arquivo...';
+
+                    setTimeout(() => {
+                        cadastroClienteIxcSuccess.classList.add('hidden');
+                        cadastroClienteIxcSubmit.classList.remove('hidden');
                     }, 5000);
                 } catch (error) {
                     window.location.reload();

@@ -15,6 +15,7 @@ from core.models import IntegrationAuditItem
 from scripts.integracoes.backoffice.desativar_atendimento_ixc import executar_desativacao_atendimento
 
 from .models import (
+    CadastroClienteIXCAuditoria,
     CotacaoStatusAuditoria,
     EmailCotacaoRespostaImportacaoAuditoria,
     EmailCotacaoRespostaSyncAuditoria,
@@ -126,6 +127,12 @@ class IntegrationAuditItemInline(admin.TabularInline):
 
 @admin.register(IntegrationAuditAuditoria)
 class IntegrationAuditAuditoriaAdmin(IntegrationAuditExportAdminMixin, admin.ModelAdmin):
+    integration_audit_title = "Logs de Integracoes"
+    integration_audit_eyebrow = "Auditoria central"
+    integration_audit_subtitle = (
+        "Acompanhe os logs tecnicos das automacoes, filtre por integracao ou acao "
+        "e exporte os itens processados em formato estruturado."
+    )
     list_display = (
         "integration",
         "action",
@@ -135,6 +142,7 @@ class IntegrationAuditAuditoriaAdmin(IntegrationAuditExportAdminMixin, admin.Mod
         "total_sucessos",
         "total_erros",
         "criado_em",
+        "exportacoes_disponiveis",
     )
     list_filter = ("integration", "action", "criado_em")
     search_fields = ("usuario__username", "arquivo_nome")
@@ -151,6 +159,38 @@ class IntegrationAuditItemAuditoriaAdmin(admin.ModelAdmin):
     readonly_fields = ("audit", "linha_numero", "status", "mensagem", "dados_json", "criado_em")
 
 
+@admin.register(CadastroClienteIXCAuditoria)
+class CadastroClienteIXCAuditoriaAdmin(IntegrationAuditExportAdminMixin, admin.ModelAdmin):
+    integration_code = "cadastro_cliente_ixc"
+    integration_audit_title = "Cadastro de Clientes IXC"
+    integration_audit_eyebrow = "Automacao administrativa"
+    integration_audit_subtitle = (
+        "Consulte as importacoes e execucoes do cadastro em massa de clientes no IXC, "
+        "com exportacao estruturada para analise por linha."
+    )
+    integration_audit_note = (
+        "Use os botoes de exportacao para baixar os resultados ja abertos em colunas no CSV ou no Excel."
+    )
+    list_display = (
+        "arquivo_nome",
+        "action",
+        "total_registros",
+        "total_sucessos",
+        "total_erros",
+        "usuario",
+        "criado_em",
+        "exportacoes_disponiveis",
+    )
+    list_filter = ("action", "criado_em")
+    search_fields = ("usuario__username", "arquivo_nome")
+    fields = IntegrationAuditExportAdminMixin.integration_audit_fields
+    readonly_fields = IntegrationAuditExportAdminMixin.integration_audit_fields
+    inlines = [IntegrationAuditItemInline]
+
+    def get_queryset(self, request):
+        return super().get_queryset(request).filter(integration=self.integration_code)
+
+
 @admin.register(DesativacaoAtendimentoIXCAuditoria)
 class DesativacaoAtendimentoIXCAuditoriaAdmin(IntegrationAuditExportAdminMixin, admin.ModelAdmin):
     integration_code = "desativacao_atendimento_ixc"
@@ -162,6 +202,7 @@ class DesativacaoAtendimentoIXCAuditoriaAdmin(IntegrationAuditExportAdminMixin, 
         "total_erros",
         "usuario",
         "criado_em",
+        "exportacoes_disponiveis",
     )
     search_fields = ("usuario__username", "arquivo_nome")
     fields = IntegrationAuditExportAdminMixin.integration_audit_fields

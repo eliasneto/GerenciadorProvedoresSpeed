@@ -1,3 +1,4 @@
+from io import BytesIO
 from unittest.mock import Mock, patch
 
 import pandas as pd
@@ -6,6 +7,9 @@ from django.http import HttpResponse
 from django.test import RequestFactory, SimpleTestCase
 
 from apps.core_admin.views import (
+    _ler_dataframe_upload,
+    cadastrar_clientes_ixc,
+    download_template_cadastro_cliente_ixc,
     desativar_atendimentos_ixc,
     download_template_desativacao_atendimento,
     import_prospects,
@@ -22,17 +26,20 @@ class CoreAdminViewsTests(SimpleTestCase):
 
     @patch("apps.core_admin.views.render")
     @patch("apps.core_admin.views._buscar_ultima_desativacao")
+    @patch("apps.core_admin.views._buscar_ultimo_cadastro_cliente_ixc")
     @patch("apps.core_admin.views.buscar_ultima_importacao")
     @patch("apps.core_admin.views.buscar_importacao_em_andamento")
     def test_import_prospects_renderiza_central_automacoes(
         self,
         mock_andamento,
         mock_ultima,
+        mock_ultimo_cadastro_cliente_ixc,
         mock_ultima_desativacao,
         mock_render,
     ):
         mock_andamento.return_value = None
         mock_ultima.return_value = None
+        mock_ultimo_cadastro_cliente_ixc.return_value = None
         mock_ultima_desativacao.return_value = None
         mock_render.return_value = HttpResponse("ok")
 
@@ -57,6 +64,51 @@ class CoreAdminViewsTests(SimpleTestCase):
             response["Content-Disposition"],
         )
         mock_auditoria.assert_called_once()
+
+    @patch("apps.core_admin.views.registrar_auditoria_integracao")
+    def test_download_template_cadastro_cliente_ixc_retorna_planilha(self, mock_auditoria):
+        request = self.factory.get("/administracao/clientes/cadastro-ixc/modelo/")
+        request.user = self.user
+
+        response = download_template_cadastro_cliente_ixc(request)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(
+            "attachment; filename=Modelo_Cadastro_Clientes_IXC.xlsx",
+            response["Content-Disposition"],
+        )
+        planilhas = pd.read_excel(BytesIO(response.content), sheet_name=None)
+        modelo = planilhas["Modelo_Cadastro_Cliente_IXC"]
+        ajuda = planilhas["Instrucoes_Ajuda"]
+        self.assertIn("Tipo_Cliente_Fiscal", ajuda["Campo"].tolist())
+        self.assertIn("Tipo_Assinante_ID", ajuda["Campo"].tolist())
+        self.assertIn("Tipo_Cliente_Fiscal", "".join(ajuda["Campo"].tolist()))
+        self.assertIn("Razao_Social*", modelo.columns)
+        self.assertIn("CNPJ_CPF*", modelo.columns)
+        self.assertIn("Confirmar_Cadastro*", modelo.columns)
+        self.assertIn("Tipo_Cliente_Fiscal", modelo.columns)
+        self.assertNotIn("Classificacao_ISS", modelo.columns)
+        linha_tipo_assinante = ajuda.loc[ajuda["Campo"] == "Tipo_Assinante_ID"].iloc[0]
+        self.assertIn("Residencial/Pessoa Fisica", linha_tipo_assinante["Regras / Exemplo"])
+        mock_auditoria.assert_called_once()
+
+    def test_ler_dataframe_upload_remove_asterisco_dos_campos_obrigatorios(self):
+        conteudo = BytesIO()
+        pd.DataFrame(
+            [{"Razao_Social*": "CLIENTE TESTE", "CNPJ_CPF*": "12345678000199", "Confirmar_Cadastro*": "SIM"}]
+        ).to_excel(conteudo, index=False)
+        arquivo = SimpleUploadedFile(
+            "cadastro_clientes.xlsx",
+            conteudo.getvalue(),
+            content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+
+        df = _ler_dataframe_upload(arquivo)
+
+        self.assertListEqual(
+            list(df.columns),
+            ["Razao_Social", "CNPJ_CPF", "Confirmar_Cadastro"],
+        )
 
     @patch("apps.core_admin.views._ler_dataframe_upload")
     @patch("apps.core_admin.views.registrar_auditoria_integracao")
@@ -92,6 +144,45 @@ class CoreAdminViewsTests(SimpleTestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn(
             "attachment; filename=Relatorio_Desativacao_Atendimentos_IXC.xlsx",
+            response["Content-Disposition"],
+        )
+        mock_executar.assert_called_once()
+        self.assertEqual(mock_auditoria.call_count, 2)
+
+    @patch("apps.core_admin.views._ler_dataframe_upload")
+    @patch("apps.core_admin.views.registrar_auditoria_integracao")
+    @patch("apps.core_admin.views.executar_cadastro_cliente_ixc")
+    def test_cadastrar_clientes_ixc_processa_planilha_e_retorna_relatorio(
+        self,
+        mock_executar,
+        mock_auditoria,
+        mock_ler_dataframe,
+    ):
+        mock_executar.return_value = (
+            True,
+            "Cliente cadastrado com sucesso.",
+            "9988",
+        )
+        mock_ler_dataframe.return_value = pd.DataFrame(
+            [{"Razao_Social": "CLIENTE TESTE", "CNPJ_CPF": "12345678000199", "Confirmar_Cadastro": "SIM"}]
+        )
+
+        arquivo = SimpleUploadedFile(
+            "cadastro_clientes.csv",
+            b"Razao_Social,CNPJ_CPF,Confirmar_Cadastro\nCLIENTE TESTE,12345678000199,SIM\n",
+            content_type="text/csv",
+        )
+        request = self.factory.post(
+            "/administracao/clientes/cadastro-ixc/",
+            {"arquivo_cadastro_cliente_ixc": arquivo},
+        )
+        request.user = self.user
+
+        response = cadastrar_clientes_ixc(request)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(
+            "attachment; filename=Relatorio_Cadastro_Clientes_IXC.xlsx",
             response["Content-Disposition"],
         )
         mock_executar.assert_called_once()
