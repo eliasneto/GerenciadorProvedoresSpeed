@@ -1,15 +1,25 @@
 import base64
 import json
 import os
+import unicodedata
+from pathlib import Path
 
 import requests
+from dotenv import load_dotenv
 
 from scripts.integracoes.ixc_client import IXCClient
 from scripts.integracoes.ixc_finalizacao_service import buscar_os_por_id, normalizar_texto, primeiro_preenchido
 
 
-IXC_PANEL_EMAIL = os.getenv("IXC_PANEL_EMAIL", "").strip()
-IXC_PANEL_PASSWORD = os.getenv("IXC_PANEL_PASSWORD", "").strip()
+load_dotenv(Path(__file__).resolve().parents[2] / ".env", override=False)
+
+
+def _painel_email_env():
+    return os.getenv("IXC_PANEL_EMAIL", "").strip()
+
+
+def _painel_password_env():
+    return os.getenv("IXC_PANEL_PASSWORD", "").strip()
 
 
 def _panel_base_url():
@@ -17,70 +27,218 @@ def _panel_base_url():
     return client.base_url.replace("/webservice/v1", "").rstrip("/")
 
 
+def _cabecalhos_navegacao():
+    return {
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/148.0.0.0 Safari/537.36 Edg/148.0.0.0"
+        ),
+        "Accept": (
+            "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,"
+            "image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7"
+        ),
+        "Accept-Language": "pt-BR,pt;q=0.9,en;q=0.8,en-GB;q=0.7,en-US;q=0.6",
+    }
+
+
+def _cabecalhos_login_api(base_url):
+    return {
+        "User-Agent": _cabecalhos_navegacao()["User-Agent"],
+        "Accept": "*/*",
+        "Accept-Language": _cabecalhos_navegacao()["Accept-Language"],
+        "Origin": base_url,
+        "Referer": f"{base_url}/app/login",
+    }
+
+
+def _parse_response_json(response):
+    try:
+        return response.json()
+    except Exception:
+        try:
+            return json.loads(response.text)
+        except Exception:
+            return {"raw": response.text}
+
+
+def _extrair_tipo_autenticacao(body):
+    if not isinstance(body, dict):
+        return ""
+    if isinstance(body.get("data"), dict):
+        return normalizar_texto(body["data"].get("type")).lower()
+    return normalizar_texto(body.get("type")).lower()
+
+
+def _resposta_autenticacao_ok(body):
+    if not isinstance(body, dict):
+        return False
+
+    status = normalizar_texto(body.get("status")).lower()
+    if status and status not in {"0", "false"}:
+        return True
+
+    tipo = _extrair_tipo_autenticacao(body)
+    return tipo in {"password", "redirect", "token"}
+
+
+def _goto_local_autenticacao(body):
+    if not isinstance(body, dict):
+        return ""
+    goto = body.get("goto")
+    if isinstance(goto, dict):
+        return normalizar_texto(goto.get("local"))
+    return ""
+
+
+def _texto_simples(valor):
+    texto = normalizar_texto(valor)
+    return unicodedata.normalize("NFKD", texto).encode("ascii", "ignore").decode("ascii").lower()
+
+
+def _mensagem_autenticacao(body):
+    if not isinstance(body, dict):
+        return ""
+
+    mensagens = body.get("messages")
+    if isinstance(mensagens, list):
+        partes = []
+        for item in mensagens:
+            if isinstance(item, dict):
+                texto = normalizar_texto(item.get("body") or item.get("message"))
+                if texto:
+                    partes.append(texto)
+        if partes:
+            return " | ".join(partes)
+
+    return normalizar_texto(body.get("message") or body.get("error"))
+
+
 def _sessao_painel_ixc(email=None, password=None):
-    email = normalizar_texto(email) or IXC_PANEL_EMAIL
-    password = normalizar_texto(password) or IXC_PANEL_PASSWORD
+    email = normalizar_texto(email) or _painel_email_env()
+    password = normalizar_texto(password) or _painel_password_env()
 
     if not email or not password:
         return None, {
             "ok": False,
-            "message": "Informe Usuario IXC e Senha IXC para enviar anexos ao atendimento no IXC.",
+            "message": "Informe Usuario IXC e Senha IXC para autenticar no painel web do IXC.",
         }
 
     base_url = _panel_base_url()
     client = IXCClient()
     session = requests.Session()
+    login_url = f"{base_url}/api-module/auth/login"
 
-    response = session.post(
-        f"{base_url}/api-module/auth/login",
-        json={
-            "email": email,
-            "password": password,
-        },
+    pagina_login = session.get(
+        f"{base_url}/app/login",
+        headers=_cabecalhos_navegacao(),
         verify=client.verify_ssl,
         timeout=client.timeout,
     )
-
-    try:
-        body = response.json()
-    except Exception:
-        body = {"raw": response.text}
-
-    sucesso = False
-    if isinstance(body, dict):
-        status = normalizar_texto(body.get("status"))
-        if status and status not in {"0", "false", "False"}:
-            sucesso = True
-        elif "token" in body or "redirect" in body:
-            sucesso = True
-
-    if not sucesso:
+    cookies_apos_login = session.cookies.get_dict()
+    if not cookies_apos_login.get("IXC_Session"):
         return None, {
             "ok": False,
-            "message": "Falha ao autenticar no painel do IXC para envio do anexo.",
-            "status_code": response.status_code,
-            "body": body,
+            "message": "Falha ao iniciar a sessao do painel web do IXC na tela /app/login.",
+            "status_code": pagina_login.status_code,
+            "body": pagina_login.text[:500],
+            "cookies": list(cookies_apos_login.keys()),
         }
 
+    resposta_email = session.post(
+        login_url,
+        files={"email": (None, email)},
+        headers=_cabecalhos_login_api(base_url),
+        verify=client.verify_ssl,
+        timeout=client.timeout,
+    )
+    body_email = _parse_response_json(resposta_email)
+    if not _resposta_autenticacao_ok(body_email):
+        return None, {
+            "ok": False,
+            "message": "Falha ao validar o e-mail no login do painel do IXC.",
+            "status_code": resposta_email.status_code,
+            "body": body_email,
+            "cookies": list(session.cookies.get_dict().keys()),
+        }
+
+    tipo_email = _extrair_tipo_autenticacao(body_email)
+    body_final = body_email
+    resposta_final = resposta_email
+
+    if tipo_email == "password":
+        resposta_password = session.post(
+            login_url,
+            files={"password": (None, password)},
+            headers=_cabecalhos_login_api(base_url),
+            verify=client.verify_ssl,
+            timeout=client.timeout,
+        )
+        body_password = _parse_response_json(resposta_password)
+        tipo_password = _extrair_tipo_autenticacao(body_password)
+        mensagem_password = _texto_simples(_mensagem_autenticacao(body_password))
+
+        # O IXC pode devolver "sessao ativa" na primeira tentativa e aceitar a
+        # segunda submissao da senha na mesma sessao web.
+        if (
+            (not _resposta_autenticacao_ok(body_password) or tipo_password not in {"redirect", "token"})
+            and "ja existe uma sessao ativa" in mensagem_password
+        ):
+            resposta_password = session.post(
+                login_url,
+                files={"password": (None, password)},
+                headers=_cabecalhos_login_api(base_url),
+                verify=client.verify_ssl,
+                timeout=client.timeout,
+            )
+            body_password = _parse_response_json(resposta_password)
+            tipo_password = _extrair_tipo_autenticacao(body_password)
+
+        if not _resposta_autenticacao_ok(body_password) or tipo_password not in {"redirect", "token"}:
+            return None, {
+                "ok": False,
+                "message": "Falha ao validar a senha no login do painel do IXC.",
+                "status_code": resposta_password.status_code,
+                "body": body_password,
+                "cookies": list(session.cookies.get_dict().keys()),
+            }
+        body_final = body_password
+        resposta_final = resposta_password
+
+    goto_local = _goto_local_autenticacao(body_final) or "/adm.php"
+    if not goto_local.startswith("/"):
+        goto_local = f"/{goto_local}"
+
+    pagina_admin = session.get(
+        f"{base_url}{goto_local}",
+        headers={**_cabecalhos_navegacao(), "Referer": f"{base_url}/app/login"},
+        verify=client.verify_ssl,
+        timeout=client.timeout,
+        allow_redirects=True,
+    )
+
     cookies = session.cookies.get_dict()
-    possui_sessao_web = bool(cookies.get("IXC_Session"))
-    if not possui_sessao_web:
+    pagina_admin_url = normalizar_texto(getattr(pagina_admin, "url", ""))
+    pagina_admin_texto = normalizar_texto(getattr(pagina_admin, "text", ""))[:500].lower()
+    possui_sessao_web = bool(cookies.get("IXC_Session")) and "/app/login" not in pagina_admin_url
+    if not possui_sessao_web or "<title>login" in pagina_admin_texto:
         return None, {
             "ok": False,
             "message": (
-                "O IXC respondeu ao login, mas nao abriu uma sessao web valida para upload de anexos. "
-                "Isso normalmente acontece quando o endpoint de login retorna token/redirect sem criar a cookie IXC_Session."
+                "O IXC respondeu ao login, mas nao concluiu a navegacao autenticada ate o painel /adm.php."
             ),
-            "status_code": response.status_code,
-            "body": body,
+            "status_code": pagina_admin.status_code,
+            "body": body_final,
             "cookies": list(cookies.keys()),
+            "pagina_final": pagina_admin_url,
         }
 
     return session, {
         "ok": True,
-        "status_code": response.status_code,
-        "body": body,
+        "status_code": resposta_final.status_code,
+        "body": body_final,
         "cookies": list(cookies.keys()),
+        "pagina_final": pagina_admin_url,
     }
 
 

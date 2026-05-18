@@ -1,0 +1,310 @@
+{% extends "core/base.html" %}
+
+{% block title %}Speed | Central de Automacoes{% endblock %}
+
+{% block content %}
+<div class="min-h-[80vh] px-4 py-8 max-w-7xl mx-auto">
+
+    <div class="text-center mb-12">
+        <div class="w-16 h-16 bg-ageis-yellow rounded-full flex items-center justify-center mx-auto mb-4 shadow-lg border-4 border-white">
+            <i data-lucide="cpu" class="w-8 h-8 text-black"></i>
+        </div>
+        <h1 class="text-3xl font-black text-gray-900 italic uppercase tracking-tighter">Central de Automacoes</h1>
+        <p class="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-2">Administracao</p>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+
+        <div class="bg-white p-8 rounded-[2rem] shadow-xl border border-gray-100 flex flex-col relative overflow-hidden transition-all hover:shadow-2xl">
+            <div class="flex items-center gap-4 mb-6">
+                <div class="w-12 h-12 bg-gray-900 rounded-2xl flex items-center justify-center shadow-md">
+                    <i data-lucide="database" class="w-6 h-6 text-ageis-yellow"></i>
+                </div>
+                <div>
+                    <h2 class="text-lg font-black text-gray-900 uppercase italic tracking-tight">Importador de Provedores</h2>
+                    <p class="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Importacao em segundo plano</p>
+                </div>
+            </div>
+
+            <div class="border-2 border-dashed border-gray-200 rounded-2xl p-4 text-center mb-6 bg-gray-50/50">
+                <a href="{% url 'download_template' %}" class="inline-flex items-center gap-2 text-[10px] font-black text-gray-900 hover:text-ageis-yellow transition-colors uppercase tracking-widest">
+                    <i data-lucide="download" class="w-3 h-3"></i> Baixar Planilha Modelo
+                </a>
+                <p class="mt-3 text-[10px] font-bold uppercase tracking-widest text-gray-400">
+                    {% if importacao_em_andamento %}
+                        {{ importacao_em_andamento.arquivo_nome }} em andamento.
+                    {% elif ultima_importacao %}
+                        Ultima execucao: {{ ultima_importacao.status_execucao }}.
+                    {% else %}
+                        Razao_Social obrigatorio. O restante segue o modelo padrao de leads.
+                    {% endif %}
+                </p>
+            </div>
+
+            <form id="leadImportForm" method="POST" enctype="multipart/form-data" class="space-y-6 flex-1 flex flex-col justify-end" action="{% url 'import_prospects' %}">
+                {% csrf_token %}
+
+                <div>
+                    <label class="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Arquivo de Provedores</label>
+                    <input type="file" name="file" id="leadImportFile" accept=".xlsx,.xls,.csv" required {% if importacao_em_andamento %}disabled{% endif %} class="hidden">
+
+                    <label for="leadImportFile" class="flex items-center w-full bg-gray-50 border border-gray-100 rounded-xl cursor-pointer hover:bg-gray-100 transition-all overflow-hidden group {% if importacao_em_andamento %}opacity-60 cursor-not-allowed{% endif %}">
+                        <div class="bg-gray-900 text-ageis-yellow group-hover:text-white text-[10px] font-black uppercase tracking-wider py-3 px-4 shadow-sm transition-all flex items-center gap-2">
+                            <i data-lucide="upload-cloud" class="w-3 h-3"></i> Planilha
+                        </div>
+                        <span id="leadImportFileName" class="text-xs font-medium text-gray-500 px-4 truncate flex-1">Nenhum arquivo...</span>
+                    </label>
+                </div>
+
+                {% if importacao_em_andamento %}
+                <div class="flex flex-col items-center justify-center gap-3 mt-4 py-2">
+                    <div class="w-6 h-6 border-4 border-gray-100 border-t-ageis-yellow rounded-full animate-spin"></div>
+                    <span class="text-[10px] font-black uppercase tracking-widest text-gray-500">Importacao em andamento...</span>
+                </div>
+                {% endif %}
+
+                <button id="leadImportSubmit" type="submit" {% if importacao_em_andamento %}disabled{% endif %} class="w-full bg-ageis-black hover:bg-gray-900 text-ageis-yellow font-black uppercase italic tracking-widest py-4 rounded-2xl shadow-lg transition-all flex items-center justify-center gap-2 group mt-auto disabled:opacity-60 disabled:cursor-not-allowed">
+                    <i data-lucide="{% if importacao_em_andamento %}loader-circle{% else %}play{% endif %}" class="w-4 h-4 {% if importacao_em_andamento %}animate-spin{% else %}group-hover:scale-110 transition-transform{% endif %}"></i>
+                    <span id="leadImportSubmitText">{% if importacao_em_andamento %}Importacao em andamento{% else %}Iniciar Importacao{% endif %}</span>
+                </button>
+            </form>
+
+            {% if importacao_em_andamento %}
+            <form id="stopImportForm" method="POST" action="{% url 'import_prospects' %}" class="mt-4">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="stop">
+                <button id="stopImportButton" type="submit" class="w-full inline-flex items-center justify-center gap-2 rounded-2xl bg-rose-600 px-5 py-3 text-xs font-black uppercase tracking-widest text-white shadow-sm hover:bg-rose-700 transition-all">
+                    <i data-lucide="octagon-x" class="w-4 h-4"></i>
+                    Parar Importacao
+                </button>
+            </form>
+            {% endif %}
+        </div>
+
+        <div class="bg-white p-8 rounded-[2rem] shadow-xl border border-gray-100 flex flex-col relative overflow-hidden transition-all hover:shadow-2xl">
+            <div class="flex items-center gap-4 mb-6">
+                <div class="w-12 h-12 bg-gray-900 rounded-2xl flex items-center justify-center shadow-md">
+                    <i data-lucide="power" class="w-6 h-6 text-ageis-yellow"></i>
+                </div>
+                <div>
+                    <h2 class="text-lg font-black text-gray-900 uppercase italic tracking-tight">Desativacao de Atendimento IXC</h2>
+                    <p class="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Finalizacao administrativa em massa</p>
+                </div>
+            </div>
+
+            <div class="border-2 border-dashed border-gray-200 rounded-2xl p-4 text-center mb-6 bg-gray-50/50">
+                <a href="{% url 'download_template_desativacao_atendimento' %}" class="inline-flex items-center gap-2 text-[10px] font-black text-gray-900 hover:text-ageis-yellow transition-colors uppercase tracking-widest">
+                    <i data-lucide="download" class="w-3 h-3"></i> Baixar Planilha Modelo
+                </a>
+                <p class="mt-3 text-[10px] font-bold uppercase tracking-widest text-gray-400">
+                    {% if ultima_desativacao %}
+                        Ultima auditoria: {{ ultima_desativacao.total_sucessos }} sucessos e {{ ultima_desativacao.total_erros }} erros.
+                    {% else %}
+                        Atendimento_ID obrigatorio. O sistema fecha todas as O.S. abertas.
+                    {% endif %}
+                </p>
+            </div>
+
+            <form id="desativacaoForm" method="POST" enctype="multipart/form-data" class="space-y-6 flex-1 flex flex-col justify-end" action="{% url 'desativar_atendimentos_ixc' %}">
+                {% csrf_token %}
+
+                <div>
+                    <label class="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Arquivo de Desativacao</label>
+                    <input type="file" name="arquivo_desativacao_atendimento" id="desativacaoFile" accept=".xlsx,.xls,.csv" required class="hidden">
+
+                    <label for="desativacaoFile" class="flex items-center w-full bg-gray-50 border border-gray-100 rounded-xl cursor-pointer hover:bg-gray-100 transition-all overflow-hidden group">
+                        <div class="bg-gray-900 text-ageis-yellow group-hover:text-white text-[10px] font-black uppercase tracking-wider py-3 px-4 shadow-sm transition-all flex items-center gap-2">
+                            <i data-lucide="upload-cloud" class="w-3 h-3"></i> Planilha
+                        </div>
+                        <span id="desativacaoFileName" class="text-xs font-medium text-gray-500 px-4 truncate flex-1">Nenhum arquivo...</span>
+                    </label>
+                </div>
+
+                <div id="desativacaoLoading" class="hidden flex flex-col items-center justify-center gap-3 mt-4 py-2">
+                    <div class="w-6 h-6 border-4 border-gray-100 border-t-ageis-yellow rounded-full animate-spin"></div>
+                    <span class="text-[10px] font-black uppercase tracking-widest text-gray-500">Finalizando Atendimentos...</span>
+                </div>
+
+                <div id="desativacaoSuccess" class="hidden flex items-center justify-center gap-2 mt-4 bg-green-50 border border-green-100 py-3 px-4 rounded-xl">
+                    <i data-lucide="check-circle" class="w-5 h-5 text-green-500"></i>
+                    <span class="text-[10px] font-black uppercase tracking-widest text-green-700">Relatorio Baixado!</span>
+                </div>
+
+                <button id="desativacaoSubmit" type="submit" class="w-full bg-ageis-black hover:bg-gray-900 text-ageis-yellow font-black uppercase italic tracking-widest py-4 rounded-2xl shadow-lg transition-all flex items-center justify-center gap-2 group mt-auto">
+                    <i data-lucide="play" class="w-4 h-4 group-hover:scale-110 transition-transform"></i>
+                    Finalizar Atendimentos
+                </button>
+            </form>
+        </div>
+
+        <div class="bg-gray-50 p-8 rounded-[2rem] border border-gray-200 border-dashed flex flex-col items-center justify-center text-center opacity-70 hidden lg:flex">
+            <div class="w-12 h-12 bg-gray-200 rounded-2xl flex items-center justify-center mb-4">
+                <i data-lucide="zap" class="w-6 h-6 text-gray-400"></i>
+            </div>
+            <h2 class="text-sm font-black text-gray-400 uppercase italic tracking-tight mb-2">Novo Recurso</h2>
+            <p class="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Em desenvolvimento</p>
+        </div>
+
+    </div>
+</div>
+
+<div id="leadImportLoadingOverlay" class="fixed inset-0 bg-black/45 backdrop-blur-sm z-[999] hidden">
+    <div class="min-h-screen flex items-center justify-center px-6">
+        <div class="w-full max-w-xl bg-white rounded-[2rem] shadow-2xl border border-gray-100 p-8 md:p-10">
+            <div class="flex items-center gap-4 mb-6">
+                <div class="w-14 h-14 rounded-[1.25rem] bg-ageis-yellow flex items-center justify-center shadow-lg">
+                    <i data-lucide="database-zap" class="w-7 h-7 text-black"></i>
+                </div>
+                <div>
+                    <h2 class="text-xl font-black uppercase italic text-gray-900">Importacao em andamento</h2>
+                    <p class="text-xs font-bold uppercase tracking-widest text-gray-400 mt-1">A importacao foi enviada para o processamento em segundo plano</p>
+                </div>
+            </div>
+
+            <div class="rounded-2xl border border-gray-100 bg-gray-50 p-5 space-y-4">
+                <div class="flex items-center justify-between gap-4">
+                    <span class="text-sm font-bold text-gray-700">Preparando fila da importacao</span>
+                    <span class="text-[10px] font-black uppercase tracking-widest text-ageis-yellow bg-ageis-black px-3 py-1 rounded-full">Rodando</span>
+                </div>
+
+                <div class="w-full h-3 bg-white rounded-full overflow-hidden border border-gray-100">
+                    <div class="lead-import-indeterminate h-full rounded-full"></div>
+                </div>
+
+                <p class="text-xs text-gray-500 font-medium leading-relaxed">
+                    A tela volta sozinha para o acompanhamento real da importacao, sem deixar outra execucao comecar em paralelo.
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<style>
+    .lead-import-indeterminate {
+        width: 38%;
+        background: linear-gradient(90deg, #facc15 0%, #f59e0b 100%);
+        animation: lead-import-slide 1.15s ease-in-out infinite;
+    }
+
+    @keyframes lead-import-slide {
+        0% { transform: translateX(-120%); }
+        100% { transform: translateX(320%); }
+    }
+</style>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        const leadImportForm = document.getElementById('leadImportForm');
+        const leadImportFile = document.getElementById('leadImportFile');
+        const leadImportFileName = document.getElementById('leadImportFileName');
+        const leadImportSubmit = document.getElementById('leadImportSubmit');
+        const leadImportSubmitText = document.getElementById('leadImportSubmitText');
+        const leadImportOverlay = document.getElementById('leadImportLoadingOverlay');
+        const importacaoEmAndamento = {{ importacao_em_andamento|yesno:"true,false" }};
+        const stopImportForm = document.getElementById('stopImportForm');
+        const stopImportButton = document.getElementById('stopImportButton');
+
+        const desativacaoForm = document.getElementById('desativacaoForm');
+        const desativacaoFile = document.getElementById('desativacaoFile');
+        const desativacaoFileName = document.getElementById('desativacaoFileName');
+        const desativacaoSubmit = document.getElementById('desativacaoSubmit');
+        const desativacaoLoading = document.getElementById('desativacaoLoading');
+        const desativacaoSuccess = document.getElementById('desativacaoSuccess');
+
+        if (leadImportFile && leadImportFileName) {
+            leadImportFile.addEventListener('change', function (e) {
+                leadImportFileName.textContent = e.target.files[0] ? e.target.files[0].name : 'Nenhum arquivo...';
+            });
+        }
+
+        if (desativacaoFile && desativacaoFileName) {
+            desativacaoFile.addEventListener('change', function (e) {
+                desativacaoFileName.textContent = e.target.files[0] ? e.target.files[0].name : 'Nenhum arquivo...';
+            });
+        }
+
+        if (importacaoEmAndamento) {
+            window.setTimeout(function () {
+                window.location.reload();
+            }, 10000);
+        }
+
+        if (leadImportForm && leadImportFile && leadImportSubmit && leadImportSubmitText && leadImportOverlay) {
+            leadImportForm.addEventListener('submit', function () {
+                if (!leadImportFile.files || !leadImportFile.files.length) {
+                    return;
+                }
+
+                leadImportSubmit.disabled = true;
+                leadImportFile.disabled = true;
+                leadImportSubmitText.textContent = 'Enviando para fila...';
+                leadImportOverlay.classList.remove('hidden');
+                document.body.classList.add('overflow-hidden');
+            });
+        }
+
+        if (stopImportForm && stopImportButton) {
+            stopImportForm.addEventListener('submit', function () {
+                stopImportButton.disabled = true;
+                stopImportButton.classList.add('opacity-70', 'cursor-not-allowed');
+                stopImportButton.innerHTML = '<i data-lucide="loader-circle" class="w-4 h-4 animate-spin"></i> Interrompendo...';
+                if (window.lucide) {
+                    window.lucide.createIcons();
+                }
+            });
+        }
+
+        if (desativacaoForm && desativacaoFile && desativacaoSubmit) {
+            desativacaoForm.addEventListener('submit', async function (e) {
+                e.preventDefault();
+                if (!desativacaoFile.files || !desativacaoFile.files.length) {
+                    return;
+                }
+
+                desativacaoSubmit.classList.add('hidden');
+                desativacaoSuccess.classList.add('hidden');
+                desativacaoLoading.classList.remove('hidden');
+
+                try {
+                    const formData = new FormData(desativacaoForm);
+                    const response = await fetch(desativacaoForm.action, {
+                        method: 'POST',
+                        body: formData,
+                        headers: { 'X-Requested-With': 'XMLHttpRequest' }
+                    });
+
+                    const contentType = response.headers.get('content-type') || '';
+                    if (!response.ok || !contentType.includes('spreadsheetml')) {
+                        window.location.reload();
+                        return;
+                    }
+
+                    const blob = await response.blob();
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = 'Relatorio_Desativacao_Atendimentos_IXC.xlsx';
+                    document.body.appendChild(a);
+                    a.click();
+                    a.remove();
+                    window.URL.revokeObjectURL(url);
+
+                    desativacaoLoading.classList.add('hidden');
+                    desativacaoSuccess.classList.remove('hidden');
+                    desativacaoForm.reset();
+                    desativacaoFileName.textContent = 'Nenhum arquivo...';
+
+                    setTimeout(() => {
+                        desativacaoSuccess.classList.add('hidden');
+                        desativacaoSubmit.classList.remove('hidden');
+                    }, 5000);
+                } catch (error) {
+                    window.location.reload();
+                }
+            });
+        }
+    });
+</script>
+{% endblock %}

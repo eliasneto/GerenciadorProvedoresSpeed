@@ -2,6 +2,16 @@
 
 Este arquivo registra as versoes publicadas do sistema e os principais itens adicionados ou alterados em cada release.
 
+## v1.5.0 - 2026-05-15
+
+Adicionado:
+- automacao administrativa para desativacao/finalizacao de atendimentos no IXC via planilha no Django Admin, com modelo dedicado, confirmacao obrigatoria por linha, auditoria e relatorio final exportavel
+
+Melhorado:
+- fluxo administrativo do IXC ajustado para finalizar a O.S. vinculada e encerrar o atendimento sem apagar historico
+- modelo de planilha de desativacao de atendimento IXC com `Atendimento_ID`, `OS_ID` opcional, `Mensagem` opcional e `Confirmar_Desativacao`
+- area administrativa reorganizada para exibir uma Central de Automações no mesmo estilo do Backoffice, reunindo o importador de provedores e a desativacao de atendimentos IXC
+
 ## v1.4.0 - 2026-05-15
 
 Adicionado:

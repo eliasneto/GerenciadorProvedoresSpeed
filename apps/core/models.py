@@ -125,6 +125,7 @@ class IntegrationAudit(models.Model):
     INTEGRATION_CHOICES = [
         ("logins_ixc", "Logins IXC"),
         ("atendimento_ixc", "Atendimento IXC"),
+        ("desativacao_atendimento_ixc", "Desativacao de Atendimento IXC"),
         ("buscar_fornecedores", "Buscar Fornecedores"),
         ("importador_leads", "Importador de Leads"),
     ]

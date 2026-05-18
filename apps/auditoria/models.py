@@ -167,6 +167,14 @@ class IntegrationAuditItemAuditoria(IntegrationAuditItem):
         verbose_name_plural = "Itens do Log de Integracao"
 
 
+class DesativacaoAtendimentoIXCAuditoria(IntegrationAudit):
+    class Meta:
+        proxy = True
+        app_label = "auditoria"
+        verbose_name = "Desativacao de Atendimento IXC"
+        verbose_name_plural = "Desativacao de Atendimentos IXC"
+
+
 class HistoricoSincronizacaoAuditoria(HistoricoSincronizacao):
     class Meta:
         proxy = True

@@ -85,3 +85,20 @@ class IXCClient:
             body = {"raw": response.text}
 
         return response.status_code, body
+
+    def delete(self, endpoint, payload=None):
+        url = f"{self.base_url}/{str(endpoint).lstrip('/')}"
+        response = requests.delete(
+            url,
+            headers=self.headers_write,
+            data=json.dumps(payload or {}),
+            verify=self.verify_ssl,
+            timeout=self.timeout,
+        )
+
+        try:
+            body = response.json()
+        except Exception:
+            body = {"raw": response.text}
+
+        return response.status_code, body
