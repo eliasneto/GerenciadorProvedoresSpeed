@@ -175,6 +175,14 @@ class DesativacaoAtendimentoIXCAuditoria(IntegrationAudit):
         verbose_name_plural = "Desativacao de Atendimentos IXC"
 
 
+class CadastroClienteIXCAuditoria(IntegrationAudit):
+    class Meta:
+        proxy = True
+        app_label = "auditoria"
+        verbose_name = "Cadastro de Cliente IXC"
+        verbose_name_plural = "Cadastro de Clientes IXC"
+
+
 class HistoricoSincronizacaoAuditoria(HistoricoSincronizacao):
     class Meta:
         proxy = True

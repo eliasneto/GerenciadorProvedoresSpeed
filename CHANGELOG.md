@@ -12,6 +12,12 @@ Melhorado:
 - modelo de planilha de desativacao de atendimento IXC com `Atendimento_ID`, `OS_ID` opcional, `Mensagem` opcional e `Confirmar_Desativacao`
 - area administrativa reorganizada para exibir uma Central de Automações no mesmo estilo do Backoffice, reunindo o importador de provedores e a desativacao de atendimentos IXC
 
+- nova automacao administrativa para cadastro de clientes em massa no IXC, com planilha modelo, auditoria, relatorio final e tratamento de duplicidade por CNPJ/CPF
+- auditoria administrativa de `Cadastro de Clientes IXC` adicionada como secao dedicada no Django Admin, com exportacao `CSV` e `Excel`
+- exportacoes de auditoria das automacoes padronizadas para abrir os dados em colunas no `Excel` e no `CSV`, removendo duplicacao visual de `JSON` bruto e consolidando metadados do resumo
+- telas de auditoria de integracoes padronizadas no Django Admin, com cabecalho contextual, acoes de exportacao mais limpas e remocao do botao manual de adicionar logs
+- modelo da planilha de cadastro de clientes IXC refinado com `*` vermelho nos campos obrigatorios, legenda para `Tipo_Assinante_ID` e nome mais claro `Tipo_Cliente_Fiscal`
+
 ## v1.4.0 - 2026-05-15
 
 Adicionado:

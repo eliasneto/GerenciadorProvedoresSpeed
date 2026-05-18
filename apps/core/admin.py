@@ -90,6 +90,7 @@ class IntegrationAuditAdmin(IntegrationAuditExportAdminMixin, admin.ModelAdmin):
         "total_sucessos",
         "total_erros",
         "criado_em",
+        "exportacoes_disponiveis",
     )
     list_filter = ("integration", "action", "criado_em")
     search_fields = ("usuario__username", "arquivo_nome")

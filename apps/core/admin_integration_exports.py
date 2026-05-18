@@ -1,6 +1,7 @@
 import csv
 import json
 from io import BytesIO
+from itertools import count
 
 import pandas as pd
 from django.core.exceptions import PermissionDenied
@@ -38,12 +39,73 @@ def _ordered_item_data_columns(audit, items):
     for item in items:
         if not isinstance(item.dados_json, dict):
             continue
-        for coluna in item.dados_json.keys():
+        for coluna in _flatten_mapping(item.dados_json).keys():
             coluna_texto = str(coluna or "").strip()
             if coluna_texto and coluna_texto not in ordered:
                 ordered.append(coluna_texto)
 
     return ordered
+
+
+def _flatten_mapping(value, prefix=""):
+    flattened = {}
+
+    def _next_key(base_key, child_key):
+        child_key = str(child_key or "").strip()
+        if not base_key:
+            return child_key
+        if not child_key:
+            return base_key
+        return f"{base_key}_{child_key}"
+
+    def _visit(current_value, current_prefix):
+        if isinstance(current_value, dict):
+            for key, nested_value in current_value.items():
+                _visit(nested_value, _next_key(current_prefix, key))
+            return
+
+        if isinstance(current_value, (list, tuple)):
+            if not current_value:
+                flattened[current_prefix] = ""
+                return
+            for index, nested_value in zip(count(1), current_value):
+                _visit(nested_value, _next_key(current_prefix, index))
+            return
+
+        flattened[current_prefix] = current_value
+
+    if isinstance(value, dict):
+        for key, nested_value in value.items():
+            _visit(nested_value, _next_key(prefix, key))
+        return flattened
+
+    if prefix:
+        _visit(value, prefix)
+    return flattened
+
+
+def _build_resumo_details_columns(audit):
+    detalhes = audit.detalhes_json if isinstance(audit.detalhes_json, dict) else {}
+    detalhes_flat = {}
+
+    colunas = detalhes.get("colunas")
+    if isinstance(colunas, list):
+        colunas_limpas = [str(coluna).strip() for coluna in colunas if str(coluna or "").strip()]
+        if colunas_limpas:
+            detalhes_flat["Colunas_Auditadas"] = ", ".join(colunas_limpas)
+
+    for chave, valor in detalhes.items():
+        if chave == "colunas":
+            continue
+        chave_texto = str(chave or "").strip()
+        if not chave_texto:
+            continue
+        if isinstance(valor, (dict, list, tuple)):
+            detalhes_flat.update(_flatten_mapping(valor, prefix=f"Detalhe_{chave_texto}"))
+        else:
+            detalhes_flat[f"Detalhe_{chave_texto}"] = valor
+
+    return detalhes_flat
 
 
 def build_integration_audit_export(audit):
@@ -52,6 +114,8 @@ def build_integration_audit_export(audit):
 
     itens = []
     for item in items:
+        dados_json = item.dados_json if isinstance(item.dados_json, dict) else {}
+        dados_flat = _flatten_mapping(dados_json)
         linha = {
             "Log_ID": audit.pk,
             "Integracao": audit.get_integration_display(),
@@ -62,18 +126,14 @@ def build_integration_audit_export(audit):
             "Status": item.get_status_display(),
             "Mensagem": item.mensagem or "",
             "Criado_Em_Item": _format_datetime(item.criado_em),
-            "Dados_JSON_Bruto": _json_dump(item.dados_json),
         }
 
-        dados_json = item.dados_json if isinstance(item.dados_json, dict) else {}
         for coluna in item_columns:
-            valor = dados_json.get(coluna, "")
-            if isinstance(valor, (dict, list)):
-                valor = _json_dump(valor)
-            linha[coluna] = valor
+            linha[coluna] = dados_flat.get(coluna, "")
 
         itens.append(linha)
 
+    detalhes_flat = _build_resumo_details_columns(audit)
     resumo = [
         {
             "Log_ID": audit.pk,
@@ -85,7 +145,7 @@ def build_integration_audit_export(audit):
             "Total_Sucessos": audit.total_sucessos,
             "Total_Erros": audit.total_erros,
             "Criado_Em_Log": _format_datetime(audit.criado_em),
-            "Detalhes_JSON_Bruto": _json_dump(audit.detalhes_json),
+            **detalhes_flat,
         }
     ]
 
@@ -93,6 +153,7 @@ def build_integration_audit_export(audit):
 
 
 class IntegrationAuditExportAdminMixin:
+    change_list_template = "admin/integration_audit_change_list.html"
     integration_audit_fields = (
         "integration",
         "action",
@@ -105,6 +166,27 @@ class IntegrationAuditExportAdminMixin:
         "criado_em",
         "exportacoes_disponiveis",
     )
+
+    integration_audit_title = "Logs de Integracao"
+    integration_audit_eyebrow = "Auditoria tecnica"
+    integration_audit_subtitle = (
+        "Consulte os logs gerados pelas automacoes, acompanhe sucessos e erros por arquivo "
+        "e exporte os itens tratados em CSV ou Excel."
+    )
+    integration_audit_note = (
+        "Os arquivos exportados abrem cada dado em sua propria coluna para facilitar a analise."
+    )
+
+    def has_add_permission(self, request):
+        return False
+
+    def changelist_view(self, request, extra_context=None):
+        extra_context = extra_context or {}
+        extra_context.setdefault("integration_audit_title", self.integration_audit_title)
+        extra_context.setdefault("integration_audit_eyebrow", self.integration_audit_eyebrow)
+        extra_context.setdefault("integration_audit_subtitle", self.integration_audit_subtitle)
+        extra_context.setdefault("integration_audit_note", self.integration_audit_note)
+        return super().changelist_view(request, extra_context=extra_context)
 
     def get_urls(self):
         opts = self.model._meta
@@ -148,7 +230,6 @@ class IntegrationAuditExportAdminMixin:
             "Status",
             "Mensagem",
             "Criado_Em_Item",
-            "Dados_JSON_Bruto",
         ]
 
         writer = csv.DictWriter(response, fieldnames=headers)
@@ -160,8 +241,18 @@ class IntegrationAuditExportAdminMixin:
     def _exportar_excel(self, nome_base, resumo, itens):
         output = BytesIO()
         with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
-            pd.DataFrame(resumo).to_excel(writer, sheet_name="Resumo", index=False)
             pd.DataFrame(itens).to_excel(writer, sheet_name="Itens", index=False)
+            pd.DataFrame(resumo).to_excel(writer, sheet_name="Resumo", index=False)
+
+            for sheet_name, dataframe in {
+                "Itens": pd.DataFrame(itens),
+                "Resumo": pd.DataFrame(resumo),
+            }.items():
+                worksheet = writer.sheets[sheet_name]
+                for col_num, column_name in enumerate(dataframe.columns):
+                    serie = dataframe[column_name].fillna("").astype(str) if not dataframe.empty else pd.Series([column_name])
+                    largura = max(len(str(column_name)), serie.map(len).max())
+                    worksheet.set_column(col_num, col_num, min(max(largura + 2, 14), 60))
 
         response = HttpResponse(
             output.getvalue(),
@@ -183,8 +274,10 @@ class IntegrationAuditExportAdminMixin:
             args=[obj.pk, "xlsx"],
         )
         return format_html(
-            '<a class="button" href="{}">Exportar CSV</a>&nbsp;'
-            '<a class="button" href="{}">Exportar Excel</a>',
+            '<div class="integration-export-actions">'
+            '<a class="integration-export-actions__button integration-export-actions__button--csv" href="{}">CSV</a>'
+            '<a class="integration-export-actions__button integration-export-actions__button--excel" href="{}">Excel</a>'
+            "</div>",
             url_csv,
             url_xlsx,
         )

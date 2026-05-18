@@ -7,6 +7,12 @@ from scripts.integracoes.backoffice.cria_atendimento_ixc import (
     executar_abertura_atendimento,
     normalizar_id_numerico,
 )
+from scripts.integracoes.backoffice.cadastrar_cliente_ixc import (
+    executar_cadastro_cliente_ixc,
+    inferir_tipo_pessoa,
+    normalizar_confirmacao_cadastro,
+    resolver_cidade_ixc,
+)
 from scripts.integracoes.backoffice.desativar_atendimento_ixc import (
     executar_desativacao_atendimento,
     listar_os_para_desativacao,
@@ -243,6 +249,109 @@ class DesativacaoAtendimentoIXCTests(SimpleTestCase):
         registros = listar_os_para_desativacao("5313")
 
         self.assertEqual([registro["id"] for registro in registros], ["6399", "6401"])
+
+
+class CadastroClienteIXCTests(SimpleTestCase):
+    def test_confirmacao_cadastro_aceita_sim(self):
+        confirmado, erro = normalizar_confirmacao_cadastro("SIM")
+
+        self.assertTrue(confirmado)
+        self.assertIsNone(erro)
+
+    def test_inferir_tipo_pessoa_por_documento(self):
+        self.assertEqual(inferir_tipo_pessoa("123.456.789-01"), "F")
+        self.assertEqual(inferir_tipo_pessoa("12.345.678/0001-99"), "J")
+
+    @patch("scripts.integracoes.backoffice.cadastrar_cliente_ixc._listar_registros")
+    def test_resolver_cidade_ixc_valida_id_existente(self, mock_listar):
+        mock_listar.side_effect = [
+            [{"id": "887", "cidade": "FORTALEZA", "uf": "CE"}],
+        ]
+
+        cidade_id, erro = resolver_cidade_ixc("887")
+
+        self.assertEqual(cidade_id, "887")
+        self.assertIsNone(erro)
+
+    @patch("scripts.integracoes.backoffice.cadastrar_cliente_ixc.resolver_cidade_ixc")
+    @patch("scripts.integracoes.backoffice.cadastrar_cliente_ixc.buscar_cliente_por_cnpj_cpf")
+    def test_executar_cadastro_retorna_sucesso_quando_cliente_ja_existe(
+        self,
+        mock_buscar_cliente,
+        mock_resolver_cidade,
+    ):
+        mock_resolver_cidade.return_value = ("887", None)
+        mock_buscar_cliente.return_value = {"id": "4455", "razao": "CLIENTE TESTE"}
+
+        status, mensagem, cliente_ixc_id = executar_cadastro_cliente_ixc(
+            {
+                "Razao_Social": "CLIENTE TESTE",
+                "CNPJ_CPF": "12.345.678/0001-99",
+                "Cidade_ID_IXC": 887,
+                "Confirmar_Cadastro": "SIM",
+            }
+        )
+
+        self.assertTrue(status)
+        self.assertEqual(cliente_ixc_id, "4455")
+        self.assertIn("ja existente", mensagem)
+
+    @patch("scripts.integracoes.backoffice.cadastrar_cliente_ixc.buscar_cliente_por_razao_social")
+    @patch("scripts.integracoes.backoffice.cadastrar_cliente_ixc.buscar_cliente_por_cnpj_cpf")
+    @patch("scripts.integracoes.backoffice.cadastrar_cliente_ixc.IXCClient")
+    @patch("scripts.integracoes.backoffice.cadastrar_cliente_ixc.resolver_cidade_ixc")
+    def test_executar_cadastro_cria_cliente_com_payload_esperado(
+        self,
+        mock_resolver_cidade,
+        mock_ixc_client_cls,
+        mock_buscar_cliente,
+        mock_buscar_razao,
+    ):
+        mock_resolver_cidade.return_value = ("887", None)
+        mock_buscar_cliente.side_effect = [{}, {}]
+        mock_buscar_razao.return_value = {}
+        client = Mock()
+        client.escrever.return_value = (200, {"type": "success", "id": "9988"})
+        mock_ixc_client_cls.return_value = client
+
+        status, mensagem, cliente_ixc_id = executar_cadastro_cliente_ixc(
+            {
+                "Razao_Social": "CLIENTE TESTE LTDA",
+                "CNPJ_CPF": "12.345.678/0001-99",
+                "Nome_Fantasia": "CLIENTE TESTE",
+                "CEP": "60000-000",
+                "Endereco": "RUA A",
+                "Numero": "100",
+                "Bairro": "CENTRO",
+                "Cidade_ID_IXC": "887",
+                "Telefone": "(85) 99999-9999",
+                "Email": "teste@exemplo.com",
+                "Confirmar_Cadastro": "SIM",
+            }
+        )
+
+        self.assertTrue(status)
+        self.assertEqual(cliente_ixc_id, "9988")
+        self.assertIn("cadastrado com sucesso", mensagem)
+        payload = client.escrever.call_args.args[1]
+        self.assertEqual(client.escrever.call_args.args[0], "cliente")
+        self.assertEqual(payload["tipo_pessoa"], "J")
+        self.assertEqual(payload["cidade"], "887")
+        self.assertEqual(payload["cnpj_cpf"], "12.345.678/0001-99")
+
+    def test_executar_cadastro_bloqueia_sem_confirmacao(self):
+        status, mensagem, cliente_ixc_id = executar_cadastro_cliente_ixc(
+            {
+                "Razao_Social": "CLIENTE TESTE",
+                "CNPJ_CPF": "12.345.678/0001-99",
+                "Cidade_ID_IXC": 887,
+                "Confirmar_Cadastro": "NAO",
+            }
+        )
+
+        self.assertFalse(status)
+        self.assertEqual(cliente_ixc_id, "")
+        self.assertIn("Confirmar_Cadastro", mensagem)
 
 
 class SessaoPainelIXCTests(SimpleTestCase):

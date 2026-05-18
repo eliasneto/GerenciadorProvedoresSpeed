@@ -1,6 +1,7 @@
 from io import BytesIO
 import logging
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -31,6 +32,7 @@ from core.models import IntegrationAudit
 from core.views import grupo_Administrador_required
 from core_admin.models import ConfiguracaoEmailEnvio
 from auditoria.models import RestoreBackupAuditoria
+from scripts.integracoes.backoffice.cadastrar_cliente_ixc import executar_cadastro_cliente_ixc
 from scripts.integracoes.backoffice.desativar_atendimento_ixc import executar_desativacao_atendimento
 
 from .forms import BackupRestoreForm, ExcelUploadForm, SMTPTestForm
@@ -51,6 +53,7 @@ from .import_services import (
 
 logger = logging.getLogger(__name__)
 DESATIVACAO_ATENDIMENTO_INTEGRATION = "desativacao_atendimento_ixc"
+CADASTRO_CLIENTE_IXC_INTEGRATION = "cadastro_cliente_ixc"
 
 
 def _split_email_values(raw_value):
@@ -128,23 +131,50 @@ def _buscar_ultima_desativacao():
     )
 
 
+def _buscar_ultimo_cadastro_cliente_ixc():
+    return (
+        IntegrationAudit.objects.filter(
+            integration=CADASTRO_CLIENTE_IXC_INTEGRATION,
+            action="execucao_integracao",
+        )
+        .order_by("-criado_em")
+        .first()
+    )
+
+
 def _ler_dataframe_upload(arquivo):
+    def _normalizar_dataframe(dataframe):
+        dataframe = dataframe.copy()
+        dataframe.columns = [
+            re.sub(r"\s*\*\s*$", "", str(coluna).replace("\ufeff", "").strip())
+            for coluna in dataframe.columns
+        ]
+        return dataframe
+
     if arquivo.name.lower().endswith(".csv"):
         try:
-            return pd.read_csv(arquivo, sep=None, engine="python", encoding="utf-8")
+            return _normalizar_dataframe(
+                pd.read_csv(arquivo, sep=None, engine="python", encoding="utf-8")
+            )
         except UnicodeDecodeError:
             arquivo.seek(0)
-            return pd.read_csv(arquivo, sep=None, engine="python", encoding="latin1")
+            return _normalizar_dataframe(
+                pd.read_csv(arquivo, sep=None, engine="python", encoding="latin1")
+            )
 
     try:
-        return pd.read_excel(arquivo)
+        return _normalizar_dataframe(pd.read_excel(arquivo))
     except ValueError:
         arquivo.seek(0)
         try:
-            return pd.read_csv(arquivo, sep=None, engine="python", encoding="utf-8")
+            return _normalizar_dataframe(
+                pd.read_csv(arquivo, sep=None, engine="python", encoding="utf-8")
+            )
         except UnicodeDecodeError:
             arquivo.seek(0)
-            return pd.read_csv(arquivo, sep=None, engine="python", encoding="latin1")
+            return _normalizar_dataframe(
+                pd.read_csv(arquivo, sep=None, engine="python", encoding="latin1")
+            )
 
 
 def _serializar_linha_para_auditoria(dataframe, index):
@@ -163,6 +193,7 @@ def _render_importacao(request, form):
             "importacao_em_andamento": _serializar_importacao(importacao_em_andamento),
             "ultima_importacao": _serializar_importacao(ultima_importacao),
             "ultima_desativacao": _serializar_auditoria_planilha(_buscar_ultima_desativacao()),
+            "ultimo_cadastro_cliente_ixc": _serializar_auditoria_planilha(_buscar_ultimo_cadastro_cliente_ixc()),
             "import_status_running": IMPORT_STATUS_RUNNING,
             "import_status_success": IMPORT_STATUS_SUCCESS,
             "import_status_error": IMPORT_STATUS_ERROR,
@@ -668,6 +699,344 @@ def download_template_desativacao_atendimento(request):
 
 @user_passes_test(grupo_Administrador_required)
 @login_required
+def download_template_cadastro_cliente_ixc(request):
+    colunas = [
+        "Razao_Social",
+        "CNPJ_CPF",
+        "Nome_Fantasia",
+        "Tipo_Pessoa",
+        "IE_RG",
+        "Contribuinte_ICMS",
+        "Tipo_Cliente_Fiscal",
+        "Tipo_Localidade",
+        "CEP",
+        "Endereco",
+        "Numero",
+        "Bairro",
+        "Cidade_ID_IXC",
+        "Complemento",
+        "Referencia",
+        "Contato_Nome",
+        "Email",
+        "Telefone",
+        "Tipo_Cliente_ID",
+        "Tipo_Assinante_ID",
+        "Filial_ID",
+        "Vendedor_ID",
+        "Observacao",
+        "Ativo",
+        "Confirmar_Cadastro",
+    ]
+    campos_obrigatorios_planilha = {
+        "Razao_Social",
+        "CNPJ_CPF",
+        "CEP",
+        "Endereco",
+        "Bairro",
+        "Cidade_ID_IXC",
+        "Email",
+        "Telefone",
+        "Confirmar_Cadastro",
+    }
+    instrucoes_campos = [
+        {
+            "Campo": "Razao_Social",
+            "Descricao": "Nome ou razao social que sera cadastrado no cliente do IXC.",
+            "Tipo de dado": "Texto",
+            "Obrigatorio?": "Sim",
+            "Regras / Exemplo": "Ex.: CLIENTE TESTE LTDA",
+        },
+        {
+            "Campo": "CNPJ_CPF",
+            "Descricao": "Documento principal do cliente. O sistema usa para evitar duplicidade.",
+            "Tipo de dado": "Texto numerico",
+            "Obrigatorio?": "Sim",
+            "Regras / Exemplo": "Aceita CPF ou CNPJ, com ou sem mascara. Ex.: 12345678000199",
+        },
+        {
+            "Campo": "Nome_Fantasia",
+            "Descricao": "Nome fantasia do cliente no IXC.",
+            "Tipo de dado": "Texto",
+            "Obrigatorio?": "Nao",
+            "Regras / Exemplo": "Ex.: CLIENTE TESTE",
+        },
+        {
+            "Campo": "Tipo_Pessoa",
+            "Descricao": "Tipo de pessoa do cadastro.",
+            "Tipo de dado": "Texto curto",
+            "Obrigatorio?": "Nao na planilha / Sim no IXC",
+            "Regras / Exemplo": "Use F/PF para fisica ou J/PJ para juridica. Se vazio, a automacao infere pelo documento antes de enviar.",
+        },
+        {
+            "Campo": "IE_RG",
+            "Descricao": "Inscricao estadual ou RG do cliente.",
+            "Tipo de dado": "Texto",
+            "Obrigatorio?": "Nao",
+            "Regras / Exemplo": "Pode informar ISENTO quando aplicavel.",
+        },
+        {
+            "Campo": "Contribuinte_ICMS",
+            "Descricao": "Indica se o cliente e contribuinte de ICMS.",
+            "Tipo de dado": "Texto curto",
+            "Obrigatorio?": "Nao na planilha / Sim no IXC",
+            "Regras / Exemplo": "Use N para nao contribuinte, S para contribuinte ou I para isento. Se vazio, a automacao infere o valor antes de enviar.",
+        },
+        {
+            "Campo": "Tipo_Cliente_Fiscal",
+            "Descricao": "Tipo de cliente fiscal do IXC, enviado pela API como iss_classificacao_padrao.",
+            "Tipo de dado": "Numero inteiro",
+            "Obrigatorio?": "Nao na planilha / Sim no IXC",
+            "Regras / Exemplo": "Ex.: 01 Comercial, 03 Residencial/Pessoa Fisica, 99 Outros nao especificados anteriormente. Se vazio, a automacao envia 99.",
+        },
+        {
+            "Campo": "Tipo_Localidade",
+            "Descricao": "Tipo de localidade do endereco do cliente.",
+            "Tipo de dado": "Texto curto",
+            "Obrigatorio?": "Nao na planilha / Sim no IXC",
+            "Regras / Exemplo": "Valor homologado no teste: U. Se vazio, a automacao envia U.",
+        },
+        {
+            "Campo": "CEP",
+            "Descricao": "CEP do endereco principal do cliente.",
+            "Tipo de dado": "Texto numerico",
+            "Obrigatorio?": "Sim",
+            "Regras / Exemplo": "Aceita com ou sem mascara. Ex.: 60000-000",
+        },
+        {
+            "Campo": "Endereco",
+            "Descricao": "Logradouro do endereco principal.",
+            "Tipo de dado": "Texto",
+            "Obrigatorio?": "Sim",
+            "Regras / Exemplo": "Ex.: RUA EXEMPLO",
+        },
+        {
+            "Campo": "Numero",
+            "Descricao": "Numero do endereco principal.",
+            "Tipo de dado": "Texto",
+            "Obrigatorio?": "Nao na planilha / Sim no IXC",
+            "Regras / Exemplo": "Use somente numeros ou SN para sem numero. Se vazio, a automacao envia SN.",
+        },
+        {
+            "Campo": "Bairro",
+            "Descricao": "Bairro do endereco principal.",
+            "Tipo de dado": "Texto",
+            "Obrigatorio?": "Sim",
+            "Regras / Exemplo": "Ex.: CENTRO",
+        },
+        {
+            "Campo": "Cidade_ID_IXC",
+            "Descricao": "ID numerico da cidade cadastrada no IXC.",
+            "Tipo de dado": "Numero inteiro",
+            "Obrigatorio?": "Sim",
+            "Regras / Exemplo": "Use apenas o ID numerico da cidade no IXC. Ex.: 887",
+        },
+        {
+            "Campo": "Complemento",
+            "Descricao": "Complemento do endereco principal.",
+            "Tipo de dado": "Texto",
+            "Obrigatorio?": "Nao",
+            "Regras / Exemplo": "Ex.: SALA 02",
+        },
+        {
+            "Campo": "Referencia",
+            "Descricao": "Referencia adicional do endereco.",
+            "Tipo de dado": "Texto",
+            "Obrigatorio?": "Nao",
+            "Regras / Exemplo": "Ex.: PROXIMO AO SUPERMERCADO",
+        },
+        {
+            "Campo": "Contato_Nome",
+            "Descricao": "Nome do contato principal do cliente.",
+            "Tipo de dado": "Texto",
+            "Obrigatorio?": "Nao",
+            "Regras / Exemplo": "Ex.: JOAO SILVA",
+        },
+        {
+            "Campo": "Email",
+            "Descricao": "E-mail principal do cliente.",
+            "Tipo de dado": "Texto",
+            "Obrigatorio?": "Sim",
+            "Regras / Exemplo": "Ex.: contato@cliente.com.br",
+        },
+        {
+            "Campo": "Telefone",
+            "Descricao": "Telefone principal do cliente.",
+            "Tipo de dado": "Texto numerico",
+            "Obrigatorio?": "Sim",
+            "Regras / Exemplo": "Aceita com ou sem mascara. Ex.: 85999999999",
+        },
+        {
+            "Campo": "Tipo_Cliente_ID",
+            "Descricao": "ID do tipo de cliente ja cadastrado no IXC.",
+            "Tipo de dado": "Numero inteiro",
+            "Obrigatorio?": "Nao",
+            "Regras / Exemplo": "Use apenas o ID numerico do IXC.",
+        },
+        {
+            "Campo": "Tipo_Assinante_ID",
+            "Descricao": "ID do tipo de assinante no IXC.",
+            "Tipo de dado": "Numero inteiro",
+            "Obrigatorio?": "Nao na planilha / Sim no IXC",
+            "Regras / Exemplo": "Legenda comum: 1 Comercial/Industrial, 2 Poder Publico, 3 Residencial/Pessoa Fisica, 4 Publico, 5 Semi-Publico, 6 Outros. Se vazio, a automacao envia 3.",
+        },
+        {
+            "Campo": "Filial_ID",
+            "Descricao": "ID da filial do IXC associada ao cliente.",
+            "Tipo de dado": "Numero inteiro",
+            "Obrigatorio?": "Nao",
+            "Regras / Exemplo": "Use apenas o ID numerico do IXC.",
+        },
+        {
+            "Campo": "Vendedor_ID",
+            "Descricao": "ID do vendedor/responsavel no IXC.",
+            "Tipo de dado": "Numero inteiro",
+            "Obrigatorio?": "Nao",
+            "Regras / Exemplo": "Use apenas o ID numerico do IXC.",
+        },
+        {
+            "Campo": "Observacao",
+            "Descricao": "Observacao administrativa enviada para o cadastro do cliente.",
+            "Tipo de dado": "Texto",
+            "Obrigatorio?": "Nao",
+            "Regras / Exemplo": "Campo livre para observacoes internas.",
+        },
+        {
+            "Campo": "Ativo",
+            "Descricao": "Define se o cliente sera criado como ativo ou inativo.",
+            "Tipo de dado": "Texto curto",
+            "Obrigatorio?": "Nao na planilha / Sim no IXC",
+            "Regras / Exemplo": "Aceita S ou N. Se vazio, a automacao assume S antes de enviar.",
+        },
+        {
+            "Campo": "Confirmar_Cadastro",
+            "Descricao": "Confirmacao explicita para autorizar o cadastro em massa.",
+            "Tipo de dado": "Texto curto",
+            "Obrigatorio?": "Sim",
+            "Regras / Exemplo": "Digite exatamente SIM.",
+        },
+    ]
+    instrucoes = pd.DataFrame(
+        instrucoes_campos
+    )
+
+    output = BytesIO()
+    with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
+        df_modelo = pd.DataFrame(
+            [
+                {
+                    "Razao_Social": "Teste de Cadastro de clinete",
+                    "CNPJ_CPF": "123.456.789-09",
+                    "Nome_Fantasia": "Teste de Cadastro de clinete",
+                    "Tipo_Pessoa": "F",
+                    "IE_RG": "",
+                    "Contribuinte_ICMS": "N",
+                    "Tipo_Cliente_Fiscal": "99",
+                    "Tipo_Localidade": "U",
+                    "CEP": "60863-012",
+                    "Endereco": "Rua Canario",
+                    "Numero": "SN",
+                    "Bairro": "Messejana",
+                    "Cidade_ID_IXC": "948",
+                    "Complemento": "",
+                    "Referencia": "",
+                    "Contato_Nome": "",
+                    "Email": "teste.cadastro@exemplo.com.br",
+                    "Telefone": "(00) 00000-0000",
+                    "Tipo_Cliente_ID": "8",
+                    "Tipo_Assinante_ID": "3",
+                    "Filial_ID": "1",
+                    "Vendedor_ID": "",
+                    "Observacao": "Cliente criado via teste de cadastro em massa pela API.",
+                    "Ativo": "S",
+                    "Confirmar_Cadastro": "SIM",
+                }
+            ],
+            columns=colunas,
+        )
+        df_modelo.to_excel(writer, index=False, sheet_name="Modelo_Cadastro_Cliente_IXC")
+        instrucoes.to_excel(writer, index=False, sheet_name="Instrucoes_Ajuda")
+
+        workbook = writer.book
+        worksheet = writer.sheets["Modelo_Cadastro_Cliente_IXC"]
+        worksheet_ajuda = writer.sheets["Instrucoes_Ajuda"]
+        header_format = workbook.add_format({"bg_color": "#DCFCE7", "border": 1})
+        header_plain_format = workbook.add_format({"bold": True, "bg_color": "#DCFCE7", "border": 1})
+        header_text_format = workbook.add_format({"bold": True})
+        required_star_format = workbook.add_format({"bold": True, "font_color": "#DC2626"})
+        integer_format = workbook.add_format({"num_format": "0"})
+
+        for col_num, value in enumerate(colunas):
+            if value in campos_obrigatorios_planilha:
+                worksheet.write_rich_string(
+                    0,
+                    col_num,
+                    header_text_format,
+                    value,
+                    required_star_format,
+                    "*",
+                    header_format,
+                )
+            else:
+                worksheet.write(0, col_num, value, header_plain_format)
+            largura = 22
+            if value in {"Razao_Social", "Nome_Fantasia", "Endereco", "Observacao"}:
+                largura = 36
+            if value in {"Complemento", "Referencia", "Contato_Nome", "Email"}:
+                largura = 28
+            formato = integer_format if value in {"Cidade_ID_IXC", "Tipo_Cliente_ID", "Tipo_Assinante_ID", "Filial_ID", "Vendedor_ID", "Tipo_Cliente_Fiscal"} else None
+            worksheet.set_column(col_num, col_num, largura, formato)
+
+        larguras_ajuda = [24, 40, 18, 16, 55]
+        for col_num, largura in enumerate(larguras_ajuda):
+            worksheet_ajuda.set_column(col_num, col_num, largura)
+
+        worksheet.data_validation(
+            1,
+            23,
+            5000,
+            23,
+            {
+                "validate": "list",
+                "source": ["S", "N"],
+                "ignore_blank": True,
+                "input_title": "Ativo",
+                "input_message": "Deixe S para ativo ou N para inativo.",
+            },
+        )
+        worksheet.data_validation(
+            1,
+            24,
+            5000,
+            24,
+            {
+                "validate": "list",
+                "source": ["SIM"],
+                "ignore_blank": False,
+                "input_title": "Confirmacao obrigatoria",
+                "input_message": "Digite SIM para autorizar o cadastro do cliente.",
+                "error_title": "Confirmacao obrigatoria",
+                "error_message": "Para cadastrar, o campo Confirmar_Cadastro deve conter SIM.",
+            },
+        )
+
+    registrar_auditoria_integracao(
+        integration=CADASTRO_CLIENTE_IXC_INTEGRATION,
+        action="download_modelo",
+        usuario=request.user,
+        arquivo_nome="Modelo_Cadastro_Clientes_IXC.xlsx",
+        detalhes={"colunas": colunas},
+    )
+
+    response = HttpResponse(
+        output.getvalue(),
+        content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
+    response["Content-Disposition"] = "attachment; filename=Modelo_Cadastro_Clientes_IXC.xlsx"
+    return response
+
+
+@user_passes_test(grupo_Administrador_required)
+@login_required
 def desativar_atendimentos_ixc(request):
     if request.method != "POST":
         return redirect("import_prospects")
@@ -750,6 +1119,90 @@ def desativar_atendimentos_ixc(request):
         return response
     except Exception as exc:
         messages.error(request, f"Falha ao processar a desativacao dos atendimentos: {exc}")
+        return redirect("import_prospects")
+
+
+@user_passes_test(grupo_Administrador_required)
+@login_required
+def cadastrar_clientes_ixc(request):
+    if request.method != "POST":
+        return redirect("import_prospects")
+
+    arquivo = request.FILES.get("arquivo_cadastro_cliente_ixc")
+    if not arquivo:
+        messages.error(request, "Selecione uma planilha para processar o cadastro de clientes no IXC.")
+        return redirect("import_prospects")
+
+    try:
+        df = _ler_dataframe_upload(arquivo)
+        itens_importados = dataframe_to_records(df)
+        registrar_auditoria_integracao(
+            integration=CADASTRO_CLIENTE_IXC_INTEGRATION,
+            action="importacao_planilha",
+            usuario=request.user,
+            arquivo_nome=arquivo.name,
+            total_registros=len(itens_importados),
+            detalhes={"colunas": list(df.columns)},
+            itens=itens_importados,
+        )
+
+        df["Status_Importacao"] = ""
+        df["Mensagem_Importacao"] = ""
+        df["ID_IXC"] = ""
+
+        sucessos = 0
+        falhas = 0
+        itens_execucao = []
+
+        for index, linha in df.iterrows():
+            if pd.notna(linha.get("Razao_Social")) or pd.notna(linha.get("RAZAO_SOCIAL")):
+                status, mensagem, cliente_ixc_id = executar_cadastro_cliente_ixc(linha)
+
+                if status:
+                    sucessos += 1
+                    df.at[index, "Status_Importacao"] = "SUCESSO"
+                else:
+                    falhas += 1
+                    df.at[index, "Status_Importacao"] = "ERRO"
+
+                df.at[index, "Mensagem_Importacao"] = mensagem
+                df.at[index, "ID_IXC"] = cliente_ixc_id or ""
+                itens_execucao.append(
+                    {
+                        "linha_numero": index + 2,
+                        "status": "sucesso" if status else "erro",
+                        "mensagem": mensagem,
+                        "dados_json": _serializar_linha_para_auditoria(df, index),
+                    }
+                )
+
+        registrar_auditoria_integracao(
+            integration=CADASTRO_CLIENTE_IXC_INTEGRATION,
+            action="execucao_integracao",
+            usuario=request.user,
+            arquivo_nome=arquivo.name,
+            total_registros=sucessos + falhas,
+            total_sucessos=sucessos,
+            total_erros=falhas,
+            detalhes={"colunas": list(df.columns)},
+            itens=itens_execucao,
+        )
+
+        output = BytesIO()
+        with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
+            df.to_excel(writer, index=False, sheet_name="Resultado_Cadastro_Clientes_IXC")
+            worksheet = writer.sheets["Resultado_Cadastro_Clientes_IXC"]
+            for col_num, _ in enumerate(df.columns.values):
+                worksheet.set_column(col_num, col_num, 24 if df.columns[col_num] != "Mensagem_Importacao" else 90)
+
+        response = HttpResponse(
+            output.getvalue(),
+            content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+        response["Content-Disposition"] = "attachment; filename=Relatorio_Cadastro_Clientes_IXC.xlsx"
+        return response
+    except Exception as exc:
+        messages.error(request, f"Falha ao processar o cadastro de clientes no IXC: {exc}")
         return redirect("import_prospects")
 
 

@@ -1,0 +1,97 @@
+{% extends "admin/change_list.html" %}
+
+{% block extrastyle %}
+{{ block.super }}
+<style>
+  .integration-audit-panel {
+    margin: 0 0 18px;
+    padding: 20px 22px;
+    border: 1px solid #1d4ed8;
+    border-radius: 8px;
+    background: linear-gradient(180deg, #102a43 0%, #0f1f33 100%);
+    box-shadow: 0 14px 30px rgba(15, 31, 51, 0.2);
+  }
+
+  .integration-audit-panel__eyebrow {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0 0 10px;
+    color: #bfdbfe;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .integration-audit-panel__title {
+    margin: 0 0 6px;
+    color: #eff6ff;
+    font-size: 22px;
+    font-weight: 800;
+  }
+
+  .integration-audit-panel__subtitle,
+  .integration-audit-panel__note {
+    margin: 0;
+    color: #dbeafe;
+    font-size: 13px;
+    line-height: 1.6;
+    max-width: 980px;
+  }
+
+  .integration-audit-panel__note {
+    margin-top: 12px;
+    color: #bfdbfe;
+  }
+
+  .integration-export-actions {
+    display: inline-flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+  }
+
+  .integration-export-actions__button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 68px;
+    min-height: 30px;
+    padding: 0 12px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 700;
+    line-height: 1;
+    text-decoration: none !important;
+    transition: transform 0.15s ease, opacity 0.15s ease, background 0.15s ease;
+  }
+
+  .integration-export-actions__button:hover {
+    transform: translateY(-1px);
+    opacity: 0.96;
+  }
+
+  .integration-export-actions__button--csv {
+    background: #0f766e;
+    color: #ecfeff !important;
+  }
+
+  .integration-export-actions__button--excel {
+    background: #1d4ed8;
+    color: #eff6ff !important;
+  }
+</style>
+{% endblock %}
+
+{% block content_title %}
+{{ block.super }}
+<section class="integration-audit-panel">
+    <div class="integration-audit-panel__eyebrow">{{ integration_audit_eyebrow }}</div>
+    <h2 class="integration-audit-panel__title">{{ integration_audit_title }}</h2>
+    <p class="integration-audit-panel__subtitle">{{ integration_audit_subtitle }}</p>
+    {% if integration_audit_note %}
+    <p class="integration-audit-panel__note">{{ integration_audit_note }}</p>
+    {% endif %}
+</section>
+{% endblock %}
