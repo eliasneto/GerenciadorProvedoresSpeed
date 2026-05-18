@@ -13,7 +13,7 @@ from django.core.files.storage import FileSystemStorage
 from django.urls import reverse_lazy
 
 from .models import Lead, LeadEmpresa, LeadEndereco
-from .forms import LeadForm
+from .forms import LeadForm, LeadEnderecoForm
 from partners.models import Partner, Proposal
 from partners.forms import ProposalForm
 from clientes.models import Cliente, Endereco
@@ -411,6 +411,40 @@ def _sync_lead_to_structured_models(lead):
     lead.save(update_fields=['empresa_estruturada', 'endereco_estruturado'])
 
     return empresa, endereco
+
+
+def _criar_ou_atualizar_lead_espelho_empresa_endereco(empresa, endereco):
+    lead = endereco.leads_legados.order_by('id').first()
+    if not lead:
+        lead = Lead(
+            empresa_estruturada=empresa,
+            endereco_estruturado=endereco,
+        )
+
+    lead.razao_social = empresa.razao_social
+    lead.cnpj_cpf = empresa.cnpj_cpf
+    lead.nome_fantasia = empresa.nome_fantasia
+    lead.site = empresa.site
+    lead.contato_nome = empresa.contato_nome
+    lead.email = empresa.email
+    lead.telefone = empresa.telefone
+    lead.fonte = empresa.fonte
+    lead.confianca = empresa.confianca
+    lead.instagram_username = empresa.instagram_username
+    lead.instagram_url = empresa.instagram_url
+    lead.bio_instagram = empresa.bio_instagram
+    lead.observacao_ia = empresa.observacao_ia
+    lead.status = empresa.status or 'novo'
+    lead.cep = endereco.cep
+    lead.endereco = endereco.endereco
+    lead.numero = endereco.numero
+    lead.bairro = endereco.bairro
+    lead.cidade = endereco.cidade
+    lead.estado = endereco.estado
+    lead.empresa_estruturada = empresa
+    lead.endereco_estruturado = endereco
+    lead.save()
+    return lead
 
 @user_passes_test(grupo_LastMile_required)
 @login_required
@@ -1213,6 +1247,29 @@ def lead_empresa_detail(request, pk):
         'page_obj': page_obj,
         'q': q,
         'total_enderecos': enderecos.count(),
+    })
+
+
+@user_passes_test(grupo_LastMile_required)
+@login_required
+def lead_empresa_endereco_create(request, pk):
+    empresa = get_object_or_404(LeadEmpresa, pk=pk)
+
+    if request.method == 'POST':
+        form = LeadEnderecoForm(request.POST, empresa=empresa)
+        if form.is_valid():
+            endereco = form.save(commit=False)
+            endereco.empresa = empresa
+            endereco.save()
+            _criar_ou_atualizar_lead_espelho_empresa_endereco(empresa, endereco)
+            messages.success(request, "Novo endereco cadastrado com sucesso para este provedor.")
+            return redirect('lead_empresa_detail', pk=empresa.pk)
+    else:
+        form = LeadEnderecoForm(empresa=empresa)
+
+    return render(request, 'leads/lead_endereco_form.html', {
+        'empresa': empresa,
+        'form': form,
     })
 
 

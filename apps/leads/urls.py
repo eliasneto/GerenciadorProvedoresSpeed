@@ -6,6 +6,7 @@ urlpatterns = [
     path('', views.lead_empresa_list, name='lead_list'),
     path('legado/', views.lead_list, name='lead_list_legacy'),
     path('empresa/<int:pk>/', views.lead_empresa_detail, name='lead_empresa_detail'),
+    path('empresa/<int:pk>/enderecos/novo/', views.lead_empresa_endereco_create, name='lead_empresa_endereco_create'),
     path('api/empresas/search/', views.api_lead_empresa_search, name='api_lead_empresa_search'),
     path('api/empresas/<int:pk>/enderecos/', views.api_lead_empresa_enderecos, name='api_lead_empresa_enderecos'),
     path('novo/', views.lead_create, name='lead_create'),

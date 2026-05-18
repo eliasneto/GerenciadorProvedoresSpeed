@@ -1,6 +1,8 @@
 from django.contrib import admin
+from django.contrib.admin.sites import NotRegistered
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 
+from .admin_integration_exports import IntegrationAuditExportAdminMixin
 from .models import (
     EmailCotacaoRespostaImportacao,
     EmailCotacaoRespostaSync,
@@ -78,7 +80,7 @@ class IntegrationAuditItemInline(admin.TabularInline):
 
 
 @admin.register(IntegrationAudit)
-class IntegrationAuditAdmin(admin.ModelAdmin):
+class IntegrationAuditAdmin(IntegrationAuditExportAdminMixin, admin.ModelAdmin):
     list_display = (
         "integration",
         "action",
@@ -91,17 +93,8 @@ class IntegrationAuditAdmin(admin.ModelAdmin):
     )
     list_filter = ("integration", "action", "criado_em")
     search_fields = ("usuario__username", "arquivo_nome")
-    readonly_fields = (
-        "integration",
-        "action",
-        "usuario",
-        "arquivo_nome",
-        "total_registros",
-        "total_sucessos",
-        "total_erros",
-        "detalhes_json",
-        "criado_em",
-    )
+    fields = IntegrationAuditExportAdminMixin.integration_audit_fields
+    readonly_fields = IntegrationAuditExportAdminMixin.integration_audit_fields
     inlines = [IntegrationAuditItemInline]
 
 
@@ -111,3 +104,16 @@ class IntegrationAuditItemAdmin(admin.ModelAdmin):
     list_filter = ("status", "criado_em", "audit__integration")
     search_fields = ("audit__arquivo_nome", "mensagem")
     readonly_fields = ("audit", "linha_numero", "status", "mensagem", "dados_json", "criado_em")
+
+
+for modelo in (
+    RegistroHistorico,
+    EmailCotacaoRespostaSync,
+    EmailCotacaoRespostaImportacao,
+    IntegrationAudit,
+    IntegrationAuditItem,
+):
+    try:
+        admin.site.unregister(modelo)
+    except NotRegistered:
+        pass

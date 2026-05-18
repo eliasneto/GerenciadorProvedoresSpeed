@@ -12,6 +12,8 @@ from datetime import datetime, time
 from html import unescape
 from urllib.parse import urlparse, urlencode
 
+from auditoria.models import CotacaoStatusAuditoria
+
 # Importações do próprio app
 from .models import Partner, PartnerPlan, Proposal, ProposalMotivoInviavel
 from .forms import PartnerForm, PartnerPlanForm, ProposalForm
@@ -41,6 +43,55 @@ def _registrar_historico_proposta(proposal, usuario, acao, tipo='sistema', arqui
         usuario=usuario,
         content_type=ContentType.objects.get_for_model(Proposal),
         object_id=proposal.id
+    )
+
+
+def _extrair_ip_request(request):
+    forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR', '')
+    if forwarded_for:
+        return forwarded_for.split(',')[0].strip()
+    return request.META.get('REMOTE_ADDR')
+
+
+def _extrair_user_agent_request(request):
+    return (request.META.get('HTTP_USER_AGENT') or '')[:500]
+
+
+def _registrar_auditoria_status_cotacao(
+    request,
+    proposal,
+    status_anterior,
+    status_novo,
+    *,
+    origem,
+    integrou_ixc=False,
+    detalhes='',
+):
+    if status_anterior == status_novo:
+        return
+
+    cliente_nome = str(proposal.cliente or '--')
+    endereco_referencia = ''
+    if proposal.client_address_id:
+        endereco_referencia = str(proposal.client_address)
+    elif proposal.lead_endereco_id:
+        endereco_referencia = str(proposal.lead_endereco)
+
+    CotacaoStatusAuditoria.objects.create(
+        usuario=request.user if getattr(request, 'user', None) and request.user.is_authenticated else None,
+        proposal=proposal,
+        codigo_cotacao=proposal.codigo_exibicao,
+        codigo_lote=proposal.codigo_proposta or '',
+        parceiro_nome=proposal.partner.nome_fantasia or proposal.partner.razao_social or '',
+        cliente_nome=cliente_nome,
+        endereco_referencia=endereco_referencia,
+        status_anterior=status_anterior,
+        status_novo=status_novo,
+        origem=origem,
+        integrou_ixc=integrou_ixc,
+        endereco_ip=_extrair_ip_request(request),
+        user_agent=_extrair_user_agent_request(request),
+        detalhes=detalhes,
     )
 
 
@@ -162,7 +213,7 @@ def _montar_resumo_outras_cotacoes_por_endereco(outras_cotacoes):
     return grupos
 
 
-def _encerrar_outras_cotacoes_automaticamente(outras_cotacoes, proposal_referencia, usuario):
+def _encerrar_outras_cotacoes_automaticamente(outras_cotacoes, proposal_referencia, usuario, request=None):
     if not outras_cotacoes:
         return 0
 
@@ -188,6 +239,16 @@ def _encerrar_outras_cotacoes_automaticamente(outras_cotacoes, proposal_referenc
                 f"Observação: {observacao_padrao}"
             ),
         )
+        if request is not None:
+            _registrar_auditoria_status_cotacao(
+                request,
+                item,
+                status_antigo,
+                'encerrada',
+                origem='fechamento_automatico',
+                integrou_ixc=False,
+                detalhes=observacao_padrao,
+            )
 
     return len(outras_cotacoes)
 
@@ -942,6 +1003,20 @@ def proposal_batch_status_update(request, pk):
                         f"{detalhe_item_contratacao}"
                     ),
                 )
+                _registrar_auditoria_status_cotacao(
+                    request,
+                    item,
+                    status_antigo,
+                    novo_status,
+                    origem='alteracao_lote',
+                    integrou_ixc=bool(novo_status == 'aguardando_contratacao' and alterar_os_ixc),
+                    detalhes=(
+                        f"Atualizacao em lote da cotacao #{item.codigo_exibicao}."
+                        f"{f' Motivo inviavel: {motivo_inviavel.nome}.' if novo_status == 'encerrada' and motivo_inviavel else ''}"
+                        f"{f' Observacao inviavel: {observacao_inviavel}.' if novo_status == 'encerrada' and observacao_inviavel else ''}"
+                        f"{f' Observacao enviada ao IXC: {observacao_contratacao}.' if novo_status == 'aguardando_contratacao' and observacao_contratacao else ''}"
+                    ).strip(),
+                )
 
             detalhe_lote_inviavel = ""
             detalhe_lote_contratacao = ""
@@ -1146,6 +1221,7 @@ def proposal_update(request, pk):
                 ]
 
                 for item in propostas_lote:
+                    status_item_anterior = item.status
                     for campo in campos_compartilhados:
                         setattr(item, campo, getattr(proposta_base, campo))
                     item.status = 'aguardando_contratacao'
@@ -1201,6 +1277,18 @@ def proposal_update(request, pk):
                             f"{f'\nObservação enviada ao IXC: {observacao_contratacao}' if alterar_os_ixc else ''}"
                         ),
                     )
+                    _registrar_auditoria_status_cotacao(
+                        request,
+                        item,
+                        status_item_anterior,
+                        'aguardando_contratacao',
+                        origem='conversao_viavel',
+                        integrou_ixc=alterar_os_ixc,
+                        detalhes=(
+                            f"Conversao de cotacao viavel concluida para a proposta #{item.codigo_exibicao}."
+                            f"{f' Observacao enviada ao IXC: {observacao_contratacao}.' if alterar_os_ixc and observacao_contratacao else ''}"
+                        ).strip(),
+                    )
 
                 RegistroHistorico.objects.create(
                     tipo='sistema',
@@ -1222,6 +1310,7 @@ def proposal_update(request, pk):
                         outras_cotacoes_abertas,
                         proposal,
                         request.user,
+                        request=request,
                     )
                     RegistroHistorico.objects.create(
                         tipo='sistema',
@@ -1376,6 +1465,15 @@ def proposal_status_update(request, pk):
         if status_antigo != novo_status:
             proposal.status = novo_status
             proposal.save(update_fields=['status'])
+            _registrar_auditoria_status_cotacao(
+                request,
+                proposal,
+                status_antigo,
+                novo_status,
+                origem='alteracao_individual',
+                integrou_ixc=False,
+                detalhes=f"Atualizacao individual da cotacao #{proposal.codigo_exibicao}.",
+            )
 
             RegistroHistorico.objects.create(
                 tipo='sistema',

@@ -2,6 +2,43 @@
 
 Este arquivo registra as versoes publicadas do sistema e os principais itens adicionados ou alterados em cada release.
 
+## v1.5.0 - 2026-05-15
+
+Adicionado:
+- automacao administrativa para desativacao/finalizacao de atendimentos no IXC via planilha no Django Admin, com modelo dedicado, confirmacao obrigatoria por linha, auditoria e relatorio final exportavel
+
+Melhorado:
+- fluxo administrativo do IXC ajustado para finalizar a O.S. vinculada e encerrar o atendimento sem apagar historico
+- modelo de planilha de desativacao de atendimento IXC com `Atendimento_ID`, `OS_ID` opcional, `Mensagem` opcional e `Confirmar_Desativacao`
+- area administrativa reorganizada para exibir uma Central de Automações no mesmo estilo do Backoffice, reunindo o importador de provedores e a desativacao de atendimentos IXC
+
+## v1.4.0 - 2026-05-15
+
+Adicionado:
+- identificacao do usuario logado na descricao dos atendimentos abertos no IXC via integracao do BackOffice, registrando quem importou e o horario do envio
+- exportacao em `CSV` e `Excel` no detalhe dos `Logs de Integracoes` no admin, com abertura do `dados_json` em colunas para facilitar a analise das linhas importadas e rejeitadas
+
+Melhorado:
+- rotina `OS Comercial | Lastmile` mantida com leitura direta da tabela de O.S. por cliente no IXC para ganhar velocidade, preservando o criterio de considerar apenas atendimentos com `login` atrelado
+- modelo de importacao de atendimento IXC endurecido com validacao de Excel para campos `*_ID` aceitarem apenas numeros
+- backend da importacao de atendimento IXC ajustado para rejeitar `Cliente_ID`, `Login_ID`, `Contrato_ID`, `Filial_ID`, `Assunto_ID` e `Departamento_ID` com texto invalido, mesmo quando o arquivo vier por CSV ou for editado fora do modelo
+- auditoria da importacao de logins IXC ajustada para gravar no log exportavel a linha ja enriquecida com `Status_Importacao`, `Mensagem_Importacao` e `ID_IXC` criado
+- placeholder do campo `Usuario da Rede` na tela de login ajustado para exibir `Nome do usuario`, removendo o exemplo fixo com login pessoal
+- modal de criacao de cotacao por endereco ajustado para usar a opcao `Buscar fora da regiao` reaproveitando os filtros ja existentes de busca, cidade e UF, sem exigir campo extra dedicado
+- layout do modal de criacao de cotacao por endereco reorganizado para manter o botao `Criar Cotacoes` visivel, com rodape mais compacto e menor altura da grade rolavel
+
+## v1.3.0 - 2026-05-08
+
+Adicionado:
+- nova arquitetura de organizacao do Django Admin com a aba `Auditoria`, consolidando historicos, logs de integracao, sincronizacoes, alteracoes do IXC e auditorias de respostas de e-mail em uma secao dedicada
+- auditoria de login com registro de login bem-sucedido, falha de autenticacao e logout, incluindo usuario informado, IP, user agent e horario do evento
+- auditoria de restore de backup com registro de usuario, origem do arquivo, nome do backup, sucesso ou erro, restauracao de midia, IP e detalhes da operacao
+- auditoria de mudanca de status de cotacao, cobrindo alteracao individual, alteracao em lote, conversao de cotacao viavel e fechamento automatico de outras cotacoes do mesmo endereco
+
+Melhorado:
+- estrutura do admin preparada para expansao continua da trilha de auditoria em novas tabelas dedicadas
+- detalhe do provedor em `/provedores/empresa/<id>/` ajustado com botao para cadastrar novos enderecos, incluindo formulario dedicado so de endereco e criacao automatica do espelho da prospeccao para o novo local
+
 ## v1.2.1 - 2026-05-08
 
 Melhorado:

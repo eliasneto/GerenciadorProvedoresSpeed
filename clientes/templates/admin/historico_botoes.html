@@ -278,20 +278,20 @@
         <form action="rodar-os-comercial-lastmile/" method="get">
             <div class="sync-launcher__form">
                 <div class="sync-launcher__field">
-                    <label for="id_cliente_local_id">Cliente Local</label>
-                    <input id="id_cliente_local_id" type="text" name="cliente_local_id" placeholder="Ex: 24">
+                    <label for="id_cliente_local_id">Cliente Local (ID interno)</label>
+                    <input id="id_cliente_local_id" type="text" name="cliente_local_id" value="{{ request.GET.cliente_local_id|default:'' }}" placeholder="Ex: 88">
                 </div>
                 <div class="sync-launcher__field">
-                    <label for="id_cliente_ixc_id">Cliente IXC</label>
-                    <input id="id_cliente_ixc_id" type="text" name="cliente_ixc_id" placeholder="Ex: 5">
+                    <label for="id_cliente_ixc_id">Cliente IXC (ID do IXC)</label>
+                    <input id="id_cliente_ixc_id" type="text" name="cliente_ixc_id" value="{{ request.GET.cliente_ixc_id|default:'' }}" placeholder="Ex: 575">
                 </div>
                 <div class="sync-launcher__field">
                     <label for="id_os_alterada_desde">O.S. Alterada Desde</label>
-                    <input id="id_os_alterada_desde" type="date" name="os_alterada_desde">
+                    <input id="id_os_alterada_desde" type="date" name="os_alterada_desde" value="{{ request.GET.os_alterada_desde|default:'' }}">
                 </div>
                 <div class="sync-launcher__field">
                     <label for="id_os_alterada_nos_ultimos_dias">Últimos Dias</label>
-                    <input id="id_os_alterada_nos_ultimos_dias" type="number" min="0" name="os_alterada_nos_ultimos_dias" placeholder="Ex: 10">
+                    <input id="id_os_alterada_nos_ultimos_dias" type="number" min="0" name="os_alterada_nos_ultimos_dias" value="{{ request.GET.os_alterada_nos_ultimos_dias|default:'' }}" placeholder="Ex: 10">
                 </div>
             </div>
 

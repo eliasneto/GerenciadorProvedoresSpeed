@@ -26,8 +26,12 @@ from django.http.multipartparser import MultiPartParserError
 from django.shortcuts import redirect, render
 from django.utils.datastructures import MultiValueDictKeyError
 
+from apps.core.integration_audit import dataframe_to_records, registrar_auditoria_integracao
+from core.models import IntegrationAudit
 from core.views import grupo_Administrador_required
 from core_admin.models import ConfiguracaoEmailEnvio
+from auditoria.models import RestoreBackupAuditoria
+from scripts.integracoes.backoffice.desativar_atendimento_ixc import executar_desativacao_atendimento
 
 from .forms import BackupRestoreForm, ExcelUploadForm, SMTPTestForm
 from .import_services import (
@@ -46,6 +50,7 @@ from .import_services import (
 
 
 logger = logging.getLogger(__name__)
+DESATIVACAO_ATENDIMENTO_INTEGRATION = "desativacao_atendimento_ixc"
 
 
 def _split_email_values(raw_value):
@@ -97,17 +102,67 @@ def _serializar_importacao(audit):
     }
 
 
+def _serializar_auditoria_planilha(audit):
+    if not audit:
+        return None
+
+    return {
+        "id": audit.id,
+        "arquivo_nome": audit.arquivo_nome or "-",
+        "criado_em": audit.criado_em,
+        "total_registros": audit.total_registros,
+        "total_sucessos": audit.total_sucessos,
+        "total_erros": audit.total_erros,
+        "detalhes": dict(audit.detalhes_json or {}),
+    }
+
+
+def _buscar_ultima_desativacao():
+    return (
+        IntegrationAudit.objects.filter(
+            integration=DESATIVACAO_ATENDIMENTO_INTEGRATION,
+            action="execucao_integracao",
+        )
+        .order_by("-criado_em")
+        .first()
+    )
+
+
+def _ler_dataframe_upload(arquivo):
+    if arquivo.name.lower().endswith(".csv"):
+        try:
+            return pd.read_csv(arquivo, sep=None, engine="python", encoding="utf-8")
+        except UnicodeDecodeError:
+            arquivo.seek(0)
+            return pd.read_csv(arquivo, sep=None, engine="python", encoding="latin1")
+
+    try:
+        return pd.read_excel(arquivo)
+    except ValueError:
+        arquivo.seek(0)
+        try:
+            return pd.read_csv(arquivo, sep=None, engine="python", encoding="utf-8")
+        except UnicodeDecodeError:
+            arquivo.seek(0)
+            return pd.read_csv(arquivo, sep=None, engine="python", encoding="latin1")
+
+
+def _serializar_linha_para_auditoria(dataframe, index):
+    return {str(k).strip(): dataframe.at[index, k] for k in dataframe.columns}
+
+
 def _render_importacao(request, form):
     importacao_em_andamento = buscar_importacao_em_andamento()
     ultima_importacao = buscar_ultima_importacao()
 
     return render(
         request,
-        "core_admin/import_form.html",
+        "core_admin/automacoes.html",
         {
             "form": form,
             "importacao_em_andamento": _serializar_importacao(importacao_em_andamento),
             "ultima_importacao": _serializar_importacao(ultima_importacao),
+            "ultima_desativacao": _serializar_auditoria_planilha(_buscar_ultima_desativacao()),
             "import_status_running": IMPORT_STATUS_RUNNING,
             "import_status_success": IMPORT_STATUS_SUCCESS,
             "import_status_error": IMPORT_STATUS_ERROR,
@@ -116,6 +171,8 @@ def _render_importacao(request, form):
     )
 
 
+@user_passes_test(grupo_Administrador_required)
+@login_required
 def import_prospects(request):
     form = ExcelUploadForm(request.POST or None, request.FILES or None)
 
@@ -245,10 +302,40 @@ def _resolver_backup_existente(nome_arquivo):
     return arquivo
 
 
+def _extrair_ip_request(request):
+    forwarded_for = (request.META.get("HTTP_X_FORWARDED_FOR") or "").strip()
+    if forwarded_for:
+        return forwarded_for.split(",")[0].strip()
+    return (request.META.get("REMOTE_ADDR") or "").strip()
+
+
+def _registrar_auditoria_restore(
+    *,
+    request,
+    arquivo_nome,
+    origem,
+    sucesso,
+    media_restaurada=False,
+    detalhes="",
+):
+    RestoreBackupAuditoria.objects.create(
+        usuario=request.user if getattr(request.user, "is_authenticated", False) else None,
+        origem=origem,
+        arquivo_nome=(arquivo_nome or "")[:255],
+        sucesso=bool(sucesso),
+        media_restaurada=bool(media_restaurada),
+        endereco_ip=_extrair_ip_request(request) or None,
+        user_agent=(request.META.get("HTTP_USER_AGENT") or "")[:500],
+        detalhes=detalhes or "",
+    )
+
+
 @user_passes_test(grupo_Administrador_required)
 @login_required
 def restore_backup(request):
     backup_choices = _listar_backups_disponiveis()
+    nome_arquivo_restore = ""
+    origem_restore = ""
 
     if request.method == "GET" and request.GET.get("restore_error") == "1":
         detalhe = (request.GET.get("restore_error_detail") or "").strip()
@@ -291,6 +378,8 @@ def restore_backup(request):
 
             if backup_selecionado:
                 temp_zip = _resolver_backup_existente(backup_selecionado)
+                nome_arquivo_restore = temp_zip.name
+                origem_restore = "servidor"
             else:
                 if not backup_zip or not backup_zip.name.lower().endswith(".zip"):
                     messages.error(request, "Envie um arquivo .zip valido.")
@@ -301,6 +390,8 @@ def restore_backup(request):
                     )
 
                 temp_zip = Path(temp_dir) / backup_zip.name
+                nome_arquivo_restore = backup_zip.name
+                origem_restore = "upload"
                 with open(temp_zip, "wb") as handler:
                     for chunk in backup_zip.chunks():
                         handler.write(chunk)
@@ -389,6 +480,14 @@ def restore_backup(request):
                 media_restaurado = True
 
             detalhe_midia = " e a pasta media foi sincronizada" if media_restaurado else ""
+            _registrar_auditoria_restore(
+                request=request,
+                arquivo_nome=nome_arquivo_restore or temp_zip.name,
+                origem=origem_restore or "upload",
+                sucesso=True,
+                media_restaurada=media_restaurado,
+                detalhes=f"Restore concluido com sucesso. Banco restaurado{detalhe_midia}.",
+            )
             return HttpResponse(
                 (
                     "<html><head><meta charset='utf-8'><title>Restore concluido</title></head>"
@@ -402,6 +501,14 @@ def restore_backup(request):
                 )
             )
         except Exception as exc:
+            _registrar_auditoria_restore(
+                request=request,
+                arquivo_nome=nome_arquivo_restore or getattr(locals().get("temp_zip", None), "name", "") or "",
+                origem=origem_restore or "upload",
+                sucesso=False,
+                media_restaurada=False,
+                detalhes=str(exc),
+            )
             messages.error(request, f"Falha ao restaurar backup: {exc}")
         finally:
             if temp_dir and os.path.isdir(temp_dir):
@@ -464,6 +571,186 @@ def download_template(request):
     )
     response["Content-Disposition"] = "attachment; filename=modelo_importacao_leads.xlsx"
     return response
+
+
+@user_passes_test(grupo_Administrador_required)
+@login_required
+def download_template_desativacao_atendimento(request):
+    colunas = ["Atendimento_ID", "Mensagem", "Confirmar_Desativacao"]
+    instrucoes = pd.DataFrame(
+        [
+            {
+                "Campo": "Atendimento_ID",
+                "O que colocar?": "ID numerico do atendimento no IXC.",
+                "Obrigatorio?": "Sim",
+            },
+            {
+                "Campo": "Mensagem",
+                "O que colocar?": "Mensagem administrativa que sera registrada no fechamento. Se ficar vazio, usamos a padrao.",
+                "Obrigatorio?": "Nao",
+            },
+            {
+                "Campo": "Confirmar_Desativacao",
+                "O que colocar?": "Digite SIM para autorizar o fechamento do atendimento.",
+                "Obrigatorio?": "Sim",
+            },
+        ]
+    )
+
+    df_modelo = pd.DataFrame(columns=colunas)
+    output = BytesIO()
+
+    with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
+        df_modelo.to_excel(writer, index=False, sheet_name="Modelo_Desativacao_IXC")
+        instrucoes.to_excel(writer, index=False, sheet_name="Instrucoes_Ajuda")
+
+        workbook = writer.book
+        worksheet = writer.sheets["Modelo_Desativacao_IXC"]
+        header_format = workbook.add_format({"bold": True, "bg_color": "#BFDBFE", "border": 1})
+        integer_format = workbook.add_format({"num_format": "0"})
+
+        for col_num, value in enumerate(colunas):
+            worksheet.write(0, col_num, value, header_format)
+            worksheet.set_column(
+                col_num,
+                col_num,
+                26 if value != "Mensagem" else 80,
+                integer_format if value == "Atendimento_ID" else None,
+            )
+
+        worksheet.data_validation(
+            1,
+            0,
+            5000,
+            0,
+            {
+                "validate": "integer",
+                "criteria": ">=",
+                "value": 1,
+                "ignore_blank": False,
+                "input_title": "ID do atendimento",
+                "input_message": "Informe apenas o ID numerico do atendimento no IXC.",
+                "error_title": "Valor invalido",
+                "error_message": "Atendimento_ID aceita somente numeros inteiros.",
+            },
+        )
+        worksheet.data_validation(
+            1,
+            2,
+            5000,
+            2,
+            {
+                "validate": "list",
+                "source": ["SIM"],
+                "ignore_blank": False,
+                "input_title": "Confirmacao obrigatoria",
+                "input_message": "Digite SIM para autorizar a finalizacao do atendimento.",
+                "error_title": "Confirmacao obrigatoria",
+                "error_message": "Para finalizar, o campo Confirmar_Desativacao deve conter SIM.",
+            },
+        )
+
+    registrar_auditoria_integracao(
+        integration=DESATIVACAO_ATENDIMENTO_INTEGRATION,
+        action="download_modelo",
+        usuario=request.user,
+        arquivo_nome="Modelo_Desativacao_Atendimentos_IXC.xlsx",
+        detalhes={"colunas": colunas},
+    )
+
+    response = HttpResponse(
+        output.getvalue(),
+        content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
+    response["Content-Disposition"] = "attachment; filename=Modelo_Desativacao_Atendimentos_IXC.xlsx"
+    return response
+
+
+@user_passes_test(grupo_Administrador_required)
+@login_required
+def desativar_atendimentos_ixc(request):
+    if request.method != "POST":
+        return redirect("import_prospects")
+
+    arquivo = request.FILES.get("arquivo_desativacao_atendimento")
+    if not arquivo:
+        messages.error(request, "Selecione uma planilha para processar a desativacao dos atendimentos.")
+        return redirect("import_prospects")
+
+    try:
+        df = _ler_dataframe_upload(arquivo)
+        itens_importados = dataframe_to_records(df)
+        registrar_auditoria_integracao(
+            integration=DESATIVACAO_ATENDIMENTO_INTEGRATION,
+            action="importacao_planilha",
+            usuario=request.user,
+            arquivo_nome=arquivo.name,
+            total_registros=len(itens_importados),
+            detalhes={"colunas": list(df.columns)},
+            itens=itens_importados,
+        )
+
+        df["Status_Importacao"] = ""
+        df["Mensagem_Importacao"] = ""
+        df["ID_IXC"] = ""
+
+        sucessos = 0
+        falhas = 0
+        itens_execucao = []
+
+        for index, linha in df.iterrows():
+            if pd.notna(linha.get("Atendimento_ID")):
+                status, mensagem, atendimento_id = executar_desativacao_atendimento(
+                    linha,
+                    usuario_sistema=request.user,
+                )
+
+                if status:
+                    sucessos += 1
+                    df.at[index, "Status_Importacao"] = "SUCESSO"
+                else:
+                    falhas += 1
+                    df.at[index, "Status_Importacao"] = "ERRO"
+
+                df.at[index, "Mensagem_Importacao"] = mensagem
+                df.at[index, "ID_IXC"] = atendimento_id or ""
+                itens_execucao.append(
+                    {
+                        "linha_numero": index + 2,
+                        "status": "sucesso" if status else "erro",
+                        "mensagem": mensagem,
+                        "dados_json": _serializar_linha_para_auditoria(df, index),
+                    }
+                )
+
+        registrar_auditoria_integracao(
+            integration=DESATIVACAO_ATENDIMENTO_INTEGRATION,
+            action="execucao_integracao",
+            usuario=request.user,
+            arquivo_nome=arquivo.name,
+            total_registros=sucessos + falhas,
+            total_sucessos=sucessos,
+            total_erros=falhas,
+            detalhes={"colunas": list(df.columns)},
+            itens=itens_execucao,
+        )
+
+        output = BytesIO()
+        with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
+            df.to_excel(writer, index=False, sheet_name="Resultado_Desativacao_IXC")
+            worksheet = writer.sheets["Resultado_Desativacao_IXC"]
+            for col_num, _ in enumerate(df.columns.values):
+                worksheet.set_column(col_num, col_num, 24 if df.columns[col_num] != "Mensagem_Importacao" else 90)
+
+        response = HttpResponse(
+            output.getvalue(),
+            content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+        response["Content-Disposition"] = "attachment; filename=Relatorio_Desativacao_Atendimentos_IXC.xlsx"
+        return response
+    except Exception as exc:
+        messages.error(request, f"Falha ao processar a desativacao dos atendimentos: {exc}")
+        return redirect("import_prospects")
 
 
 @user_passes_test(grupo_Administrador_required)

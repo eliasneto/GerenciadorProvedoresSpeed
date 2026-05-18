@@ -1,0 +1,7 @@
+cd /home/elias.neto/SGP_Speed/GerenciadorProvedoresSpeed
+kill 2855978 || true
+docker cp scripts/integracoes/ixc_os_comercial_lastmile.py speed_sistema:/app/scripts/integracoes/ixc_os_comercial_lastmile.py
+docker cp scripts/integracoes/ixc_os_comercial_lastmile.py speed_sincronizador_ixc:/app/scripts/integracoes/ixc_os_comercial_lastmile.py
+docker exec speed_sistema python manage.py shell -c "from django.utils import timezone; from clientes.models import HistoricoSincronizacao; HistoricoSincronizacao.objects.filter(id=6616,status='rodando').update(status='erro', data_fim=timezone.now(), detalhes='Execucao interrompida para aplicar otimizacao de lookup da O.S. por ticket.')"
+docker exec speed_sistema python scripts/integracoes/ixc_os_comercial_lastmile.py manual admin --cliente-ixc-id=575 --os-alterada-nos-ultimos-dias=10
+docker exec speed_sistema python manage.py shell -c "from clientes.models import Endereco, HistoricoSincronizacao; qs=Endereco.objects.filter(cliente__id_ixc='575'); print({'total': qs.count(), 'lastmile_true': qs.filter(em_os_comercial_lastmile=True).count(), 'os_aberta_true': qs.filter(os_atual_aberta=True).count(), 'com_ticket': qs.exclude(ticket_os_atual_ixc__isnull=True).count()}); print(list(qs.filter(em_os_comercial_lastmile=True).values_list('id','login_id_ixc','ticket_os_atual_ixc','setor_os_atual_nome','status_os_atual_nome')[:20])); print(list(HistoricoSincronizacao.objects.filter(tipo='os_comercial_lastmile').order_by('-id').values('id','status','origem','data_inicio','data_fim','detalhes')[:3]))"

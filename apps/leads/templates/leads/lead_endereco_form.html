@@ -1,0 +1,81 @@
+{% extends "core/base.html" %}
+
+{% block content %}
+<div class="p-6 md:p-10 max-w-4xl mx-auto">
+    <div class="mb-6 flex flex-col gap-4">
+        <a href="{% url 'lead_empresa_detail' empresa.pk %}" class="page-back-button w-fit">
+            <i data-lucide="arrow-left" class="w-4 h-4"></i> Voltar para enderecos
+        </a>
+
+        <div>
+            <p class="text-[10px] text-gray-400 font-black uppercase tracking-[0.2em] mb-2">Provedores • Novo Endereco</p>
+            <h1 class="text-3xl font-black text-gray-900 italic uppercase tracking-tighter">{{ empresa.nome_fantasia|default:empresa.razao_social }}</h1>
+            <p class="text-[10px] text-gray-500 font-bold uppercase tracking-widest mt-1">Cadastre um novo endereco para este provedor</p>
+        </div>
+    </div>
+
+    <div class="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
+        <div class="px-6 py-5 border-b border-gray-100 bg-gray-50">
+            <h2 class="text-sm font-black uppercase tracking-widest text-gray-700">Dados do Endereco</h2>
+        </div>
+
+        <form method="POST" class="p-6 md:p-8 space-y-6">
+            {% csrf_token %}
+
+            {% if form.non_field_errors %}
+            <div class="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-600">
+                {{ form.non_field_errors }}
+            </div>
+            {% endif %}
+
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-5">
+                <div>
+                    <label class="block text-[10px] font-black uppercase tracking-widest text-gray-500 mb-2">CEP</label>
+                    {{ form.cep }}
+                    {% if form.cep.errors %}<p class="mt-2 text-xs font-bold text-red-500">{{ form.cep.errors|join:", " }}</p>{% endif %}
+                </div>
+                <div class="md:col-span-2">
+                    <label class="block text-[10px] font-black uppercase tracking-widest text-gray-500 mb-2">Endereco</label>
+                    {{ form.endereco }}
+                    {% if form.endereco.errors %}<p class="mt-2 text-xs font-bold text-red-500">{{ form.endereco.errors|join:", " }}</p>{% endif %}
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-5">
+                <div>
+                    <label class="block text-[10px] font-black uppercase tracking-widest text-gray-500 mb-2">Numero</label>
+                    {{ form.numero }}
+                    {% if form.numero.errors %}<p class="mt-2 text-xs font-bold text-red-500">{{ form.numero.errors|join:", " }}</p>{% endif %}
+                </div>
+                <div>
+                    <label class="block text-[10px] font-black uppercase tracking-widest text-gray-500 mb-2">Bairro</label>
+                    {{ form.bairro }}
+                    {% if form.bairro.errors %}<p class="mt-2 text-xs font-bold text-red-500">{{ form.bairro.errors|join:", " }}</p>{% endif %}
+                </div>
+                <div class="md:col-span-2">
+                    <label class="block text-[10px] font-black uppercase tracking-widest text-gray-500 mb-2">Cidade</label>
+                    {{ form.cidade }}
+                    {% if form.cidade.errors %}<p class="mt-2 text-xs font-bold text-red-500">{{ form.cidade.errors|join:", " }}</p>{% endif %}
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-5">
+                <div>
+                    <label class="block text-[10px] font-black uppercase tracking-widest text-gray-500 mb-2">UF</label>
+                    {{ form.estado }}
+                    {% if form.estado.errors %}<p class="mt-2 text-xs font-bold text-red-500">{{ form.estado.errors|join:", " }}</p>{% endif %}
+                </div>
+            </div>
+
+            <div class="pt-4 flex items-center justify-end gap-3">
+                <a href="{% url 'lead_empresa_detail' empresa.pk %}" class="px-5 py-3 rounded-2xl border border-gray-200 text-gray-500 font-bold hover:bg-gray-50 transition">
+                    Cancelar
+                </a>
+                <button type="submit" class="px-7 py-3 rounded-2xl bg-ageis-black text-ageis-yellow text-[10px] font-black uppercase tracking-widest hover:bg-gray-800 transition shadow-sm">
+                    Salvar Endereco
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

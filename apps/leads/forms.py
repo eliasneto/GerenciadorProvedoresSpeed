@@ -1,6 +1,6 @@
 from django import forms
 
-from .models import Lead, LeadEmpresa
+from .models import Lead, LeadEmpresa, LeadEndereco
 
 
 class LeadForm(forms.ModelForm):
@@ -93,5 +93,68 @@ class LeadForm(forms.ModelForm):
             raise forms.ValidationError(
                 "Ja existe um cliente com o mesmo documento/nome e o mesmo endereco cadastrado."
             )
+
+        return cleaned_data
+
+
+class LeadEnderecoForm(forms.ModelForm):
+    class Meta:
+        model = LeadEndereco
+        fields = ["cep", "endereco", "numero", "bairro", "cidade", "estado"]
+
+    def __init__(self, *args, empresa=None, **kwargs):
+        self.empresa = empresa
+        super().__init__(*args, **kwargs)
+
+        for name, field in self.fields.items():
+            field.required = False
+            field.widget.attrs.update({
+                'class': 'w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-ageis-yellow focus:ring-1 focus:ring-ageis-yellow outline-none transition'
+            })
+
+            if name == 'cep':
+                field.widget.attrs['placeholder'] = '00000-000'
+            elif name == 'endereco':
+                field.widget.attrs['placeholder'] = 'Rua, avenida, alameda...'
+            elif name == 'numero':
+                field.widget.attrs['placeholder'] = 'Ex: 1500'
+            elif name == 'bairro':
+                field.widget.attrs['placeholder'] = 'Nome do bairro'
+            elif name == 'cidade':
+                field.widget.attrs['placeholder'] = 'Municipio'
+            elif name == 'estado':
+                field.widget.attrs['placeholder'] = 'UF'
+
+    def clean(self):
+        cleaned_data = super().clean()
+        endereco = (cleaned_data.get('endereco') or '').strip()
+        numero = (cleaned_data.get('numero') or '').strip()
+        bairro = (cleaned_data.get('bairro') or '').strip()
+        cidade = (cleaned_data.get('cidade') or '').strip()
+        estado = (cleaned_data.get('estado') or '').strip().upper()
+        cep = (cleaned_data.get('cep') or '').strip()
+
+        if estado:
+            cleaned_data['estado'] = estado[:2]
+
+        if not any([endereco, numero, bairro, cidade, estado, cep]):
+            raise forms.ValidationError("Preencha pelo menos um dado do endereco para continuar.")
+
+        if self.empresa:
+            duplicado = LeadEndereco.objects.filter(
+                empresa=self.empresa,
+                endereco__iexact=endereco,
+                numero__iexact=numero,
+                bairro__iexact=bairro,
+                cidade__iexact=cidade,
+                estado__iexact=estado,
+                cep__iexact=cep,
+            )
+            if self.instance.pk:
+                duplicado = duplicado.exclude(pk=self.instance.pk)
+            if duplicado.exists():
+                raise forms.ValidationError(
+                    "Este provedor ja possui um endereco igual cadastrado."
+                )
 
         return cleaned_data

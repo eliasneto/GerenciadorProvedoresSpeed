@@ -1,0 +1,159 @@
+{% extends "admin/change_list.html" %}
+
+{% block extrastyle %}
+{{ block.super }}
+<style>
+  .ixc-deactivate-panel {
+    margin: 0 0 18px;
+    padding: 20px 22px;
+    border: 1px solid #1d4ed8;
+    border-radius: 8px;
+    background: linear-gradient(180deg, #102a43 0%, #0f1f33 100%);
+    box-shadow: 0 14px 30px rgba(15, 31, 51, 0.2);
+  }
+
+  .ixc-deactivate-panel__eyebrow {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0 0 10px;
+    color: #bfdbfe;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .ixc-deactivate-panel__title {
+    margin: 0 0 6px;
+    color: #eff6ff;
+    font-size: 22px;
+    font-weight: 800;
+  }
+
+  .ixc-deactivate-panel__subtitle,
+  .ixc-deactivate-panel__note {
+    margin: 0;
+    color: #dbeafe;
+    font-size: 13px;
+    line-height: 1.6;
+    max-width: 900px;
+  }
+
+  .ixc-deactivate-panel__note {
+    margin-top: 12px;
+    color: #bfdbfe;
+  }
+
+  .ixc-deactivate-panel__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    align-items: center;
+    margin-top: 18px;
+  }
+
+  .ixc-deactivate-panel__download,
+  .ixc-deactivate-panel__submit {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 40px;
+    padding: 0 16px;
+    border-radius: 8px;
+    font-weight: 700;
+    text-decoration: none;
+    cursor: pointer;
+  }
+
+  .ixc-deactivate-panel__download {
+    border: 1px solid #60a5fa;
+    background: transparent;
+    color: #dbeafe;
+  }
+
+  .ixc-deactivate-panel__download:hover {
+    background: rgba(96, 165, 250, 0.18);
+  }
+
+  .ixc-deactivate-panel__submit {
+    border: none;
+    background: #2563eb;
+    color: #fff;
+  }
+
+  .ixc-deactivate-panel__submit:hover {
+    background: #1d4ed8;
+  }
+
+  .ixc-deactivate-panel__submit[disabled] {
+    opacity: 0.55;
+    cursor: not-allowed;
+  }
+
+  .ixc-deactivate-panel__upload {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    align-items: center;
+    margin-top: 16px;
+  }
+
+  .ixc-deactivate-panel__upload input[type="file"] {
+    max-width: 420px;
+    color: #eff6ff;
+  }
+
+  .ixc-deactivate-panel__meta {
+    margin-top: 14px;
+    color: #bfdbfe;
+    font-size: 12px;
+    line-height: 1.5;
+  }
+</style>
+{% endblock %}
+
+{% block object-tools-items %}
+<li>
+    <a href="{{ download_modelo_url }}" class="addlink" style="background:#1d4ed8;color:#fff;">
+        Baixar Planilha Modelo
+    </a>
+</li>
+{{ block.super }}
+{% endblock %}
+
+{% block content_title %}
+{{ block.super }}
+<section class="ixc-deactivate-panel">
+    <div class="ixc-deactivate-panel__eyebrow">Finalizacao administrativa no IXC</div>
+    <h2 class="ixc-deactivate-panel__title">Desativar atendimentos via planilha</h2>
+    <p class="ixc-deactivate-panel__subtitle">
+        Finalize atendimentos no IXC sem apagar historico. O sistema localiza a O.S. vinculada, registra o fechamento e devolve uma planilha com o resultado de cada linha.
+    </p>
+    <p class="ixc-deactivate-panel__note">
+        Cada linha precisa trazer o <code>Atendimento_ID</code> e a confirmacao <code>SIM</code> no campo <code>Confirmar_Desativacao</code>. O campo <code>OS_ID</code> e opcional.
+    </p>
+
+    <form action="{{ processar_planilha_url }}" method="post" enctype="multipart/form-data">
+        {% csrf_token %}
+        <div class="ixc-deactivate-panel__upload">
+            <input
+                type="file"
+                name="arquivo_desativacao_atendimento"
+                accept=".xlsx,.xls,.csv"
+                {% if pode_processar_desativacao %}required{% else %}disabled{% endif %}
+            >
+            <div class="ixc-deactivate-panel__actions">
+                <a href="{{ download_modelo_url }}" class="ixc-deactivate-panel__download">Baixar modelo</a>
+                <button type="submit" class="ixc-deactivate-panel__submit" {% if not pode_processar_desativacao %}disabled{% endif %}>
+                    Processar desativacao
+                </button>
+            </div>
+        </div>
+    </form>
+
+    <div class="ixc-deactivate-panel__meta">
+        Se o IXC recusar a finalizacao por dados obrigatorios ou vinculo de tecnico, o motivo volta no relatorio exportado.
+    </div>
+</section>
+{% endblock %}

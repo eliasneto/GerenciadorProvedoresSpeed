@@ -2,8 +2,10 @@ import os
 import sys
 import json
 import base64
+import re
 import traceback
 import time
+import unicodedata
 from collections import defaultdict
 from datetime import datetime, timedelta
 
@@ -35,7 +37,7 @@ django.setup()
 from django.utils import timezone
 from django.db.models import Count
 
-from clientes.models import Endereco, HistoricoSincronizacao
+from clientes.models import Cliente, Endereco, HistoricoSincronizacao
 from clientes.sync_utils import descrever_rotina_em_execucao, iniciar_historico_com_trava
 
 
@@ -52,11 +54,91 @@ HEADERS = {
 }
 
 ALVO_SETOR_NOME = "comercial | lastmile"
+EXECUTION_LOGGER = None
+
+
+class ExecutionLogger:
+    def __init__(self, historico, tipo):
+        self.historico = historico
+        self.tipo = tipo
+        self.stop_requested = False
+        self.max_chars = 14000
+        self.flush_interval = 2.0
+        self.last_flush_monotonic = 0.0
+        self.lines = []
+
+        timestamp = formatar_datetime_local(timezone.now(), "%Y%m%d_%H%M%S")
+        nome_arquivo = f"{timestamp}_historico_{historico.id}.log"
+        self.relative_path = f"media/integration_logs/{tipo}/{nome_arquivo}"
+        self.absolute_path = os.path.join(
+            BASE_DIR,
+            "media",
+            "integration_logs",
+            tipo,
+            nome_arquivo,
+        )
+        os.makedirs(os.path.dirname(self.absolute_path), exist_ok=True)
+
+    def append(self, mensagem, force_flush=False):
+        self.lines.append(mensagem)
+        self._trim_lines()
+        with open(self.absolute_path, "a", encoding="utf-8") as arquivo_log:
+            arquivo_log.write(mensagem + "\n")
+        self.sync_to_historico(force=force_flush)
+
+    def _trim_lines(self):
+        while self.lines and len("\n".join(self.lines)) > self.max_chars:
+            self.lines.pop(0)
+
+    def build_details(self, cabecalho):
+        atualizado_em = formatar_datetime_local(timezone.now(), "%d/%m/%Y %H:%M:%S")
+        partes = [
+            cabecalho,
+            f"Arquivo de log: {self.relative_path}",
+            f"Atualizado em: {atualizado_em}",
+        ]
+        if self.lines:
+            partes.extend([
+                "",
+                "Ultimas mensagens:",
+                *self.lines,
+            ])
+        return "\n".join(partes)
+
+    def sync_to_historico(self, force=False, cabecalho="Execucao em andamento."):
+        if not force and (time.monotonic() - self.last_flush_monotonic) < self.flush_interval:
+            return
+
+        detalhes_atuais = (
+            type(self.historico).objects
+            .filter(pk=self.historico.pk)
+            .values_list("detalhes", flat=True)
+            .first()
+        )
+        if detalhes_atuais == "STOP":
+            self.stop_requested = True
+            return
+
+        self.historico.detalhes = self.build_details(cabecalho)
+        self.historico.save(update_fields=["detalhes"])
+        self.last_flush_monotonic = time.monotonic()
+
+    def finalize(self, cabecalho):
+        self.sync_to_historico(force=True, cabecalho=cabecalho)
 
 
 def log_etapa(inicio, mensagem):
     decorrido = time.perf_counter() - inicio
-    print(f"[{decorrido:8.1f}s] {mensagem}", flush=True)
+    mensagem_formatada = f"[{decorrido:8.1f}s] {mensagem}"
+    print(mensagem_formatada, flush=True)
+    if EXECUTION_LOGGER:
+        EXECUTION_LOGGER.append(mensagem_formatada)
+
+
+def formatar_datetime_local(valor, formato):
+    if timezone.is_naive(valor):
+        return valor.strftime(formato)
+    return timezone.localtime(valor).strftime(formato)
 
 
 def progresso_visual_habilitado():
@@ -80,6 +162,231 @@ def consultar_ixc(tabela, payload):
 
 def normalizar_texto(valor):
     return str(valor or '').strip()
+
+
+def normalizar_texto_busca(valor):
+    texto = normalizar_texto(valor)
+    if not texto:
+        return ""
+    texto = unicodedata.normalize("NFKD", texto)
+    texto = "".join(ch for ch in texto if not unicodedata.combining(ch))
+    texto = re.sub(r"[^A-Z0-9]+", " ", texto.upper())
+    return re.sub(r"\s+", " ", texto).strip()
+
+
+def extrair_cep_texto(valor):
+    texto = normalizar_texto(valor)
+    if not texto:
+        return ""
+    match = re.search(r"\b(\d{5})-?(\d{3})\b", texto)
+    if not match:
+        return ""
+    return f"{match.group(1)}-{match.group(2)}"
+
+
+def extrair_endereco_referencia_registro(registro):
+    if not registro:
+        return ""
+
+    campos_textuais = [
+        normalizar_texto(registro.get("menssagem")),
+        normalizar_texto(registro.get("mensagem")),
+        normalizar_texto(registro.get("endereco")),
+    ]
+
+    padrao_local = re.compile(
+        r"local\s*:\s*(.+?)(?=\s*\*\s*[A-Z0-9_ /-]+\s*:|$)",
+        re.IGNORECASE | re.DOTALL,
+    )
+    for campo in campos_textuais:
+        if not campo:
+            continue
+        match = padrao_local.search(campo)
+        if match:
+            return normalizar_texto(match.group(1))
+
+    for campo in campos_textuais:
+        if campo:
+            return campo
+    return ""
+
+
+def construir_indice_enderecos_cliente(cliente_ixc_id, logins_permitidos=None):
+    queryset = (
+        Endereco.objects
+        .filter(cliente__id_ixc=cliente_ixc_id)
+        .exclude(login_id_ixc__isnull=True)
+        .exclude(login_id_ixc="")
+        .values("id", "login_id_ixc", "logradouro", "cep", "cidade", "estado", "numero", "bairro")
+    )
+    if logins_permitidos:
+        queryset = queryset.filter(login_id_ixc__in=list(logins_permitidos))
+
+    indice_por_texto = {}
+    indice_por_cep = defaultdict(list)
+    enderecos = []
+
+    for endereco in queryset:
+        login_id = normalizar_texto(endereco.get("login_id_ixc"))
+        if not login_id:
+            continue
+        endereco_info = {
+            "id": endereco.get("id"),
+            "login_id": login_id,
+            "logradouro": normalizar_texto(endereco.get("logradouro")),
+            "logradouro_norm": normalizar_texto_busca(endereco.get("logradouro")),
+            "cep": extrair_cep_texto(endereco.get("cep")),
+            "cidade_norm": normalizar_texto_busca(endereco.get("cidade")),
+            "estado_norm": normalizar_texto_busca(endereco.get("estado")),
+            "numero_norm": normalizar_texto_busca(endereco.get("numero")),
+            "bairro_norm": normalizar_texto_busca(endereco.get("bairro")),
+        }
+        enderecos.append(endereco_info)
+        if endereco_info["logradouro_norm"]:
+            indice_por_texto.setdefault(endereco_info["logradouro_norm"], []).append(endereco_info)
+        if endereco_info["cep"]:
+            indice_por_cep[endereco_info["cep"]].append(endereco_info)
+
+    return {
+        "enderecos": enderecos,
+        "por_texto": indice_por_texto,
+        "por_cep": indice_por_cep,
+    }
+
+
+def resolver_login_local_por_endereco(ticket, os_atual, indice_enderecos):
+    if not indice_enderecos:
+        return None, None
+
+    referencias = [
+        ("ticket", extrair_endereco_referencia_registro(ticket)),
+        ("os", extrair_endereco_referencia_registro(os_atual)),
+    ]
+
+    for origem, referencia in referencias:
+        referencia_norm = normalizar_texto_busca(referencia)
+        if not referencia_norm:
+            continue
+
+        candidatos_texto = indice_enderecos["por_texto"].get(referencia_norm, [])
+        if len(candidatos_texto) == 1:
+            return candidatos_texto[0]["login_id"], f"{origem}:texto_exato"
+        if len(candidatos_texto) > 1:
+            return None, f"{origem}:texto_duplicado"
+
+        cep = extrair_cep_texto(referencia)
+        if not cep:
+            continue
+
+        candidatos_cep = indice_enderecos["por_cep"].get(cep, [])
+        if len(candidatos_cep) == 1:
+            return candidatos_cep[0]["login_id"], f"{origem}:cep_unico"
+
+        if len(candidatos_cep) > 1:
+            candidatos_filtrados = []
+            for candidato in candidatos_cep:
+                numero_ok = not candidato["numero_norm"] or candidato["numero_norm"] in referencia_norm
+                cidade_ok = not candidato["cidade_norm"] or candidato["cidade_norm"] in referencia_norm
+                bairro_ok = not candidato["bairro_norm"] or candidato["bairro_norm"] in referencia_norm
+                if numero_ok and cidade_ok and bairro_ok:
+                    candidatos_filtrados.append(candidato)
+            if len(candidatos_filtrados) == 1:
+                return candidatos_filtrados[0]["login_id"], f"{origem}:cep_refinado"
+
+    return None, None
+
+
+def construir_snapshot_os(registro, ticket_id, setor_id, setor_nome):
+    return {
+        "ticket_os_atual_ixc": normalizar_texto(registro.get('id')) or ticket_id,
+        "setor_os_atual_id_ixc": setor_id,
+        "setor_os_atual_nome": setor_nome,
+        "status_os_atual_nome": extrair_status_registro(registro) or None,
+        "os_atual_aberta": status_indica_os_ativa(registro),
+        "em_os_comercial_lastmile": True,
+    }
+
+
+def buscar_os_lastmile_por_cliente_direto(cliente_ixc_id, mapa_setores, alterado_desde=None, logins_permitidos=None, cliente_idx=None, total_clientes=None):
+    inicio = time.perf_counter()
+    prefixo_cliente = f"[cliente {cliente_idx}/{total_clientes}] " if cliente_idx and total_clientes else ""
+    resposta_os = consultar_todos_registros("su_oss_chamado", {
+        "qtype": "id_cliente",
+        "query": str(cliente_ixc_id),
+        "oper": "=",
+        "rp": "1000",
+        "sortname": "id",
+        "sortorder": "desc",
+    })
+    if not resposta_os:
+        log_etapa(inicio, f"{prefixo_cliente}Busca direta por O.S. nao retornou registros para o cliente IXC {cliente_ixc_id}.")
+        return None
+
+    log_etapa(inicio, f"{prefixo_cliente}Busca direta carregou {len(resposta_os)} O.S. do cliente {cliente_ixc_id}.")
+    snapshots = {}
+    logins_processados = set()
+    metricas = {
+        "os_sem_login": 0,
+        "os_fora_escopo_local": 0,
+        "os_endereco_resolvido": 0,
+        "os_endereco_nao_resolvido": 0,
+        "os_login_repetido": 0,
+        "os_fora_data": 0,
+        "os_setor_diferente": 0,
+    }
+
+    for os_atual in resposta_os:
+        if alterado_desde:
+            data_registro = extrair_data_referencia_registro(os_atual)
+            if data_registro and data_registro < alterado_desde:
+                metricas["os_fora_data"] += 1
+                continue
+
+        setor_id, setor_nome = extrair_setor_registro(os_atual, mapa_setores)
+        if normalizar_texto(setor_nome).lower() != ALVO_SETOR_NOME:
+            metricas["os_setor_diferente"] += 1
+            continue
+
+        login_id = normalizar_texto(os_atual.get("id_login"))
+        if login_id == "0":
+            login_id = ""
+
+        login_em_escopo = bool(login_id and (not logins_permitidos or login_id in logins_permitidos))
+        if not login_em_escopo:
+            if login_id:
+                metricas["os_fora_escopo_local"] += 1
+            else:
+                metricas["os_sem_login"] += 1
+            metricas["os_endereco_nao_resolvido"] += 1
+            continue
+
+        if login_id in logins_processados:
+            metricas["os_login_repetido"] += 1
+            continue
+
+        ticket_id = (
+            normalizar_texto(os_atual.get("id_ticket"))
+            or normalizar_texto(os_atual.get("id_atendimento"))
+            or None
+        )
+        snapshots[login_id] = construir_snapshot_os(os_atual, ticket_id, setor_id, setor_nome)
+        logins_processados.add(login_id)
+
+    log_etapa(
+        inicio,
+        (
+            f"{prefixo_cliente}Busca direta do cliente IXC {cliente_ixc_id} concluida | "
+            f"os_total={len(resposta_os)} | logins_lastmile={len(snapshots)} | "
+            f"sem_login={metricas['os_sem_login']} | "
+            f"fora_escopo_local={metricas['os_fora_escopo_local']} | "
+            f"endereco_resolvido={metricas['os_endereco_resolvido']} | "
+            f"endereco_nao_resolvido={metricas['os_endereco_nao_resolvido']} | "
+            f"login_repetido={metricas['os_login_repetido']} | "
+            f"fora_data={metricas['os_fora_data']} | "
+            f"setor_diferente={metricas['os_setor_diferente']}"
+        ),
+    )
+    return snapshots
 
 
 def obter_data_corte_env():
@@ -154,6 +461,37 @@ def obter_filtro_cliente_args():
             cliente_ixc_id = arg.split("=", 1)[1].strip() or None
 
     return cliente_local_id, cliente_ixc_id
+
+
+def resolver_filtros_cliente(cliente_local_id, cliente_ixc_id):
+    cliente_local_id = normalizar_texto(cliente_local_id) or None
+    cliente_ixc_id = normalizar_texto(cliente_ixc_id) or None
+    avisos = []
+
+    cliente_local = None
+    if cliente_local_id:
+        cliente_local = Cliente.objects.filter(pk=cliente_local_id).only("id", "id_ixc").first()
+        if cliente_local:
+            id_ixc_cliente_local = normalizar_texto(cliente_local.id_ixc)
+            if id_ixc_cliente_local and not cliente_ixc_id:
+                cliente_ixc_id = id_ixc_cliente_local
+        elif not cliente_ixc_id:
+            cliente_por_ixc = Cliente.objects.filter(id_ixc=cliente_local_id).only("id", "id_ixc").first()
+            if cliente_por_ixc:
+                cliente_ixc_id = normalizar_texto(cliente_por_ixc.id_ixc) or cliente_ixc_id
+                cliente_local_id = str(cliente_por_ixc.id)
+                avisos.append(
+                    "O filtro informado em cliente_local_id nao correspondeu a um ID interno. "
+                    f"O valor '{cliente_por_ixc.id_ixc}' foi interpretado automaticamente como ID IXC "
+                    f"do cliente local {cliente_por_ixc.id}."
+                )
+
+    if cliente_ixc_id and not cliente_local_id:
+        cliente_por_ixc = Cliente.objects.filter(id_ixc=cliente_ixc_id).only("id").first()
+        if cliente_por_ixc:
+            cliente_local_id = str(cliente_por_ixc.id)
+
+    return cliente_local_id, cliente_ixc_id, avisos
 
 
 def parse_data_ixc(valor):
@@ -307,12 +645,15 @@ def buscar_os_atual_por_ticket(ticket_id):
     if not ticket_id:
         return None
 
+    # Em producao, o IXC costuma expor a O.S. do fluxo comercial pela
+    # tabela `su_oss_chamado`, entao priorizamos esse lookup para evitar
+    # dezenas de consultas negativas antes de chegar no endpoint certo.
     candidatos = [
+        ("su_oss_chamado", ["id_ticket", "id_atendimento", "id_su_ticket", "id_chamado"]),
+        ("su_oss", ["id_ticket", "id_atendimento", "id_su_ticket", "id_chamado"]),
         ("su_os", ["id_ticket", "id_atendimento", "id_su_ticket", "id_chamado"]),
         ("su_ordem_servico", ["id_ticket", "id_atendimento", "id_su_ticket", "id_chamado"]),
         ("ordem_servico", ["id_ticket", "id_atendimento", "id_su_ticket", "id_chamado"]),
-        ("su_oss_chamado", ["id_ticket", "id_atendimento", "id_su_ticket", "id_chamado"]),
-        ("su_oss", ["id_ticket", "id_atendimento", "id_su_ticket", "id_chamado"]),
     ]
 
     for tabela, qtypes in candidatos:
@@ -502,6 +843,17 @@ def buscar_os_lastmile_por_cliente(cliente_ixc_id, mapa_setores, alterado_desde=
     if not cliente_ixc_id:
         return {}
 
+    snapshots_diretos = buscar_os_lastmile_por_cliente_direto(
+        cliente_ixc_id,
+        mapa_setores,
+        alterado_desde=alterado_desde,
+        logins_permitidos=logins_permitidos,
+        cliente_idx=cliente_idx,
+        total_clientes=total_clientes,
+    )
+    if snapshots_diretos is not None:
+        return snapshots_diretos
+
     resposta_tickets = consultar_todos_registros("su_ticket", {
         "qtype": "id_cliente",
         "query": str(cliente_ixc_id),
@@ -517,6 +869,8 @@ def buscar_os_lastmile_por_cliente(cliente_ixc_id, mapa_setores, alterado_desde=
     metricas = {
         "tickets_sem_login": 0,
         "tickets_fora_escopo_local": 0,
+        "tickets_endereco_resolvido": 0,
+        "tickets_endereco_nao_resolvido": 0,
         "tickets_login_repetido": 0,
         "tickets_sem_id": 0,
         "tickets_sem_os": 0,
@@ -534,18 +888,8 @@ def buscar_os_lastmile_por_cliente(cliente_ixc_id, mapa_setores, alterado_desde=
 
     for ticket in resposta_tickets:
         login_id = normalizar_texto(ticket.get("id_login"))
-        if not login_id:
-            metricas["tickets_sem_login"] += 1
-            pbar_tickets.update(1)
-            continue
-        if logins_permitidos and login_id not in logins_permitidos:
-            metricas["tickets_fora_escopo_local"] += 1
-            pbar_tickets.update(1)
-            continue
-        if login_id in logins_processados:
-            metricas["tickets_login_repetido"] += 1
-            pbar_tickets.update(1)
-            continue
+        if login_id == "0":
+            login_id = ""
 
         ticket_id = normalizar_texto(ticket.get("id"))
         if not ticket_id:
@@ -571,6 +915,21 @@ def buscar_os_lastmile_por_cliente(cliente_ixc_id, mapa_setores, alterado_desde=
             pbar_tickets.update(1)
             continue
 
+        login_em_escopo = bool(login_id and (not logins_permitidos or login_id in logins_permitidos))
+        if not login_em_escopo:
+            if login_id:
+                metricas["tickets_fora_escopo_local"] += 1
+            else:
+                metricas["tickets_sem_login"] += 1
+            metricas["tickets_endereco_nao_resolvido"] += 1
+            pbar_tickets.update(1)
+            continue
+
+        if login_id in logins_processados:
+            metricas["tickets_login_repetido"] += 1
+            pbar_tickets.update(1)
+            continue
+
         os_aberta = status_indica_os_ativa(os_atual)
         snapshots[login_id] = {
             "ticket_os_atual_ixc": normalizar_texto(os_atual.get('id')) or ticket_id,
@@ -591,6 +950,8 @@ def buscar_os_lastmile_por_cliente(cliente_ixc_id, mapa_setores, alterado_desde=
             f"tickets={total_tickets} | logins_lastmile={len(snapshots)} | "
             f"sem_login={metricas['tickets_sem_login']} | "
             f"fora_escopo_local={metricas['tickets_fora_escopo_local']} | "
+            f"endereco_resolvido={metricas['tickets_endereco_resolvido']} | "
+            f"endereco_nao_resolvido={metricas['tickets_endereco_nao_resolvido']} | "
             f"login_repetido={metricas['tickets_login_repetido']} | "
             f"sem_id={metricas['tickets_sem_id']} | "
             f"sem_os={metricas['tickets_sem_os']} | "
@@ -674,7 +1035,14 @@ def sincronizar_os_comercial_lastmile(historico):
     log_etapa(inicio, "Iniciando sincronizacao rapida de OS Comercial | Lastmile...")
     alterado_desde = obter_data_corte_args()
     cliente_local_id, cliente_ixc_id_arg = obter_filtro_cliente_args()
+    cliente_local_id, cliente_ixc_id_arg, avisos_filtro = resolver_filtros_cliente(
+        cliente_local_id,
+        cliente_ixc_id_arg,
+    )
     mapa_setores = buscar_mapa_setores()
+
+    for aviso in avisos_filtro:
+        log_etapa(inicio, aviso)
 
     queryset_base = (
         Endereco.objects
@@ -714,6 +1082,12 @@ def sincronizar_os_comercial_lastmile(historico):
             "Nenhum endereco com status ativo foi encontrado. "
             f"Usando fallback por status e considerando {total} endereco(s) nao cancelado(s)."
         )
+    if total == 0:
+        detalhe = "Nenhum endereco elegivel com login_id_ixc foi encontrado para os filtros informados."
+        if avisos_filtro:
+            detalhe = f"{detalhe} {' '.join(avisos_filtro)}"
+        log_etapa(inicio, detalhe)
+        return 0, detalhe
 
     logins_por_cliente = defaultdict(set)
     for cliente_id_ixc, login_id_ixc in queryset.values_list('cliente__id_ixc', 'login_id_ixc'):
@@ -767,7 +1141,7 @@ def sincronizar_os_comercial_lastmile(historico):
 
         for endereco in queryset_alvo.iterator():
             historico.refresh_from_db()
-            if historico.detalhes == "STOP":
+            if historico.detalhes == "STOP" or (EXECUTION_LOGGER and EXECUTION_LOGGER.stop_requested):
                 raise KeyboardInterrupt("Parada solicitada via Admin")
 
             snapshot = snapshots_lastmile.get(str(endereco.login_id_ixc))
@@ -788,14 +1162,17 @@ def sincronizar_os_comercial_lastmile(historico):
 
         pbar.close()
         log_etapa(inicio, "Sincronizacao concluida pelo caminho otimizado por cliente.")
-        return total
+        detalhe = "Marcacao de OS atual Comercial | Lastmile concluida com sucesso."
+        if avisos_filtro:
+            detalhe = f"{detalhe} {' '.join(avisos_filtro)}"
+        return total, detalhe
 
     log_etapa(inicio, "Nenhum cliente IXC valido encontrado. Caindo para o caminho de fallback por endereco.")
     pbar = tqdm(total=total, desc="Marcando OS Comercial Lastmile", unit="end")
 
     for endereco in queryset.iterator():
         historico.refresh_from_db()
-        if historico.detalhes == "STOP":
+        if historico.detalhes == "STOP" or (EXECUTION_LOGGER and EXECUTION_LOGGER.stop_requested):
             raise KeyboardInterrupt("Parada solicitada via Admin")
 
         ticket_atual = buscar_ticket_atual_por_login(endereco)
@@ -859,7 +1236,10 @@ def sincronizar_os_comercial_lastmile(historico):
 
     pbar.close()
     log_etapa(inicio, "Sincronizacao concluida pelo caminho de fallback.")
-    return total
+    detalhe = "Marcacao de OS atual Comercial | Lastmile concluida com sucesso."
+    if avisos_filtro:
+        detalhe = f"{detalhe} {' '.join(avisos_filtro)}"
+    return total, detalhe
 
 
 if __name__ == "__main__":
@@ -867,6 +1247,10 @@ if __name__ == "__main__":
     origem_detectada = 'manual' if eh_manual else 'automatica'
     data_corte_args = obter_data_corte_args()
     cliente_local_id, cliente_ixc_id = obter_filtro_cliente_args()
+    cliente_local_id, cliente_ixc_id, avisos_filtro = resolver_filtros_cliente(
+        cliente_local_id,
+        cliente_ixc_id,
+    )
 
     usuario_executor = None
     if eh_manual:
@@ -892,25 +1276,45 @@ if __name__ == "__main__":
                 f" Cliente IXC filtrado: {cliente_ixc_id}."
                 if cliente_ixc_id else ''
             )
+            + (
+                f" {' '.join(avisos_filtro)}"
+                if avisos_filtro else ''
+            )
         ),
     )
     if rotina_ativa:
         print(descrever_rotina_em_execucao('os_comercial_lastmile', rotina_ativa))
         raise SystemExit(0)
 
+    EXECUTION_LOGGER = ExecutionLogger(historico, "os_comercial_lastmile")
+    EXECUTION_LOGGER.append(
+        f"[     0.0s] Historico #{historico.id} iniciado para OS Comercial | Lastmile.",
+        force_flush=True,
+    )
+
     try:
-        total_processado = sincronizar_os_comercial_lastmile(historico)
+        total_processado, detalhes_finais = sincronizar_os_comercial_lastmile(historico)
         historico.status = 'sucesso'
         historico.registros_processados = total_processado
-        historico.detalhes = 'Marcacao de OS atual Comercial | Lastmile concluida com sucesso.'
+        historico.detalhes = detalhes_finais
+        if EXECUTION_LOGGER:
+            EXECUTION_LOGGER.finalize(detalhes_finais)
     except KeyboardInterrupt as exc:
         historico.status = 'erro'
         historico.detalhes = str(exc)
         print(str(exc))
+        if EXECUTION_LOGGER:
+            EXECUTION_LOGGER.append(f"[erro] {exc}", force_flush=True)
+            EXECUTION_LOGGER.finalize(f"Execucao interrompida. {exc}")
     except Exception:
         historico.status = 'erro'
-        historico.detalhes = traceback.format_exc()
+        erro_detalhado = traceback.format_exc()
+        historico.detalhes = erro_detalhado
         print("Erro fatal ao marcar OS Comercial | Lastmile.")
+        if EXECUTION_LOGGER:
+            for linha in erro_detalhado.rstrip().splitlines():
+                EXECUTION_LOGGER.append(linha, force_flush=True)
+            EXECUTION_LOGGER.finalize("Execucao finalizada com erro.")
     finally:
         historico.data_fim = timezone.now()
         historico.save()

@@ -30,23 +30,49 @@ def endereco_lastmile_partner_search(request, endereco_pk):
     )
 
     q = (request.GET.get("q") or "").strip()
+    busca_ampla = (request.GET.get("busca_ampla") or "").strip().lower() in {
+        "1",
+        "true",
+        "sim",
+        "s",
+        "on",
+    }
     estado = (request.GET.get("estado") or endereco.estado or "").strip().upper()
     cidade = (request.GET.get("cidade") or endereco.cidade or "").strip()
     parceiros_queryset = Partner.objects.all()
 
     if q:
-        parceiros_queryset = parceiros_queryset.filter(
+        filtros_busca = (
             Q(nome_fantasia__icontains=q)
             | Q(razao_social__icontains=q)
             | Q(cnpj_cpf__icontains=q)
         )
+        if busca_ampla:
+            filtros_busca |= (
+                Q(proposals__client_address__cidade__icontains=q)
+                | Q(proposals__client_address__estado__icontains=q)
+                | Q(proposals__client_address__bairro__icontains=q)
+            )
+        parceiros_queryset = parceiros_queryset.filter(
+            filtros_busca
+        )
 
-    if estado:
+    if busca_ampla and estado:
+        parceiros_queryset = parceiros_queryset.filter(
+            proposals__client_address__estado__icontains=estado
+        )
+
+    if busca_ampla and cidade:
+        parceiros_queryset = parceiros_queryset.filter(
+            proposals__client_address__cidade__icontains=cidade
+        )
+
+    if not busca_ampla and estado:
         parceiros_queryset = parceiros_queryset.filter(
             proposals__client_address__estado__iexact=estado
         )
 
-    if cidade:
+    if not busca_ampla and cidade:
         parceiros_queryset = parceiros_queryset.filter(
             proposals__client_address__cidade__icontains=cidade
         )
@@ -86,6 +112,7 @@ def endereco_lastmile_partner_search(request, endereco_pk):
                 "estado": endereco.estado or "",
             },
             "cobertura": _montar_cobertura_parceiros_por_regiao(endereco),
+            "busca_ampla_ativa": busca_ampla,
             "resultados": resultados,
         }
     )
