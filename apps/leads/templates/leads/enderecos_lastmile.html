@@ -253,7 +253,7 @@
                     <span>Endereço</span>
                     <span class="text-right">Sel.</span>
                 </div>
-                <div id="leadAddressGridList" class="max-h-[38vh] overflow-y-auto border border-gray-100 border-t-0 rounded-b-[1.5rem] bg-white divide-y divide-gray-100">
+                <div id="leadAddressGridList" class="max-h-[52vh] overflow-y-auto border border-gray-100 border-t-0 rounded-b-[1.5rem] bg-white divide-y divide-gray-100">
                     <div class="px-4 py-8 text-center text-sm font-bold text-gray-400 uppercase">Carregando...</div>
                 </div>
             </section>
@@ -285,6 +285,9 @@
                         Criar Cotações
                     </button>
                 </div>
+            </div>
+            <div id="partnerProposalList" class="hidden max-h-[24vh] overflow-y-auto border border-gray-100 rounded-[1.5rem] bg-gray-50/40 p-3 mt-4 space-y-3">
+                <div class="px-4 py-10 text-center text-sm font-bold text-gray-400 uppercase">Selecione filtros para visualizar os provedores elegíveis</div>
             </div>
             <p class="text-[10px] font-bold text-gray-400 mt-3">Regra de bloqueio: o sistema só impede nova cotação quando o mesmo provedor já possui uma cotação em Em negociação para este mesmo endereço operacional.</p>
         </form>
@@ -373,6 +376,7 @@ function closePartnerProposalModal() {
     document.getElementById('partnerProposalModal').classList.add('hidden');
     document.getElementById('partnerCoverageSummary').innerText = '';
     document.getElementById('partnerProposalSummary').innerText = '';
+    document.getElementById('partnerProposalList').innerHTML = '';
     document.getElementById('leadAddressGridList').innerHTML = '';
     document.getElementById('leadAddressGridSummary').innerText = '';
     document.getElementById('selectedLeadAddressId').value = '';
@@ -403,8 +407,8 @@ async function loadLeadAddressGrid() {
 
     const url = new URL(leadAddressGridUrl(partnerProposalAddressId), window.location.origin);
     if (q) url.searchParams.set('q', q);
-    if (cidade) url.searchParams.set('cidade', cidade);
-    if (estado) url.searchParams.set('estado', estado);
+    url.searchParams.set('cidade', cidade);
+    url.searchParams.set('estado', estado);
 
     const response = await fetch(url.toString(), {
         headers: { 'X-Requested-With': 'XMLHttpRequest' }
@@ -484,33 +488,28 @@ async function loadPartnerProposalOptions() {
     const leadEnderecoIds = Array.from(selectedLeadAddressIds);
     const coverage = document.getElementById('partnerCoverageSummary');
     const summary = document.getElementById('partnerProposalSummary');
+    const list = document.getElementById('partnerProposalList');
     const selectedPartnerInputs = document.getElementById('selectedPartnerInputs');
 
     partnerProposalOptionsLoading = true;
     setPartnerProposalSubmitState(true);
+    list.innerHTML = '<div class="px-4 py-10 text-center text-sm font-bold text-gray-400 uppercase">Carregando provedores...</div>';
     coverage.innerText = buscaAmpla
         ? 'Busca ampla ativa para encontrar parceiros fora da cobertura regional padrao...'
         : 'Analisando cobertura regional dos parceiros...';
-    if (!leadEnderecoIds.length) {
-        if (requestId !== partnerProposalOptionsRequestId) return;
-        summary.innerText = 'Selecione pelo menos um endereço da prospecção para calcular os parceiros elegíveis.';
-        selectedPartnerInputs.innerHTML = '';
-        partnerProposalOptionsLoading = false;
-        setPartnerProposalSubmitState(false);
-        return;
-    }
-
-    summary.innerText = 'Buscando parceiros...';
+    summary.innerText = !leadEnderecoIds.length && !buscaAmpla
+        ? 'Buscando provedores da cobertura conhecida. Se quiser ampliar, marque "Buscar fora da regiao".'
+        : 'Buscando parceiros...';
     selectedPartnerInputs.innerHTML = '';
 
     const url = new URL(partnerSearchUrl(partnerProposalAddressId), window.location.origin);
     if (buscaAmpla) {
         url.searchParams.set('busca_ampla', '1');
-        if (estado) url.searchParams.set('estado', estado);
-        if (cidade) url.searchParams.set('cidade', cidade);
+        url.searchParams.set('estado', estado);
+        url.searchParams.set('cidade', cidade);
     } else {
-        if (estado) url.searchParams.set('estado', estado);
-        if (cidade) url.searchParams.set('cidade', cidade);
+        url.searchParams.set('estado', estado);
+        url.searchParams.set('cidade', cidade);
     }
     if (q) {
         url.searchParams.set('q', q);
@@ -548,10 +547,20 @@ async function loadPartnerProposalOptions() {
         document.getElementById('partnerProposalLeadFallbackMode').value = '0';
 
         summary.innerText = buscaAmplaAtiva
-            ? `${parceirosDisponiveis.length} provedor(es) foram encontrados na busca ampla com os filtros informados. Ao criar, o sistema abrira cotacoes apenas para os provedores elegiveis desta busca.`
-            : `${parceirosDisponiveis.length} provedor(es) foram encontrados pela cobertura conhecida para esta regiao. Ao criar, o sistema abrira cotacoes apenas para os provedores selecionados na prospeccao.`;
+            ? `${parceirosDisponiveis.length} provedor(es) foram encontrados na busca ampla com os filtros informados. Ao criar, o sistema abrira cotacoes para esses provedores.`
+            : `${parceirosDisponiveis.length} provedor(es) foram encontrados pela cobertura conhecida para esta regiao. Ao criar, o sistema abrira cotacoes para esses provedores.`;
 
         if (!parceirosDisponiveis.length) {
+            list.innerHTML = `
+                <div class="px-4 py-10 text-center">
+                    <p class="text-sm font-black uppercase italic text-gray-500">Nenhum provedor elegivel encontrado</p>
+                    <p class="text-xs font-bold text-gray-400 mt-2">${
+                        buscaAmplaAtiva
+                            ? 'Ajuste a busca, cidade ou UF para procurar em outra regiao.'
+                            : 'Marque "Buscar fora da regiao" para pesquisar provedores fora da cobertura conhecida.'
+                    }</p>
+                </div>
+            `;
             if (leadEnderecoIds.length) {
                 summary.innerText = buscaAmplaAtiva
                     ? 'Nenhum provedor elegivel foi encontrado na busca ampla com os filtros informados. Ajuste a busca, cidade ou UF, ou siga com Criar Cotacoes para usar apenas os provedores ja ligados a esta prospeccao.'
@@ -572,11 +581,29 @@ async function loadPartnerProposalOptions() {
         selectedPartnerInputs.innerHTML = parceirosDisponiveis
             .map((partner) => `<input type="hidden" name="partner_ids" value="${partner.id}">`)
             .join('');
+        list.innerHTML = resultados.map((partner) => {
+            const blocked = partner.ja_possui_cotacao_aberta;
+            const statusBadge = blocked
+                ? '<span class="px-3 py-1 rounded-lg bg-yellow-50 text-yellow-700 border border-yellow-100 text-[10px] font-black uppercase">Cotacao ja aberta</span>'
+                : '<span class="px-3 py-1 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-100 text-[10px] font-black uppercase">Elegivel</span>';
+
+            return `
+                <div class="flex items-center justify-between gap-4 rounded-2xl border border-gray-100 bg-white px-4 py-4 ${blocked ? 'opacity-60' : ''}">
+                    <div class="min-w-0">
+                        <div class="text-sm font-black text-gray-900 uppercase italic leading-tight">${partner.nome}</div>
+                        <div class="text-[10px] font-bold uppercase text-gray-400 mt-1">${partner.cnpj_cpf || 'Sem CNPJ/CPF'}${partner.status ? ' • ' + partner.status : ''}</div>
+                        ${partner.razao_social && partner.razao_social !== partner.nome ? `<div class="text-[11px] text-gray-500 font-bold mt-2">${partner.razao_social}</div>` : ''}
+                    </div>
+                    <div class="shrink-0">${statusBadge}</div>
+                </div>
+            `;
+        }).join('');
     } catch (error) {
         if (requestId !== partnerProposalOptionsRequestId) return;
         console.error(error);
         summary.innerText = 'Nao foi possivel carregar os parceiros elegiveis agora. Tente novamente.';
         selectedPartnerInputs.innerHTML = '';
+        list.innerHTML = '<div class="px-4 py-10 text-center text-sm font-bold text-gray-400 uppercase">Falha ao carregar provedores</div>';
     } finally {
         if (requestId === partnerProposalOptionsRequestId) {
             partnerProposalOptionsLoading = false;
@@ -620,9 +647,10 @@ document.getElementById('partnerExpandSearchToggle').addEventListener('change', 
 });
 
 document.getElementById('partnerProposalCreateForm').addEventListener('submit', function (event) {
-    if (!selectedLeadAddressIds.size) {
+    const possuiPartners = Boolean(document.querySelector('#selectedPartnerInputs input[name="partner_ids"]'));
+    if (!selectedLeadAddressIds.size && !possuiPartners) {
         event.preventDefault();
-        alert('Selecione pelo menos um endereço da prospecção antes de criar as cotações.');
+        alert('Selecione pelo menos um endereço da prospecção ou carregue provedores elegíveis antes de criar as cotações.');
         return;
     }
     if (partnerProposalOptionsLoading) {

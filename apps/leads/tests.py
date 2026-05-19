@@ -3,6 +3,7 @@ from django.test import TestCase
 from django.urls import reverse
 
 from clientes.models import Cliente, Endereco
+from leads.models import LeadEmpresa, LeadEndereco
 from partners.models import Partner, Proposal
 
 
@@ -45,9 +46,45 @@ class EnderecoLastmilePartnerSearchTests(TestCase):
             cnpj_cpf="22222222000122",
             status="ativo",
         )
+        self.parceiro_sp = Partner.objects.create(
+            nome_fantasia="Parceiro Sao Paulo",
+            razao_social="Parceiro Sao Paulo LTDA",
+            cnpj_cpf="33333333000133",
+            status="ativo",
+        )
 
         self._criar_proposta_regional(self.parceiro_pe, "Recife", "PE", "Boa Viagem")
         self._criar_proposta_regional(self.parceiro_ce, "Fortaleza", "CE", "Aldeota")
+        self._criar_proposta_regional(self.parceiro_sp, "Sao Paulo", "SP", "Pinheiros")
+
+        self.lead_empresa_pe = LeadEmpresa.objects.create(
+            razao_social="Lead PE",
+            nome_fantasia="Lead PE",
+            cnpj_cpf="44444444000144",
+        )
+        self.lead_empresa_sp = LeadEmpresa.objects.create(
+            razao_social="Lead SP",
+            nome_fantasia="Lead SP",
+            cnpj_cpf="55555555000155",
+        )
+        self.lead_endereco_pe = LeadEndereco.objects.create(
+            empresa=self.lead_empresa_pe,
+            endereco="Rua Recife",
+            numero="10",
+            bairro="Boa Viagem",
+            cidade="Recife",
+            estado="PE",
+            cep="50000-000",
+        )
+        self.lead_endereco_sp = LeadEndereco.objects.create(
+            empresa=self.lead_empresa_sp,
+            endereco="Rua Sao Paulo",
+            numero="20",
+            bairro="Pinheiros",
+            cidade="Sao Paulo",
+            estado="SP",
+            cep="01000-000",
+        )
 
     def _criar_proposta_regional(self, partner, cidade, estado, bairro):
         cliente = Cliente.objects.create(
@@ -96,3 +133,66 @@ class EnderecoLastmilePartnerSearchTests(TestCase):
 
         self.assertIn("Parceiro Ceara", nomes)
         self.assertTrue(data["busca_ampla_ativa"])
+
+    def test_busca_ampla_sem_filtros_nao_fica_presa_a_regiao_do_endereco(self):
+        response = self.client.get(
+            reverse("endereco_lastmile_partner_search", args=[self.endereco_alvo.pk]),
+            {"busca_ampla": "1"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        nomes = {item["nome"] for item in data["resultados"]}
+
+        self.assertIn("Parceiro Pernambuco", nomes)
+        self.assertIn("Parceiro Ceara", nomes)
+        self.assertIn("Parceiro Sao Paulo", nomes)
+        self.assertTrue(data["busca_ampla_ativa"])
+
+    def test_busca_ampla_respeita_cidade_esvaziada_ao_filtrar_por_uf(self):
+        response = self.client.get(
+            reverse("endereco_lastmile_partner_search", args=[self.endereco_alvo.pk]),
+            {"busca_ampla": "1", "estado": "SP", "cidade": ""},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        nomes = {item["nome"] for item in data["resultados"]}
+
+        self.assertIn("Parceiro Sao Paulo", nomes)
+        self.assertNotIn("Parceiro Pernambuco", nomes)
+        self.assertNotIn("Parceiro Ceara", nomes)
+        self.assertTrue(data["busca_ampla_ativa"])
+
+    def test_grid_de_enderecos_respeita_cidade_esvaziada_ao_filtrar_por_uf(self):
+        response = self.client.get(
+            reverse("endereco_lastmile_lead_address_grid", args=[self.endereco_alvo.pk]),
+            {"estado": "SP", "cidade": ""},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        nomes = {item["lead_nome"] for item in data["results"]}
+
+        self.assertIn("Lead SP", nomes)
+        self.assertNotIn("Lead PE", nomes)
+        self.assertEqual(data["filtros"]["cidade"], "")
+        self.assertEqual(data["filtros"]["estado"], "SP")
+
+    def test_criacao_de_cotacao_aceita_partner_ids_sem_lead_endereco(self):
+        response = self.client.post(
+            reverse("endereco_lastmile_batch_proposal_create", args=[self.endereco_alvo.pk]),
+            {
+                "partner_ids": [str(self.parceiro_sp.id)],
+                "next": reverse("enderecos_lastmile"),
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertTrue(
+            Proposal.objects.filter(
+                client_address=self.endereco_alvo,
+                partner=self.parceiro_sp,
+                status="analise",
+            ).exists()
+        )

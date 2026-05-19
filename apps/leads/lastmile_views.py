@@ -13,6 +13,7 @@ from partners.models import Partner, Proposal
 
 from .models import LeadEndereco
 from .views import (
+    _get_request_param_or_default,
     _montar_cobertura_parceiros_por_regiao,
     _obter_ou_criar_parceiro_do_lead,
     grupo_LastMile_required,
@@ -37,8 +38,10 @@ def endereco_lastmile_partner_search(request, endereco_pk):
         "s",
         "on",
     }
-    estado = (request.GET.get("estado") or endereco.estado or "").strip().upper()
-    cidade = (request.GET.get("cidade") or endereco.cidade or "").strip()
+    estado_default = "" if busca_ampla else endereco.estado
+    cidade_default = "" if busca_ampla else endereco.cidade
+    estado = _get_request_param_or_default(request, "estado", estado_default).upper()
+    cidade = _get_request_param_or_default(request, "cidade", cidade_default)
     parceiros_queryset = Partner.objects.all()
 
     if q:
@@ -196,6 +199,11 @@ def endereco_lastmile_batch_proposal_create(request, endereco_pk):
         os_atual_aberta=True,
     )
 
+    partner_ids = [
+        int(value)
+        for value in request.POST.getlist("partner_ids")
+        if value and str(value).isdigit()
+    ]
     lead_endereco_ids = [
         int(value)
         for value in request.POST.getlist("lead_endereco_ids")
@@ -211,10 +219,10 @@ def endereco_lastmile_batch_proposal_create(request, endereco_pk):
         or reverse_lazy("enderecos_lastmile_cliente", kwargs={"pk": endereco.cliente_id})
     )
 
-    if not lead_endereco_ids:
+    if not lead_endereco_ids and not partner_ids:
         messages.error(
             request,
-            "Selecione pelo menos um endereco da prospeccao antes de criar as cotacoes.",
+            "Selecione pelo menos um endereco da prospeccao ou carregue provedores elegiveis antes de criar as cotacoes.",
         )
         return redirect(redirect_url)
 
@@ -223,33 +231,54 @@ def endereco_lastmile_batch_proposal_create(request, endereco_pk):
         .filter(pk__in=lead_endereco_ids)
         .order_by("empresa__razao_social", "cidade", "bairro", "endereco", "id")
     )
-    if not lead_enderecos:
+    if lead_endereco_ids and not lead_enderecos:
         messages.error(request, "Nenhum endereco valido da prospeccao foi selecionado.")
+        return redirect(redirect_url)
+
+    parceiros_diretos = list(
+        Partner.objects.filter(id__in=partner_ids).order_by("nome_fantasia", "razao_social", "id")
+    )
+    if partner_ids and not parceiros_diretos:
+        messages.error(request, "Nenhum provedor valido foi encontrado para abrir as cotacoes.")
         return redirect(redirect_url)
 
     proposal_type = ContentType.objects.get_for_model(Proposal)
     criadas = 0
     parceiros_ignorados = 0
-    parceiros_processados = {}
 
     with transaction.atomic():
-        for lead_endereco_item in lead_enderecos:
-            partner, lead_espelho_item = _obter_ou_criar_parceiro_do_endereco_lead(
-                lead_endereco_item
-            )
-            parceiros_processados.setdefault(
-                partner.id,
-                {
-                    "partner": partner,
-                    "lead_endereco": lead_endereco_item,
-                    "lead": lead_espelho_item,
-                },
-            )
+        parceiros_processados = {}
+
+        if parceiros_diretos:
+            for partner in parceiros_diretos:
+                parceiros_processados.setdefault(
+                    partner.id,
+                    {
+                        "partner": partner,
+                        "lead_endereco": None,
+                        "lead": None,
+                        "origem": "busca_ampla" if request.POST.get("force_lead_partner_fallback") != "1" else "busca_direta",
+                    },
+                )
+        else:
+            for lead_endereco_item in lead_enderecos:
+                partner, lead_espelho_item = _obter_ou_criar_parceiro_do_endereco_lead(
+                    lead_endereco_item
+                )
+                parceiros_processados.setdefault(
+                    partner.id,
+                    {
+                        "partner": partner,
+                        "lead_endereco": lead_endereco_item,
+                        "lead": lead_espelho_item,
+                        "origem": "prospeccao",
+                    },
+                )
 
         if not parceiros_processados:
             messages.error(
                 request,
-                "Nenhum provedor valido foi encontrado a partir dos enderecos da prospeccao selecionados.",
+                "Nenhum provedor valido foi encontrado para abrir as cotacoes.",
             )
             return redirect(redirect_url)
 
@@ -257,6 +286,7 @@ def endereco_lastmile_batch_proposal_create(request, endereco_pk):
             partner = payload["partner"]
             lead_endereco_item = payload["lead_endereco"]
             lead_espelho_item = payload["lead"]
+            origem = payload["origem"]
 
             if Proposal.objects.filter(
                 client_address=endereco,
@@ -284,8 +314,9 @@ def endereco_lastmile_batch_proposal_create(request, endereco_pk):
                     "Cotacao criada a partir da fila de enderecos Lastmile.\n\n"
                     f"ID da proposta: #{proposal.codigo_exibicao}\n"
                     f"Parceiro: {partner}\n"
-                    f"Prospeccao: {lead_endereco_item.empresa}\n"
-                    f"Endereco da prospeccao: {lead_endereco_item}\n"
+                    f"Origem: {'Busca ampla de provedores' if origem == 'busca_ampla' else 'Endereco da prospeccao'}\n"
+                    f"Prospeccao: {lead_endereco_item.empresa if lead_endereco_item else '--'}\n"
+                    f"Endereco da prospeccao: {lead_endereco_item or '--'}\n"
                     f"Cliente: {proposal.cliente or '--'}\n"
                     f"Unidade: {proposal.client_address or '--'}"
                 ),

@@ -546,6 +546,8 @@ async function loadPartnerProposalOptions() {
     const url = new URL(partnerSearchUrl(partnerProposalAddressId), window.location.origin);
     if (buscaAmpla) {
         url.searchParams.set('busca_ampla', '1');
+        url.searchParams.set('estado', '');
+        url.searchParams.set('cidade', '');
     } else {
         if (estado) url.searchParams.set('estado', estado);
         if (cidade) url.searchParams.set('cidade', cidade);

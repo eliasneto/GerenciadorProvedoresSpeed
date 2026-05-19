@@ -40,6 +40,12 @@ def grupo_LastMile_required(user):
     raise PermissionDenied
 
 
+def _get_request_param_or_default(request, name, default=''):
+    if name in request.GET:
+        return (request.GET.get(name) or '').strip()
+    return (default or '').strip()
+
+
 def _nomes_candidatos_lead(lead):
     nomes = []
     vistos = set()
@@ -1399,8 +1405,8 @@ def endereco_lastmile_lead_address_grid(request, endereco_pk):
     )
 
     q = (request.GET.get('q') or '').strip()
-    cidade = (request.GET.get('cidade') or endereco.cidade or '').strip()
-    estado = (request.GET.get('estado') or endereco.estado or '').strip().upper()
+    cidade = _get_request_param_or_default(request, 'cidade', endereco.cidade)
+    estado = _get_request_param_or_default(request, 'estado', endereco.estado).upper()
 
     enderecos = LeadEndereco.objects.select_related('empresa').all()
 
