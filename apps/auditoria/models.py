@@ -183,6 +183,22 @@ class CadastroClienteIXCAuditoria(IntegrationAudit):
         verbose_name_plural = "Cadastro de Clientes IXC"
 
 
+class EdicaoLoginIXCAuditoria(IntegrationAudit):
+    class Meta:
+        proxy = True
+        app_label = "auditoria"
+        verbose_name = "Edicao de Login IXC"
+        verbose_name_plural = "Edicao de Logins IXC"
+
+
+class EdicaoAtendimentoIXCAuditoria(IntegrationAudit):
+    class Meta:
+        proxy = True
+        app_label = "auditoria"
+        verbose_name = "Edicao de Atendimento IXC"
+        verbose_name_plural = "Edicao de Atendimentos IXC"
+
+
 class HistoricoSincronizacaoAuditoria(HistoricoSincronizacao):
     class Meta:
         proxy = True

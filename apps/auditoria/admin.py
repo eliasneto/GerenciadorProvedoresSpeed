@@ -17,6 +17,8 @@ from scripts.integracoes.backoffice.desativar_atendimento_ixc import executar_de
 from .models import (
     CadastroClienteIXCAuditoria,
     CotacaoStatusAuditoria,
+    EdicaoAtendimentoIXCAuditoria,
+    EdicaoLoginIXCAuditoria,
     EmailCotacaoRespostaImportacaoAuditoria,
     EmailCotacaoRespostaSyncAuditoria,
     DesativacaoAtendimentoIXCAuditoria,
@@ -170,6 +172,70 @@ class CadastroClienteIXCAuditoriaAdmin(IntegrationAuditExportAdminMixin, admin.M
     )
     integration_audit_note = (
         "Use os botoes de exportacao para baixar os resultados ja abertos em colunas no CSV ou no Excel."
+    )
+    list_display = (
+        "arquivo_nome",
+        "action",
+        "total_registros",
+        "total_sucessos",
+        "total_erros",
+        "usuario",
+        "criado_em",
+        "exportacoes_disponiveis",
+    )
+    list_filter = ("action", "criado_em")
+    search_fields = ("usuario__username", "arquivo_nome")
+    fields = IntegrationAuditExportAdminMixin.integration_audit_fields
+    readonly_fields = IntegrationAuditExportAdminMixin.integration_audit_fields
+    inlines = [IntegrationAuditItemInline]
+
+    def get_queryset(self, request):
+        return super().get_queryset(request).filter(integration=self.integration_code)
+
+
+@admin.register(EdicaoLoginIXCAuditoria)
+class EdicaoLoginIXCAuditoriaAdmin(IntegrationAuditExportAdminMixin, admin.ModelAdmin):
+    integration_code = "edicao_login_ixc"
+    integration_audit_title = "Edicao de Logins IXC"
+    integration_audit_eyebrow = "Automacao administrativa"
+    integration_audit_subtitle = (
+        "Consulte as alteracoes em massa de logins no IXC, com rastreabilidade por arquivo, "
+        "linha processada e campos alterados."
+    )
+    integration_audit_note = (
+        "As exportacoes abrem os campos tratados em colunas separadas no CSV e no Excel."
+    )
+    list_display = (
+        "arquivo_nome",
+        "action",
+        "total_registros",
+        "total_sucessos",
+        "total_erros",
+        "usuario",
+        "criado_em",
+        "exportacoes_disponiveis",
+    )
+    list_filter = ("action", "criado_em")
+    search_fields = ("usuario__username", "arquivo_nome")
+    fields = IntegrationAuditExportAdminMixin.integration_audit_fields
+    readonly_fields = IntegrationAuditExportAdminMixin.integration_audit_fields
+    inlines = [IntegrationAuditItemInline]
+
+    def get_queryset(self, request):
+        return super().get_queryset(request).filter(integration=self.integration_code)
+
+
+@admin.register(EdicaoAtendimentoIXCAuditoria)
+class EdicaoAtendimentoIXCAuditoriaAdmin(IntegrationAuditExportAdminMixin, admin.ModelAdmin):
+    integration_code = "edicao_atendimento_ixc"
+    integration_audit_title = "Edicao de Atendimentos IXC"
+    integration_audit_eyebrow = "Automacao administrativa"
+    integration_audit_subtitle = (
+        "Consulte as alteracoes em massa de atendimentos no IXC, com rastreabilidade por arquivo, "
+        "linha processada e campos alterados."
+    )
+    integration_audit_note = (
+        "As exportacoes abrem os campos tratados em colunas separadas no CSV e no Excel."
     )
     list_display = (
         "arquivo_nome",

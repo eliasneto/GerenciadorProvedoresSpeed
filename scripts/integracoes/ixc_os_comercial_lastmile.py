@@ -18,6 +18,11 @@ from tqdm import tqdm
 # pertence ao setor "Comercial | Lastmile".
 # Ela existe em paralelo a ixc_primeira_os.py, que continua sendo a rotina
 # mais completa de enriquecimento operacional.
+#
+# Regra importante:
+# - a reconciliacao diaria padrao e completa, sem janela de dias
+# - recorte por data so deve ser usado em execucoes incrementais explicitas
+# - O.S. sem login atrelado continuam fora do escopo desta rotina
 
 DIRETORIO_ATUAL = os.path.dirname(os.path.abspath(__file__))
 BASE_DIR = os.path.dirname(os.path.dirname(DIRETORIO_ATUAL))
@@ -445,7 +450,27 @@ def obter_data_corte_args():
                         raise SystemExit(1)
                     data_corte = datetime.now() - timedelta(days=dias)
                     break
-    return data_corte or obter_data_corte_env()
+    return data_corte
+
+
+def obter_data_corte_incremental_padrao():
+    return obter_data_corte_env()
+
+
+def execucao_incremental_explicita():
+    argumentos = sys.argv[1:]
+    if any(
+        arg.startswith(prefixo)
+        for arg in argumentos
+        for prefixo in (
+            "--os-alterada-desde=",
+            "--alterado-desde=",
+            "--os-alterada-nos-ultimos-dias=",
+            "--alterado-nos-ultimos-dias=",
+        )
+    ):
+        return True
+    return any(arg in {"--incremental", "incremental"} for arg in argumentos)
 
 
 def obter_filtro_cliente_args():
@@ -1246,6 +1271,9 @@ if __name__ == "__main__":
     eh_manual = 'manual' in sys.argv
     origem_detectada = 'manual' if eh_manual else 'automatica'
     data_corte_args = obter_data_corte_args()
+    incremental_explicito = execucao_incremental_explicita()
+    if incremental_explicito and not data_corte_args:
+        data_corte_args = obter_data_corte_incremental_padrao()
     cliente_local_id, cliente_ixc_id = obter_filtro_cliente_args()
     cliente_local_id, cliente_ixc_id, avisos_filtro = resolver_filtros_cliente(
         cliente_local_id,
@@ -1264,6 +1292,11 @@ if __name__ == "__main__":
         executado_por=usuario_executor,
         detalhes=(
             'Marcacao rapida dos logins ativos com OS atual em Comercial | Lastmile.'
+            + (
+                ' Modo incremental com recorte de ultima alteracao.'
+                if incremental_explicito else
+                ' Modo de reconciliacao completa sem recorte de ultima alteracao.'
+            )
             + (
                 f" Filtro opcional de ultima alteracao aplicado a partir de {data_corte_args.date().isoformat()}."
                 if data_corte_args else ''

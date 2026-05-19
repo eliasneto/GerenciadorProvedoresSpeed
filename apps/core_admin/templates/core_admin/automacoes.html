@@ -140,6 +140,118 @@
         <div class="bg-white p-8 rounded-[2rem] shadow-xl border border-gray-100 flex flex-col relative overflow-hidden transition-all hover:shadow-2xl">
             <div class="flex items-center gap-4 mb-6">
                 <div class="w-12 h-12 bg-gray-900 rounded-2xl flex items-center justify-center shadow-md">
+                    <i data-lucide="clipboard-pen-line" class="w-6 h-6 text-ageis-yellow"></i>
+                </div>
+                <div>
+                    <h2 class="text-lg font-black text-gray-900 uppercase italic tracking-tight">Edicao de Atendimento IXC</h2>
+                    <p class="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Atualizacao administrativa em massa</p>
+                </div>
+            </div>
+
+            <div class="border-2 border-dashed border-gray-200 rounded-2xl p-4 text-center mb-6 bg-gray-50/50">
+                <a href="{% url 'download_template_edicao_atendimento_ixc' %}" class="inline-flex items-center gap-2 text-[10px] font-black text-gray-900 hover:text-ageis-yellow transition-colors uppercase tracking-widest">
+                    <i data-lucide="download" class="w-3 h-3"></i> Baixar Planilha Modelo
+                </a>
+                <p class="mt-3 text-[10px] font-bold uppercase tracking-widest text-gray-400">
+                    {% if ultima_edicao_atendimento_ixc %}
+                        Ultima auditoria: {{ ultima_edicao_atendimento_ixc.total_sucessos }} sucessos e {{ ultima_edicao_atendimento_ixc.total_erros }} erros.
+                    {% else %}
+                        Atendimento_ID e confirmacao obrigatorios. Adicione so as colunas que deseja alterar.
+                    {% endif %}
+                </p>
+            </div>
+
+            <form id="edicaoAtendimentoIxcForm" method="POST" enctype="multipart/form-data" class="space-y-6 flex-1 flex flex-col justify-end" action="{% url 'editar_atendimentos_ixc' %}">
+                {% csrf_token %}
+
+                <div>
+                    <label class="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Arquivo de Edicao</label>
+                    <input type="file" name="arquivo_edicao_atendimento_ixc" id="edicaoAtendimentoIxcFile" accept=".xlsx,.xls,.csv" required class="hidden">
+
+                    <label for="edicaoAtendimentoIxcFile" class="flex items-center w-full bg-gray-50 border border-gray-100 rounded-xl cursor-pointer hover:bg-gray-100 transition-all overflow-hidden group">
+                        <div class="bg-gray-900 text-ageis-yellow group-hover:text-white text-[10px] font-black uppercase tracking-wider py-3 px-4 shadow-sm transition-all flex items-center gap-2">
+                            <i data-lucide="upload-cloud" class="w-3 h-3"></i> Planilha
+                        </div>
+                        <span id="edicaoAtendimentoIxcFileName" class="text-xs font-medium text-gray-500 px-4 truncate flex-1">Nenhum arquivo...</span>
+                    </label>
+                </div>
+
+                <div id="edicaoAtendimentoIxcLoading" class="hidden flex flex-col items-center justify-center gap-3 mt-4 py-2">
+                    <div class="w-6 h-6 border-4 border-gray-100 border-t-ageis-yellow rounded-full animate-spin"></div>
+                    <span class="text-[10px] font-black uppercase tracking-widest text-gray-500">Atualizando Atendimentos...</span>
+                </div>
+
+                <div id="edicaoAtendimentoIxcSuccess" class="hidden flex items-center justify-center gap-2 mt-4 bg-green-50 border border-green-100 py-3 px-4 rounded-xl">
+                    <i data-lucide="check-circle" class="w-5 h-5 text-green-500"></i>
+                    <span class="text-[10px] font-black uppercase tracking-widest text-green-700">Relatorio Baixado!</span>
+                </div>
+
+                <button id="edicaoAtendimentoIxcSubmit" type="submit" class="w-full bg-ageis-black hover:bg-gray-900 text-ageis-yellow font-black uppercase italic tracking-widest py-4 rounded-2xl shadow-lg transition-all flex items-center justify-center gap-2 group mt-auto">
+                    <i data-lucide="play" class="w-4 h-4 group-hover:scale-110 transition-transform"></i>
+                    Atualizar Atendimentos
+                </button>
+            </form>
+        </div>
+
+        <div class="bg-white p-8 rounded-[2rem] shadow-xl border border-gray-100 flex flex-col relative overflow-hidden transition-all hover:shadow-2xl">
+            <div class="flex items-center gap-4 mb-6">
+                <div class="w-12 h-12 bg-gray-900 rounded-2xl flex items-center justify-center shadow-md">
+                    <i data-lucide="pencil-line" class="w-6 h-6 text-ageis-yellow"></i>
+                </div>
+                <div>
+                    <h2 class="text-lg font-black text-gray-900 uppercase italic tracking-tight">Edicao de Login IXC</h2>
+                    <p class="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Atualizacao administrativa em massa</p>
+                </div>
+            </div>
+
+            <div class="border-2 border-dashed border-gray-200 rounded-2xl p-4 text-center mb-6 bg-gray-50/50">
+                <a href="{% url 'download_template_edicao_login_ixc' %}" class="inline-flex items-center gap-2 text-[10px] font-black text-gray-900 hover:text-ageis-yellow transition-colors uppercase tracking-widest">
+                    <i data-lucide="download" class="w-3 h-3"></i> Baixar Planilha Modelo
+                </a>
+                <p class="mt-3 text-[10px] font-bold uppercase tracking-widest text-gray-400">
+                    {% if ultima_edicao_login_ixc %}
+                        Ultima auditoria: {{ ultima_edicao_login_ixc.total_sucessos }} sucessos e {{ ultima_edicao_login_ixc.total_erros }} erros.
+                    {% else %}
+                        Login_ID e confirmacao obrigatorios. Adicione so as colunas que deseja alterar.
+                    {% endif %}
+                </p>
+            </div>
+
+            <form id="edicaoLoginIxcForm" method="POST" enctype="multipart/form-data" class="space-y-6 flex-1 flex flex-col justify-end" action="{% url 'editar_logins_ixc' %}">
+                {% csrf_token %}
+
+                <div>
+                    <label class="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Arquivo de Edicao</label>
+                    <input type="file" name="arquivo_edicao_login_ixc" id="edicaoLoginIxcFile" accept=".xlsx,.xls,.csv" required class="hidden">
+
+                    <label for="edicaoLoginIxcFile" class="flex items-center w-full bg-gray-50 border border-gray-100 rounded-xl cursor-pointer hover:bg-gray-100 transition-all overflow-hidden group">
+                        <div class="bg-gray-900 text-ageis-yellow group-hover:text-white text-[10px] font-black uppercase tracking-wider py-3 px-4 shadow-sm transition-all flex items-center gap-2">
+                            <i data-lucide="upload-cloud" class="w-3 h-3"></i> Planilha
+                        </div>
+                        <span id="edicaoLoginIxcFileName" class="text-xs font-medium text-gray-500 px-4 truncate flex-1">Nenhum arquivo...</span>
+                    </label>
+                </div>
+
+                <div id="edicaoLoginIxcLoading" class="hidden flex flex-col items-center justify-center gap-3 mt-4 py-2">
+                    <div class="w-6 h-6 border-4 border-gray-100 border-t-ageis-yellow rounded-full animate-spin"></div>
+                    <span class="text-[10px] font-black uppercase tracking-widest text-gray-500">Atualizando Logins...</span>
+                </div>
+
+                <div id="edicaoLoginIxcSuccess" class="hidden flex items-center justify-center gap-2 mt-4 bg-green-50 border border-green-100 py-3 px-4 rounded-xl">
+                    <i data-lucide="check-circle" class="w-5 h-5 text-green-500"></i>
+                    <span class="text-[10px] font-black uppercase tracking-widest text-green-700">Relatorio Baixado!</span>
+                </div>
+
+                <button id="edicaoLoginIxcSubmit" type="submit" class="w-full bg-ageis-black hover:bg-gray-900 text-ageis-yellow font-black uppercase italic tracking-widest py-4 rounded-2xl shadow-lg transition-all flex items-center justify-center gap-2 group mt-auto">
+                    <i data-lucide="play" class="w-4 h-4 group-hover:scale-110 transition-transform"></i>
+                    Atualizar Logins
+                </button>
+            </form>
+        </div>
+
+        <div class="bg-white p-8 rounded-[2rem] shadow-xl border border-gray-100 flex flex-col relative overflow-hidden transition-all hover:shadow-2xl">
+            <div class="flex items-center gap-4 mb-6">
+                <div class="w-12 h-12 bg-gray-900 rounded-2xl flex items-center justify-center shadow-md">
                     <i data-lucide="user-round-plus" class="w-6 h-6 text-ageis-yellow"></i>
                 </div>
                 <div>
@@ -260,6 +372,18 @@
         const desativacaoSubmit = document.getElementById('desativacaoSubmit');
         const desativacaoLoading = document.getElementById('desativacaoLoading');
         const desativacaoSuccess = document.getElementById('desativacaoSuccess');
+        const edicaoAtendimentoIxcForm = document.getElementById('edicaoAtendimentoIxcForm');
+        const edicaoAtendimentoIxcFile = document.getElementById('edicaoAtendimentoIxcFile');
+        const edicaoAtendimentoIxcFileName = document.getElementById('edicaoAtendimentoIxcFileName');
+        const edicaoAtendimentoIxcSubmit = document.getElementById('edicaoAtendimentoIxcSubmit');
+        const edicaoAtendimentoIxcLoading = document.getElementById('edicaoAtendimentoIxcLoading');
+        const edicaoAtendimentoIxcSuccess = document.getElementById('edicaoAtendimentoIxcSuccess');
+        const edicaoLoginIxcForm = document.getElementById('edicaoLoginIxcForm');
+        const edicaoLoginIxcFile = document.getElementById('edicaoLoginIxcFile');
+        const edicaoLoginIxcFileName = document.getElementById('edicaoLoginIxcFileName');
+        const edicaoLoginIxcSubmit = document.getElementById('edicaoLoginIxcSubmit');
+        const edicaoLoginIxcLoading = document.getElementById('edicaoLoginIxcLoading');
+        const edicaoLoginIxcSuccess = document.getElementById('edicaoLoginIxcSuccess');
         const cadastroClienteIxcForm = document.getElementById('cadastroClienteIxcForm');
         const cadastroClienteIxcFile = document.getElementById('cadastroClienteIxcFile');
         const cadastroClienteIxcFileName = document.getElementById('cadastroClienteIxcFileName');
@@ -276,6 +400,18 @@
         if (desativacaoFile && desativacaoFileName) {
             desativacaoFile.addEventListener('change', function (e) {
                 desativacaoFileName.textContent = e.target.files[0] ? e.target.files[0].name : 'Nenhum arquivo...';
+            });
+        }
+
+        if (edicaoAtendimentoIxcFile && edicaoAtendimentoIxcFileName) {
+            edicaoAtendimentoIxcFile.addEventListener('change', function (e) {
+                edicaoAtendimentoIxcFileName.textContent = e.target.files[0] ? e.target.files[0].name : 'Nenhum arquivo...';
+            });
+        }
+
+        if (edicaoLoginIxcFile && edicaoLoginIxcFileName) {
+            edicaoLoginIxcFile.addEventListener('change', function (e) {
+                edicaoLoginIxcFileName.textContent = e.target.files[0] ? e.target.files[0].name : 'Nenhum arquivo...';
             });
         }
 
@@ -359,6 +495,106 @@
                     setTimeout(() => {
                         desativacaoSuccess.classList.add('hidden');
                         desativacaoSubmit.classList.remove('hidden');
+                    }, 5000);
+                } catch (error) {
+                    window.location.reload();
+                }
+            });
+        }
+
+        if (edicaoAtendimentoIxcForm && edicaoAtendimentoIxcFile && edicaoAtendimentoIxcSubmit) {
+            edicaoAtendimentoIxcForm.addEventListener('submit', async function (e) {
+                e.preventDefault();
+                if (!edicaoAtendimentoIxcFile.files || !edicaoAtendimentoIxcFile.files.length) {
+                    return;
+                }
+
+                edicaoAtendimentoIxcSubmit.classList.add('hidden');
+                edicaoAtendimentoIxcSuccess.classList.add('hidden');
+                edicaoAtendimentoIxcLoading.classList.remove('hidden');
+
+                try {
+                    const formData = new FormData(edicaoAtendimentoIxcForm);
+                    const response = await fetch(edicaoAtendimentoIxcForm.action, {
+                        method: 'POST',
+                        body: formData,
+                        headers: { 'X-Requested-With': 'XMLHttpRequest' }
+                    });
+
+                    const contentType = response.headers.get('content-type') || '';
+                    if (!response.ok || !contentType.includes('spreadsheetml')) {
+                        window.location.reload();
+                        return;
+                    }
+
+                    const blob = await response.blob();
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = 'Relatorio_Edicao_Atendimentos_IXC.xlsx';
+                    document.body.appendChild(a);
+                    a.click();
+                    a.remove();
+                    window.URL.revokeObjectURL(url);
+
+                    edicaoAtendimentoIxcLoading.classList.add('hidden');
+                    edicaoAtendimentoIxcSuccess.classList.remove('hidden');
+                    edicaoAtendimentoIxcForm.reset();
+                    edicaoAtendimentoIxcFileName.textContent = 'Nenhum arquivo...';
+
+                    setTimeout(() => {
+                        edicaoAtendimentoIxcSuccess.classList.add('hidden');
+                        edicaoAtendimentoIxcSubmit.classList.remove('hidden');
+                    }, 5000);
+                } catch (error) {
+                    window.location.reload();
+                }
+            });
+        }
+
+        if (edicaoLoginIxcForm && edicaoLoginIxcFile && edicaoLoginIxcSubmit) {
+            edicaoLoginIxcForm.addEventListener('submit', async function (e) {
+                e.preventDefault();
+                if (!edicaoLoginIxcFile.files || !edicaoLoginIxcFile.files.length) {
+                    return;
+                }
+
+                edicaoLoginIxcSubmit.classList.add('hidden');
+                edicaoLoginIxcSuccess.classList.add('hidden');
+                edicaoLoginIxcLoading.classList.remove('hidden');
+
+                try {
+                    const formData = new FormData(edicaoLoginIxcForm);
+                    const response = await fetch(edicaoLoginIxcForm.action, {
+                        method: 'POST',
+                        body: formData,
+                        headers: { 'X-Requested-With': 'XMLHttpRequest' }
+                    });
+
+                    const contentType = response.headers.get('content-type') || '';
+                    if (!response.ok || !contentType.includes('spreadsheetml')) {
+                        window.location.reload();
+                        return;
+                    }
+
+                    const blob = await response.blob();
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = 'Relatorio_Edicao_Logins_IXC.xlsx';
+                    document.body.appendChild(a);
+                    a.click();
+                    a.remove();
+                    window.URL.revokeObjectURL(url);
+
+                    edicaoLoginIxcLoading.classList.add('hidden');
+                    edicaoLoginIxcSuccess.classList.remove('hidden');
+                    edicaoLoginIxcForm.reset();
+                    edicaoLoginIxcFileName.textContent = 'Nenhum arquivo...';
+
+                    setTimeout(() => {
+                        edicaoLoginIxcSuccess.classList.add('hidden');
+                        edicaoLoginIxcSubmit.classList.remove('hidden');
                     }, 5000);
                 } catch (error) {
                     window.location.reload();

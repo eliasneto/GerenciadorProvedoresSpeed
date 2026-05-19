@@ -124,7 +124,9 @@ class EmailCotacaoRespostaImportacao(models.Model):
 class IntegrationAudit(models.Model):
     INTEGRATION_CHOICES = [
         ("logins_ixc", "Logins IXC"),
+        ("edicao_login_ixc", "Edicao de Login IXC"),
         ("atendimento_ixc", "Atendimento IXC"),
+        ("edicao_atendimento_ixc", "Edicao de Atendimento IXC"),
         ("desativacao_atendimento_ixc", "Desativacao de Atendimento IXC"),
         ("buscar_fornecedores", "Buscar Fornecedores"),
         ("importador_leads", "Importador de Leads"),

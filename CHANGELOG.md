@@ -13,10 +13,21 @@ Melhorado:
 - area administrativa reorganizada para exibir uma Central de Automações no mesmo estilo do Backoffice, reunindo o importador de provedores e a desativacao de atendimentos IXC
 
 - nova automacao administrativa para cadastro de clientes em massa no IXC, com planilha modelo, auditoria, relatorio final e tratamento de duplicidade por CNPJ/CPF
+- nova automacao administrativa para edicao de logins no IXC via planilha, com `Login_ID` obrigatorio, colunas dinamicas de alteracao, auditoria dedicada e relatorio final exportavel
+- nova automacao administrativa para edicao de atendimentos no IXC via planilha, com `Atendimento_ID` obrigatorio, colunas dinamicas de alteracao, auditoria dedicada e relatorio final exportavel
 - auditoria administrativa de `Cadastro de Clientes IXC` adicionada como secao dedicada no Django Admin, com exportacao `CSV` e `Excel`
+- auditoria administrativa de `Edicao de Logins IXC` adicionada como secao dedicada no Django Admin, com exportacao `CSV` e `Excel`
+- auditoria administrativa de `Edicao de Atendimentos IXC` adicionada como secao dedicada no Django Admin, com exportacao `CSV` e `Excel`
 - exportacoes de auditoria das automacoes padronizadas para abrir os dados em colunas no `Excel` e no `CSV`, removendo duplicacao visual de `JSON` bruto e consolidando metadados do resumo
 - telas de auditoria de integracoes padronizadas no Django Admin, com cabecalho contextual, acoes de exportacao mais limpas e remocao do botao manual de adicionar logs
 - modelo da planilha de cadastro de clientes IXC refinado com `*` vermelho nos campos obrigatorios, legenda para `Tipo_Assinante_ID` e nome mais claro `Tipo_Cliente_Fiscal`
+- modelo da planilha de edicao de logins IXC estruturado para aceitar apenas `Login_ID` e `Confirmar_Alteracao` como base fixa, permitindo adicionar somente as colunas que se deseja alterar
+- modelo da planilha de edicao de atendimentos IXC estruturado para aceitar apenas `Atendimento_ID` e `Confirmar_Alteracao` como base fixa, permitindo adicionar somente as colunas que se deseja alterar
+- filtros do modal `Abrir Cotacao por Endereco` corrigidos para respeitar cidade vazia e UF digitada manualmente na busca ampla, sem voltar silenciosamente para a cidade padrao do endereco
+- modal `Abrir Cotacao por Endereco` ajustado para exibir os provedores elegiveis encontrados e criar cotacoes diretamente a partir dos `partner_ids` retornados pela busca ampla
+- botao `Buscar fora da regiao` corrigido para nao herdar `cidade/UF` do endereco quando esses filtros sao limpos no modal, permitindo busca ampla real em toda a base
+- painel inferior de provedores elegiveis removido do modal `Abrir Cotacao por Endereco`, com ampliacao da grade principal para aproveitar melhor a altura disponivel
+- rotina `OS Comercial | Lastmile` ajustada para rodar reconciliacao completa por padrao na execucao diaria, deixando o recorte por data apenas para execucoes incrementais explicitas e mantendo a regra de ignorar O.S. sem login
 
 ## v1.4.0 - 2026-05-15
 

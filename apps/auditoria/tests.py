@@ -4,8 +4,18 @@ from django.contrib import admin
 from django.contrib.admin.sites import AdminSite
 from django.test import RequestFactory, SimpleTestCase
 
-from auditoria.admin import CadastroClienteIXCAuditoriaAdmin, IntegrationAuditAuditoriaAdmin
-from auditoria.models import CadastroClienteIXCAuditoria, IntegrationAuditAuditoria
+from auditoria.admin import (
+    CadastroClienteIXCAuditoriaAdmin,
+    EdicaoAtendimentoIXCAuditoriaAdmin,
+    EdicaoLoginIXCAuditoriaAdmin,
+    IntegrationAuditAuditoriaAdmin,
+)
+from auditoria.models import (
+    CadastroClienteIXCAuditoria,
+    EdicaoAtendimentoIXCAuditoria,
+    EdicaoLoginIXCAuditoria,
+    IntegrationAuditAuditoria,
+)
 
 
 class AuditoriaAdminTests(SimpleTestCase):
@@ -42,6 +52,42 @@ class AuditoriaAdminTests(SimpleTestCase):
 
         mock_get_queryset.assert_called_once_with(request)
         queryset_base.filter.assert_called_once_with(integration="cadastro_cliente_ixc")
+        self.assertIs(queryset, queryset_filtrado)
+        self.assertIn("exportacoes_disponiveis", admin_obj.get_list_display(request))
+        self.assertFalse(admin_obj.has_add_permission(request))
+
+    @patch.object(admin.ModelAdmin, "get_queryset")
+    def test_admin_dedicado_filtra_apenas_logs_de_edicao_login_ixc(self, mock_get_queryset):
+        request = self.factory.get("/")
+        request.user = self.user
+        admin_obj = EdicaoLoginIXCAuditoriaAdmin(EdicaoLoginIXCAuditoria, AdminSite())
+        queryset_base = Mock()
+        queryset_filtrado = Mock()
+        queryset_base.filter.return_value = queryset_filtrado
+        mock_get_queryset.return_value = queryset_base
+
+        queryset = admin_obj.get_queryset(request)
+
+        mock_get_queryset.assert_called_once_with(request)
+        queryset_base.filter.assert_called_once_with(integration="edicao_login_ixc")
+        self.assertIs(queryset, queryset_filtrado)
+        self.assertIn("exportacoes_disponiveis", admin_obj.get_list_display(request))
+        self.assertFalse(admin_obj.has_add_permission(request))
+
+    @patch.object(admin.ModelAdmin, "get_queryset")
+    def test_admin_dedicado_filtra_apenas_logs_de_edicao_atendimento_ixc(self, mock_get_queryset):
+        request = self.factory.get("/")
+        request.user = self.user
+        admin_obj = EdicaoAtendimentoIXCAuditoriaAdmin(EdicaoAtendimentoIXCAuditoria, AdminSite())
+        queryset_base = Mock()
+        queryset_filtrado = Mock()
+        queryset_base.filter.return_value = queryset_filtrado
+        mock_get_queryset.return_value = queryset_base
+
+        queryset = admin_obj.get_queryset(request)
+
+        mock_get_queryset.assert_called_once_with(request)
+        queryset_base.filter.assert_called_once_with(integration="edicao_atendimento_ixc")
         self.assertIs(queryset, queryset_filtrado)
         self.assertIn("exportacoes_disponiveis", admin_obj.get_list_display(request))
         self.assertFalse(admin_obj.has_add_permission(request))
