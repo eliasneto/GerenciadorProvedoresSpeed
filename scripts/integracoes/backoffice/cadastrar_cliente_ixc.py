@@ -83,6 +83,15 @@ def inferir_tipo_pessoa(documento, valor_informado=""):
     return "J"
 
 
+def normalizar_prospeccao(valor):
+    texto = limpar_texto(valor).upper()
+    if texto in {"SIM", "S", "TRUE", "1"}:
+        return "S"
+    if texto in {"NAO", "NAO", "N", "FALSE", "0", "NÃO"}:
+        return "N"
+    return ""
+
+
 def normalizar_contribuinte_icms(valor, tipo_pessoa, ie_rg):
     texto = limpar_texto(valor).upper()
     if texto in {"SIM", "S", "TRUE", "1"}:
@@ -160,18 +169,20 @@ def resolver_cidade_ixc(cidade_id=None):
                 registro = registros[0]
                 break
         if not registro:
-            return "", f"Cidade_ID_IXC {cidade_id} nao encontrada no IXC."
-        return limpar_texto(registro.get("id")), None
-    return "", "Cidade_ID_IXC obrigatorio para cadastrar o cliente no IXC."
+            return "", "", f"Cidade_ID_IXC {cidade_id} nao encontrada no IXC."
+        uf_id = limpar_texto(registro.get("id_uf") or registro.get("uf"))
+        return limpar_texto(registro.get("id")), uf_id, None
+    return "", "", "Cidade_ID_IXC obrigatorio para cadastrar o cliente no IXC."
 
 
-def montar_payload_cliente_ixc(linha, cidade_id_ixc):
+def montar_payload_cliente_ixc(linha, cidade_id_ixc, uf_id_ixc=""):
     documento = somente_digitos(linha.get("CNPJ_CPF"))
     tipo_pessoa = inferir_tipo_pessoa(documento, linha.get("Tipo_Pessoa"))
     ie_rg = limpar_texto(linha.get("IE_RG"))
     telefone = normalizar_telefone(linha.get("Telefone"))
     email = limpar_texto(linha.get("Email") or linha.get("EMAIL"))
     ativo = "S" if limpar_texto(linha.get("Ativo")).upper() not in {"N", "NAO", "NAO", "FALSE", "0"} else "N"
+    prospeccao = normalizar_prospeccao(linha.get("Prospeccao"))
     hoje = datetime.now().strftime("%Y-%m-%d")
     payload = {
         "ativo": ativo,
@@ -186,31 +197,27 @@ def montar_payload_cliente_ixc(linha, cidade_id_ixc):
             ie_rg,
         ),
         "data_cadastro": hoje,
+        "data_nascimento": "0000-00-00",
+        "cob_envia_email": "S",
+        "cob_envia_sms": "S",
         "crm_data_novo": hoje,
-        "crm_data_vencemos": "0000-00-00",
-        "crm_data_perdemos": "0000-00-00",
-        "crm_data_sem_viabilidade": "0000-00-00",
-        "crm_data_sem_porta_disponivel": "0000-00-00",
-        "crm_data_abortamos": "0000-00-00",
-        "crm_data_negociando": "0000-00-00",
-        "crm_data_apresentando": "0000-00-00",
-        "crm_data_sondagem": "0000-00-00",
         "convert_cliente_forn": "N",
         "cep": normalizar_cep(linha.get("CEP")),
         "endereco": limpar_texto(linha.get("Endereco") or linha.get("ENDERECO")),
         "numero": normalizar_numero_endereco(linha.get("Numero") or linha.get("NUMERO")),
         "bairro": limpar_texto(linha.get("Bairro") or linha.get("BAIRRO")),
         "cidade": cidade_id_ixc,
+        "uf": uf_id_ixc,
         "complemento": limpar_texto(linha.get("Complemento")),
         "referencia": limpar_texto(linha.get("Referencia")),
         "contato": limpar_texto(linha.get("Contato_Nome") or linha.get("CONTATO_NOME")),
         "email": email,
         "fone": telefone,
         "telefone_comercial": telefone,
-        "celular": telefone,
         "telefone_celular": telefone,
         "whatsapp": telefone,
         "obs": limpar_texto(linha.get("Observacao") or linha.get("Obs")),
+        "prospeccao": prospeccao,
     }
 
     tipo_cliente_id, _ = normalizar_id_numerico(linha.get("Tipo_Cliente_ID"), "Tipo_Cliente_ID")
@@ -221,11 +228,19 @@ def montar_payload_cliente_ixc(linha, cidade_id_ixc):
     if tipo_cliente_id:
         payload["id_tipo_cliente"] = tipo_cliente_id
     payload["tipo_assinante"] = tipo_assinante_id or "3"
-    classificacao_iss = limpar_texto(
+    classificacao_iss_raw = limpar_texto(
         linha.get("Tipo_Cliente_Fiscal") or linha.get("Classificacao_ISS")
     )
-    payload["iss_classificacao_padrao"] = classificacao_iss or "99"
-    payload["tipo_localidade"] = limpar_texto(linha.get("Tipo_Localidade")).upper() or "U"
+    if classificacao_iss_raw:
+        try:
+            classificacao_iss = str(int(classificacao_iss_raw)).zfill(2)
+        except ValueError:
+            classificacao_iss = classificacao_iss_raw
+    else:
+        classificacao_iss = "99"
+    payload["iss_classificacao_padrao"] = classificacao_iss
+    tipo_localidade_raw = limpar_texto(linha.get("Tipo_Localidade")).upper()
+    payload["tipo_localidade"] = tipo_localidade_raw if tipo_localidade_raw in {"U", "R"} else "U"
     payload["filial_id"] = filial_id or "1"
     if vendedor_id:
         payload["id_vendedor"] = vendedor_id
@@ -249,27 +264,29 @@ def executar_cadastro_cliente_ixc(dados):
     if not confirmado:
         return False, erro_confirmacao, ""
 
-    cidade_id_ixc, erro_cidade = resolver_cidade_ixc(linha.get("Cidade_ID_IXC"))
+    cidade_id_ixc, uf_id_ixc, erro_cidade = resolver_cidade_ixc(linha.get("Cidade_ID_IXC"))
     if erro_cidade:
         return False, erro_cidade, ""
 
-    cliente_existente = buscar_cliente_por_cnpj_cpf(documento)
-    if not cliente_existente:
-        cliente_existente = buscar_cliente_por_razao_social(razao_social)
-    if cliente_existente:
-        cliente_ixc_id = limpar_texto(cliente_existente.get("id"))
-        return (
-            True,
-            f"Cliente ja existente no IXC. ID {cliente_ixc_id} reaproveitado para {razao_social}.",
-            cliente_ixc_id,
-        )
+    permitir_duplicidade = limpar_texto(linha.get("Permitir_Duplicidade")).upper() in {"SIM", "S", "TRUE", "1"}
+    if not permitir_duplicidade:
+        cliente_existente = buscar_cliente_por_cnpj_cpf(documento)
+        if not cliente_existente:
+            cliente_existente = buscar_cliente_por_razao_social(razao_social)
+        if cliente_existente:
+            cliente_ixc_id = limpar_texto(cliente_existente.get("id"))
+            return (
+                True,
+                f"Cliente ja existente no IXC (ID {cliente_ixc_id}). Nenhuma alteracao feita para {razao_social}.",
+                cliente_ixc_id,
+            )
 
     if not limpar_texto(linha.get("Email") or linha.get("EMAIL")):
         return False, "Email obrigatorio para cadastro do cliente no IXC.", ""
     if not limpar_texto(linha.get("Telefone")):
         return False, "Telefone obrigatorio para cadastro do cliente no IXC.", ""
 
-    payload = montar_payload_cliente_ixc(linha, cidade_id_ixc)
+    payload = montar_payload_cliente_ixc(linha, cidade_id_ixc, uf_id_ixc)
     status_code, body = IXCClient().escrever("cliente", payload)
 
     cliente_ixc_id = ""

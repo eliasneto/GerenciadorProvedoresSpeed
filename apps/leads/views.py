@@ -13,7 +13,7 @@ from django.core.files.storage import FileSystemStorage
 from django.urls import reverse_lazy
 
 from .models import Lead, LeadEmpresa, LeadEndereco
-from .forms import LeadForm, LeadEnderecoForm
+from .forms import LeadForm, LeadEnderecoForm, LeadEmpresaForm
 from partners.models import Partner, Proposal
 from partners.forms import ProposalForm
 from clientes.models import Cliente, Endereco
@@ -531,9 +531,9 @@ def lead_create(request):
         form = LeadForm(request.POST)
         if form.is_valid():
             lead = form.save()
-            _sync_lead_to_structured_models(lead)
-            messages.success(request, "Nova prospecção cadastrada com sucesso!")
-            return redirect('lead_list')
+            empresa, _ = _sync_lead_to_structured_models(lead)
+            messages.success(request, "Provedor cadastrado! Agora adicione o primeiro endereço.")
+            return redirect('lead_empresa_endereco_create', pk=empresa.pk)
     else:
         form = LeadForm()
     return render(request, 'leads/lead_form.html', {'form': form})
@@ -1274,6 +1274,51 @@ def lead_empresa_endereco_create(request, pk):
         form = LeadEnderecoForm(empresa=empresa)
 
     return render(request, 'leads/lead_endereco_form.html', {
+        'empresa': empresa,
+        'form': form,
+    })
+
+
+@user_passes_test(grupo_LastMile_required)
+@login_required
+def lead_empresa_endereco_update(request, empresa_pk, pk):
+    empresa = get_object_or_404(LeadEmpresa, pk=empresa_pk)
+    endereco = get_object_or_404(LeadEndereco, pk=pk, empresa=empresa)
+
+    if request.method == 'POST':
+        form = LeadEnderecoForm(request.POST, instance=endereco, empresa=empresa)
+        if form.is_valid():
+            form.save()
+            _criar_ou_atualizar_lead_espelho_empresa_endereco(empresa, endereco)
+            messages.success(request, "Endereço atualizado com sucesso.")
+            return redirect('lead_empresa_detail', pk=empresa.pk)
+    else:
+        form = LeadEnderecoForm(instance=endereco, empresa=empresa)
+
+    return render(request, 'leads/lead_endereco_form.html', {
+        'empresa': empresa,
+        'form': form,
+        'endereco': endereco,
+    })
+
+
+@user_passes_test(grupo_LastMile_required)
+@login_required
+def lead_empresa_update(request, pk):
+    empresa = get_object_or_404(LeadEmpresa, pk=pk)
+
+    if request.method == 'POST':
+        form = LeadEmpresaForm(request.POST, instance=empresa)
+        if form.is_valid():
+            form.save()
+            for lead in empresa.leads_legados.all():
+                _sync_lead_to_structured_models(lead)
+            messages.success(request, "Dados do provedor atualizados com sucesso.")
+            return redirect('lead_empresa_detail', pk=empresa.pk)
+    else:
+        form = LeadEmpresaForm(instance=empresa)
+
+    return render(request, 'leads/lead_empresa_form.html', {
         'empresa': empresa,
         'form': form,
     })

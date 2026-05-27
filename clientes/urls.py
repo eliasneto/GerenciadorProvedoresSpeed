@@ -10,6 +10,7 @@ urlpatterns = [
     path('<int:pk>/enderecos/', views.endereco_list, name='endereco_list'),
 
     # ROTAS DE API (Endpoints para o Modal e Chained Dropdown)
+    path('api/cep/<str:cep>/', views.buscar_cep, name='api_buscar_cep'),
     path('api/search/', views.api_cliente_search, name='api_cliente_search'),
     
     # Padronize esta rota para ser a que o JS do ProposalForm vai consumir

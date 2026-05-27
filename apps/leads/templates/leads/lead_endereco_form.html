@@ -8,9 +8,9 @@
         </a>
 
         <div>
-            <p class="text-[10px] text-gray-400 font-black uppercase tracking-[0.2em] mb-2">Provedores • Novo Endereco</p>
+            <p class="text-[10px] text-gray-400 font-black uppercase tracking-[0.2em] mb-2">Provedores • {% if endereco %}Editar Endereco{% else %}Novo Endereco{% endif %}</p>
             <h1 class="text-3xl font-black text-gray-900 italic uppercase tracking-tighter">{{ empresa.nome_fantasia|default:empresa.razao_social }}</h1>
-            <p class="text-[10px] text-gray-500 font-bold uppercase tracking-widest mt-1">Cadastre um novo endereco para este provedor</p>
+            <p class="text-[10px] text-gray-500 font-bold uppercase tracking-widest mt-1">{% if endereco %}Edite os dados do endereco abaixo{% else %}Cadastre um novo endereco para este provedor{% endif %}</p>
         </div>
     </div>
 
@@ -78,4 +78,28 @@
         </form>
     </div>
 </div>
+
+<script>
+    document.querySelector('input[name="cep"]').addEventListener('blur', function() {
+        let cep = this.value.replace(/\D/g, '');
+        if (cep.length === 8) {
+            const cepInput = this;
+            cepInput.classList.add('opacity-50');
+
+            fetch(`/clientes/api/cep/${cep}/`)
+                .then(response => response.json())
+                .then(data => {
+                    cepInput.classList.remove('opacity-50');
+                    if (!data.erro) {
+                        document.querySelector('input[name="endereco"]').value = data.logradouro;
+                        document.querySelector('input[name="bairro"]').value = data.bairro;
+                        document.querySelector('input[name="cidade"]').value = data.localidade;
+                        document.querySelector('input[name="estado"]').value = data.uf;
+                        document.querySelector('input[name="numero"]').focus();
+                    }
+                })
+                .catch(() => cepInput.classList.remove('opacity-50'));
+        }
+    });
+</script>
 {% endblock %}

@@ -1,0 +1,131 @@
+{% extends "core/base.html" %}
+
+{% block content %}
+<div class="p-6 md:p-10 max-w-5xl mx-auto">
+    <div class="mb-8 flex justify-between items-end">
+        <div>
+            <a href="{% url 'lead_empresa_detail' empresa.pk %}" class="page-back-button mb-3">
+                <i data-lucide="arrow-left" class="w-4 h-4"></i> Voltar
+            </a>
+            <h1 class="text-3xl font-black text-gray-900 italic uppercase tracking-tighter">
+                Editar <span class="text-ageis-yellow">Provedor</span>
+            </h1>
+            <p class="text-xs font-bold text-gray-400 mt-1 uppercase">{{ empresa.nome_fantasia|default:empresa.razao_social }}</p>
+        </div>
+    </div>
+
+    <div class="bg-white p-8 md:p-12 rounded-[2.5rem] shadow-sm border border-gray-100">
+        <form method="post" class="space-y-8">
+            {% csrf_token %}
+
+            <div>
+                <div class="flex items-center gap-2 mb-6 border-b border-gray-50 pb-4">
+                    <i data-lucide="building-2" class="w-5 h-5 text-ageis-yellow"></i>
+                    <h3 class="font-black text-sm uppercase tracking-widest text-gray-800">Identificação do Provedor</h3>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div class="md:col-span-2">
+                        <label class="text-[10px] font-black uppercase text-gray-400 mb-2 block tracking-widest">Razão Social</label>
+                        {{ form.razao_social }}
+                    </div>
+                    <div class="md:col-span-2">
+                        <label class="text-[10px] font-black uppercase text-gray-400 mb-2 block tracking-widest">Nome Fantasia</label>
+                        {{ form.nome_fantasia }}
+                    </div>
+                    <div>
+                        <label class="text-[10px] font-black uppercase text-gray-400 mb-2 block tracking-widest">CNPJ/CPF</label>
+                        {{ form.cnpj_cpf }}
+                    </div>
+                    <div>
+                        <label class="text-[10px] font-black uppercase text-gray-400 mb-2 block tracking-widest">Site / URL</label>
+                        {{ form.site }}
+                    </div>
+
+                </div>
+            </div>
+
+            <div class="pt-4">
+                <div class="flex items-center gap-2 mb-6 border-b border-gray-50 pb-4">
+                    <i data-lucide="instagram" class="w-5 h-5 text-pink-500"></i>
+                    <h3 class="font-black text-sm uppercase tracking-widest text-gray-800">(Instagram)</h3>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                        <label class="text-[10px] font-black uppercase text-gray-400 mb-2 block tracking-widest">@ Usuário Instagram</label>
+                        <div class="relative flex items-center">
+                            <span class="absolute left-4 text-gray-400 font-black">@</span>
+                            {{ form.instagram_username }}
+                        </div>
+                    </div>
+                    <div>
+                        <label class="text-[10px] font-black uppercase text-gray-400 mb-2 block tracking-widest">URL do Perfil (Link Completo)</label>
+                        {{ form.instagram_url }}
+                    </div>
+                </div>
+            </div>
+
+            <div class="pt-4">
+                <div class="flex items-center gap-2 mb-6 border-b border-gray-50 pb-4">
+                    <i data-lucide="phone" class="w-5 h-5 text-ageis-yellow"></i>
+                    <h3 class="font-black text-sm uppercase tracking-widest text-gray-800">Informações de Contato</h3>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                        <label class="text-[10px] font-black uppercase text-gray-400 mb-2 block tracking-widest">Pessoa de Contato</label>
+                        {{ form.contato_nome }}
+                    </div>
+                    <div>
+                        <label class="text-[10px] font-black uppercase text-gray-400 mb-2 block tracking-widest">Telefone / WhatsApp</label>
+                        {{ form.telefone }}
+                    </div>
+                    <div class="md:col-span-2">
+                        <label class="text-[10px] font-black uppercase text-gray-400 mb-2 block tracking-widest">E-mail Corporativo</label>
+                        {{ form.email }}
+                    </div>
+                </div>
+            </div>
+
+            <div class="mt-12 pt-8 border-t border-gray-100 flex flex-col md:flex-row gap-4">
+                <button type="submit" class="flex-1 bg-ageis-black text-ageis-yellow font-black italic uppercase tracking-[0.2em] py-5 rounded-2xl hover:bg-gray-800 transition shadow-xl hover:scale-[1.02] active:scale-[0.98]">
+                    <i data-lucide="save" class="w-5 h-5 inline mr-2"></i> Salvar Alterações
+                </button>
+                <a href="{% url 'lead_empresa_detail' empresa.pk %}" class="px-10 py-5 text-[10px] font-black uppercase tracking-widest text-gray-400 hover:text-red-500 transition text-center">
+                    Cancelar
+                </a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script src="https://unpkg.com/imask"></script>
+<script>
+    lucide.createIcons();
+
+    const phoneElement = document.querySelector('input[name="telefone"]');
+    if (phoneElement) {
+        IMask(phoneElement, {
+            mask: [
+                { mask: '(00) 0000-0000' },
+                { mask: '(00) 00000-0000' }
+            ]
+        });
+    }
+
+    const docElement = document.querySelector('input[name="cnpj_cpf"]');
+    if (docElement) {
+        IMask(docElement, {
+            mask: [
+                { mask: '000.000.000-00' },
+                { mask: '00.000.000/0000-00' }
+            ]
+        });
+    }
+
+    document.querySelector('input[name="instagram_username"]')?.classList.add('pl-10');
+
+    document.querySelectorAll('input, select, textarea').forEach(el => {
+        el.classList.add('w-full', 'p-4', 'bg-gray-50', 'border', 'border-gray-100', 'rounded-2xl', 'outline-none', 'focus:ring-2', 'focus:ring-ageis-yellow', 'font-bold', 'text-sm', 'transition-all');
+    });
+</script>
+{% endblock %}

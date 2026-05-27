@@ -85,6 +85,21 @@ def _normalizar_dataframe(df):
     return df.fillna("")
 
 
+def _normalizar_documento(valor):
+    """Converte CNPJ/CPF em notação científica (ex: 5.42e+13) para string numérica."""
+    import re
+    texto = str(valor).strip().replace(',', '.')
+    if re.search(r'[eE][+\-]?\d+', texto):
+        try:
+            return str(int(float(texto)))
+        except (ValueError, OverflowError):
+            pass
+    # Remove '.0' de floats inteiros lidos pelo pandas (ex: '12345678000195.0')
+    if texto.endswith('.0') and texto[:-2].isdigit():
+        return texto[:-2]
+    return str(valor).strip()
+
+
 def _valor_limpo(row, key, default=""):
     valor = row.get(key, default)
 
@@ -94,6 +109,9 @@ def _valor_limpo(row, key, default=""):
     valor_limpo = str(valor).strip()
     if valor_limpo.upper() in TEXT_EMPTY_MARKERS:
         return default
+
+    if key == 'CNPJ_CPF':
+        return _normalizar_documento(valor)
 
     return valor_limpo
 

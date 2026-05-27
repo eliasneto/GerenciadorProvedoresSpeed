@@ -761,6 +761,8 @@ def download_template_cadastro_cliente_ixc(request):
         "Vendedor_ID",
         "Observacao",
         "Ativo",
+        "Permitir_Duplicidade",
+        "Prospeccao",
         "Confirmar_Cadastro",
     ]
     campos_obrigatorios_planilha = {
@@ -822,14 +824,14 @@ def download_template_cadastro_cliente_ixc(request):
             "Descricao": "Tipo de cliente fiscal do IXC, enviado pela API como iss_classificacao_padrao.",
             "Tipo de dado": "Numero inteiro",
             "Obrigatorio?": "Nao na planilha / Sim no IXC",
-            "Regras / Exemplo": "Ex.: 01 Comercial, 03 Residencial/Pessoa Fisica, 99 Outros nao especificados anteriormente. Se vazio, a automacao envia 99.",
+            "Regras / Exemplo": "01=Comercial | 02=Industrial | 03=Prestacao de Servicos | 04=Produtor Rural | 05=Simples Nacional | 99=Outros. Se vazio, a automacao envia 99.",
         },
         {
             "Campo": "Tipo_Localidade",
-            "Descricao": "Tipo de localidade do endereco do cliente.",
+            "Descricao": "Tipo de localidade do endereco do cliente no IXC.",
             "Tipo de dado": "Texto curto",
             "Obrigatorio?": "Nao na planilha / Sim no IXC",
-            "Regras / Exemplo": "Valor homologado no teste: U. Se vazio, a automacao envia U.",
+            "Regras / Exemplo": "Use U para Urbano ou R para Rural. Nao coloque UF/estado aqui. Se vazio ou valor invalido, a automacao envia U.",
         },
         {
             "Campo": "CEP",
@@ -944,6 +946,20 @@ def download_template_cadastro_cliente_ixc(request):
             "Regras / Exemplo": "Aceita S ou N. Se vazio, a automacao assume S antes de enviar.",
         },
         {
+            "Campo": "Permitir_Duplicidade",
+            "Descricao": "Permite cadastrar o cliente mesmo que ja exista outro com o mesmo CNPJ/CPF no IXC.",
+            "Tipo de dado": "Texto curto",
+            "Obrigatorio?": "Nao",
+            "Regras / Exemplo": "Use Sim para ignorar a verificacao de duplicidade e forcar o cadastro. Se vazio ou Nao, o sistema bloqueia o cadastro se ja houver cliente com o mesmo CNPJ/CPF ou razao social.",
+        },
+        {
+            "Campo": "Prospeccao",
+            "Descricao": "Indica se o cliente deve ser marcado como prospeccao na aba CRM do IXC.",
+            "Tipo de dado": "Texto curto",
+            "Obrigatorio?": "Nao",
+            "Regras / Exemplo": "Use Sim ou S para marcar como prospeccao, Nao ou N para nao marcar. Se vazio, o campo nao e enviado ao IXC.",
+        },
+        {
             "Campo": "Confirmar_Cadastro",
             "Descricao": "Confirmacao explicita para autorizar o cadastro em massa.",
             "Tipo de dado": "Texto curto",
@@ -984,6 +1000,8 @@ def download_template_cadastro_cliente_ixc(request):
                     "Vendedor_ID": "",
                     "Observacao": "Cliente criado via teste de cadastro em massa pela API.",
                     "Ativo": "S",
+                    "Permitir_Duplicidade": "Nao",
+                    "Prospeccao": "Nao",
                     "Confirmar_Cadastro": "SIM",
                 }
             ],
@@ -1019,13 +1037,41 @@ def download_template_cadastro_cliente_ixc(request):
                 largura = 36
             if value in {"Complemento", "Referencia", "Contato_Nome", "Email"}:
                 largura = 28
-            formato = integer_format if value in {"Cidade_ID_IXC", "Tipo_Cliente_ID", "Tipo_Assinante_ID", "Filial_ID", "Vendedor_ID", "Tipo_Cliente_Fiscal"} else None
+            formato = integer_format if value in {"Cidade_ID_IXC", "Tipo_Cliente_ID", "Tipo_Assinante_ID", "Filial_ID", "Vendedor_ID"} else None
             worksheet.set_column(col_num, col_num, largura, formato)
 
         larguras_ajuda = [24, 40, 18, 16, 55]
         for col_num, largura in enumerate(larguras_ajuda):
             worksheet_ajuda.set_column(col_num, col_num, largura)
 
+        worksheet.data_validation(
+            1,
+            6,
+            5000,
+            6,
+            {
+                "validate": "list",
+                "source": ["01", "02", "03", "04", "05", "99"],
+                "ignore_blank": True,
+                "input_title": "Tipo_Cliente_Fiscal",
+                "input_message": "01=Comercial 02=Industrial 03=Servicos 04=Prod.Rural 05=Simples 99=Outros",
+            },
+        )
+        worksheet.data_validation(
+            1,
+            7,
+            5000,
+            7,
+            {
+                "validate": "list",
+                "source": ["U", "R"],
+                "ignore_blank": True,
+                "input_title": "Tipo_Localidade",
+                "input_message": "Use U para Urbano ou R para Rural.",
+                "error_title": "Valor invalido",
+                "error_message": "Tipo_Localidade deve ser U (Urbano) ou R (Rural).",
+            },
+        )
         worksheet.data_validation(
             1,
             23,
@@ -1044,6 +1090,32 @@ def download_template_cadastro_cliente_ixc(request):
             24,
             5000,
             24,
+            {
+                "validate": "list",
+                "source": ["Sim", "Nao"],
+                "ignore_blank": True,
+                "input_title": "Permitir_Duplicidade",
+                "input_message": "Sim para cadastrar mesmo que o CNPJ/CPF ja exista no IXC. Nao ou vazio para bloquear duplicatas.",
+            },
+        )
+        worksheet.data_validation(
+            1,
+            25,
+            5000,
+            25,
+            {
+                "validate": "list",
+                "source": ["Sim", "Nao"],
+                "ignore_blank": True,
+                "input_title": "Prospeccao",
+                "input_message": "Sim para marcar como prospeccao no CRM do IXC, Nao para nao marcar.",
+            },
+        )
+        worksheet.data_validation(
+            1,
+            26,
+            5000,
+            26,
             {
                 "validate": "list",
                 "source": ["SIM"],
