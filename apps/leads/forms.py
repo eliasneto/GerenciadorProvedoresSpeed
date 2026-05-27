@@ -97,6 +97,36 @@ class LeadForm(forms.ModelForm):
         return cleaned_data
 
 
+class LeadEmpresaForm(forms.ModelForm):
+    class Meta:
+        model = LeadEmpresa
+        fields = [
+            'razao_social', 'nome_fantasia', 'cnpj_cpf', 'site',
+            'instagram_username', 'instagram_url',
+            'contato_nome', 'telefone', 'email',
+        ]
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        css = 'w-full p-4 bg-gray-50 border border-gray-100 rounded-2xl outline-none focus:ring-2 focus:ring-ageis-yellow font-bold text-sm transition-all'
+        placeholders = {
+            'razao_social': 'Razão Social da empresa',
+            'nome_fantasia': 'Nome comercial',
+            'cnpj_cpf': '00.000.000/0000-00',
+            'site': 'https://...',
+            'instagram_username': 'perfil_instagram',
+            'instagram_url': 'https://instagram.com/...',
+            'contato_nome': 'Nome do responsável',
+            'telefone': '(00) 00000-0000',
+            'email': 'contato@empresa.com.br',
+        }
+        for name, field in self.fields.items():
+            field.required = False
+            field.widget.attrs.update({'class': css})
+            if name in placeholders:
+                field.widget.attrs['placeholder'] = placeholders[name]
+
+
 class LeadEnderecoForm(forms.ModelForm):
     class Meta:
         model = LeadEndereco

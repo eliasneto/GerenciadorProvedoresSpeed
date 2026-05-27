@@ -2,6 +2,24 @@
 
 Este arquivo registra as versoes publicadas do sistema e os principais itens adicionados ou alterados em cada release.
 
+## v1.6.0 - 2026-05-27
+
+Adicionado:
+- integracao com a API Hub do Desenvolvedor (WSCEP1J3) para preenchimento automatico de endereco ao digitar o CEP, disponivel no cadastro de provedores e no cadastro/edicao de enderecos
+- endpoint interno `/clientes/api/cep/<cep>/` como proxy autenticado para a API de CEP, mantendo o token protegido no servidor via `.env`
+- view `lead_empresa_update` para edicao dos dados cadastrais do provedor (razao social, nome fantasia, CNPJ, site, contato, instagram) sem expor o campo de status
+- view `lead_empresa_endereco_update` para edicao de enderecos individuais de um provedor com reuso do formulario existente e atualizacao automatica do lead espelho
+- comando de management `corrigir_cnpj` para normalizar CNPJs importados em notacao cientifica (ex: `5,42E+13` para `54200000000000`), com suporte a `--dry-run`
+
+Melhorado:
+- cadastro de provedor refatorado para separar dados da empresa e dados de endereco: apos salvar o provedor o sistema redireciona automaticamente para o formulario de novo endereco
+- secao de endereco removida do formulario de cadastro de provedor (`lead_form.html`), que agora trata apenas os dados da empresa
+- botao `VER ENDERECOS` na listagem de provedores convertido para icone (`map-pin`) sem texto, padronizando com os demais icones de acao da tabela
+- botao de editar provedor adicionado na listagem de provedores, apontando para o formulario dedicado `lead_empresa_update`
+- botao de editar na tela de enderecos do provedor corrigido para abrir o formulario de edicao do endereco em vez do formulario legado do lead
+- campo `Estagio Atual da Prospeccao` removido da tela de edicao do provedor, pois o status e gerenciado por fluxo proprio em outras telas
+- importador de provedores corrigido para converter CNPJs em notacao cientifica ou com sufixo `.0` (lidos pelo pandas como float) para string numerica correta antes de salvar no banco
+
 ## v1.5.1 - 2026-05-27
 
 Melhorado:

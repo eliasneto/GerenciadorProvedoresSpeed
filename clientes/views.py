@@ -1,16 +1,18 @@
 from django.shortcuts import render, get_object_or_404, redirect
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
-from django.urls import reverse_lazy 
+from django.urls import reverse_lazy
 from urllib.parse import urlencode
-from django.views.generic import UpdateView 
-from django.contrib.auth.mixins import LoginRequiredMixin 
-from .models import Cliente, Endereco 
+from django.views.generic import UpdateView
+from django.contrib.auth.mixins import LoginRequiredMixin
+from .models import Cliente, Endereco
 from .forms import ClienteForm, EnderecoForm
 from django.http import JsonResponse
 from django.db.models import Q, Count
 import json
+import requests
 from django.views.decorators.http import require_POST
+from decouple import config
 
 # ==========================================
 # LISTAGEM DE CLIENTES
@@ -355,5 +357,29 @@ def disparar_sincronizacao_manual(request):
     finally:
         historico.data_fim = timezone.now()
         historico.save()
-        
-    return JsonResponse({'status': 'ok'})        
+
+    return JsonResponse({'status': 'ok'})
+
+
+@login_required
+def buscar_cep(request, cep):
+    cep_limpo = ''.join(c for c in cep if c.isdigit())
+    if len(cep_limpo) != 8:
+        return JsonResponse({'erro': 'CEP inválido'}, status=400)
+
+    token = config('HUB_DO_DEV_TOKEN', default='')
+    url = f'https://ws.hubdodesenvolvedor.com.br/v2/cep/?cep={cep_limpo}&token={token}'
+    try:
+        resp = requests.get(url, timeout=5)
+        data = resp.json()
+        if data.get('status') and isinstance(data.get('result'), dict):
+            addr = data['result']
+            return JsonResponse({
+                'logradouro': addr.get('logradouro', ''),
+                'bairro': addr.get('bairro', ''),
+                'localidade': addr.get('localidade', ''),
+                'uf': addr.get('uf', ''),
+            })
+    except Exception:
+        pass
+    return JsonResponse({'erro': 'CEP não encontrado'}, status=404)

@@ -158,8 +158,11 @@
                         </td>
                         <td class="px-6 py-4 text-right">
                             <div class="flex justify-end items-center gap-2">
-                                <a href="{% url 'lead_empresa_detail' empresa.pk %}" class="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-ageis-black text-ageis-yellow text-[10px] font-black uppercase tracking-widest hover:bg-gray-800 transition">
-                                    <i data-lucide="building-2" class="w-4 h-4"></i> Ver endereços
+                                <a href="{% url 'lead_empresa_update' empresa.pk %}" class="p-2 text-gray-400 hover:text-ageis-black hover:bg-gray-100 rounded-lg transition" title="Editar provedor">
+                                    <i data-lucide="edit-3" class="w-5 h-5"></i>
+                                </a>
+                                <a href="{% url 'lead_empresa_detail' empresa.pk %}" class="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition" title="Ver endereços">
+                                    <i data-lucide="map-pin" class="w-5 h-5"></i>
                                 </a>
                             </div>
                         </td>

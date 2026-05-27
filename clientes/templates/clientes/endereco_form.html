@@ -108,7 +108,7 @@
             const cepInput = this;
             cepInput.classList.add('opacity-50');
 
-            fetch(`https://viacep.com.br/ws/${cep}/json/`)
+            fetch(`/clientes/api/cep/${cep}/`)
                 .then(response => response.json())
                 .then(data => {
                     cepInput.classList.remove('opacity-50');

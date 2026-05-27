@@ -101,7 +101,7 @@
                                     <i data-lucide="history" class="w-5 h-5"></i>
                                 </a>
 
-                                <a href="{% url 'lead_update' endereco.lead_espelho.pk %}" class="p-2 text-gray-400 hover:text-ageis-black hover:bg-gray-100 rounded-lg transition" title="Editar prospeccao">
+                                <a href="{% url 'lead_empresa_endereco_update' empresa.pk endereco.pk %}" class="p-2 text-gray-400 hover:text-ageis-black hover:bg-gray-100 rounded-lg transition" title="Editar endereco">
                                     <i data-lucide="edit-3" class="w-5 h-5"></i>
                                 </a>
                                 {% else %}
