@@ -2,6 +2,15 @@
 
 Este arquivo registra as versoes publicadas do sistema e os principais itens adicionados ou alterados em cada release.
 
+## v1.5.1 - 2026-05-27
+
+Melhorado:
+- funcao `resolver_cidade_ixc` ajustada para retornar tambem o `UF_ID` da cidade consultada no IXC, preenchendo automaticamente o campo `uf` no payload de cadastro do cliente
+- payload de cadastro de cliente no IXC enxugado: removidos campos `crm_data_*` sem uso e o campo duplicado `celular`, substituido pelo `telefone_celular` que o IXC reconhece corretamente
+- campos `data_nascimento`, `cob_envia_email` e `cob_envia_sms` adicionados ao payload de cadastro com valores padrao para evitar rejeicao da API IXC
+- campo `classificacao_iss` ajustado para garantir que o valor seja sempre zero-preenchido com dois digitos antes de enviar ao IXC
+- campo `tipo_localidade` validado para aceitar apenas `U` (urbano) ou `R` (rural), defaultando para `U` quando o valor informado nao for reconhecido
+
 ## v1.5.0 - 2026-05-15
 
 Adicionado:
@@ -28,6 +37,7 @@ Melhorado:
 - botao `Buscar fora da regiao` corrigido para nao herdar `cidade/UF` do endereco quando esses filtros sao limpos no modal, permitindo busca ampla real em toda a base
 - painel inferior de provedores elegiveis removido do modal `Abrir Cotacao por Endereco`, com ampliacao da grade principal para aproveitar melhor a altura disponivel
 - rotina `OS Comercial | Lastmile` ajustada para rodar reconciliacao completa por padrao na execucao diaria, deixando o recorte por data apenas para execucoes incrementais explicitas e mantendo a regra de ignorar O.S. sem login
+- fluxo de alteracao de O.S. no IXC pela tela de cotacao ajustado para diferenciar quando a O.S. foi finalizada agora versus quando ja estava finalizada, com mensagem visivel ao operador e historico/auditoria mais claros
 
 ## v1.4.0 - 2026-05-15
 

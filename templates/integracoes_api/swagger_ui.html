@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Swagger - GerenciadorProvedores API</title>
+    <link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist@5/swagger-ui.css">
+    <style>
+        body {
+            margin: 0;
+            background: #f5f7fb;
+            font-family: Arial, sans-serif;
+        }
+
+        .swagger-ui .topbar {
+            display: none;
+        }
+
+        .api-header {
+            padding: 20px 24px 8px;
+            background: linear-gradient(135deg, #0d3b66, #1d6fa5);
+            color: #fff;
+        }
+
+        .api-header h1 {
+            margin: 0 0 6px;
+            font-size: 28px;
+        }
+
+        .api-header p {
+            margin: 0;
+            opacity: 0.9;
+        }
+    </style>
+</head>
+<body>
+    <header class="api-header">
+        <h1>GerenciadorProvedores API</h1>
+        <p>Documentacao Swagger da camada publica de integracoes.</p>
+    </header>
+    <div id="swagger-ui"></div>
+    <script src="https://unpkg.com/swagger-ui-dist@5/swagger-ui-bundle.js"></script>
+    <script src="https://unpkg.com/swagger-ui-dist@5/swagger-ui-standalone-preset.js"></script>
+    <script>
+        window.onload = function () {
+            SwaggerUIBundle({
+                url: "{{ schema_url }}",
+                dom_id: "#swagger-ui",
+                deepLinking: true,
+                displayRequestDuration: true,
+                docExpansion: "list",
+                presets: [
+                    SwaggerUIBundle.presets.apis,
+                    SwaggerUIStandalonePreset
+                ],
+                layout: "BaseLayout"
+            });
+        };
+    </script>
+</body>
+</html>

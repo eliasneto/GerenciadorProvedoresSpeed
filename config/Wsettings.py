@@ -35,6 +35,7 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'rest_framework',
     
     # Suas Apps
     'core',
@@ -43,6 +44,7 @@ INSTALLED_APPS = [
     'clientes',
     'core_admin',
     'backoffice',
+    'integracoes_api',
 ]
 
 # ============================================
@@ -128,6 +130,12 @@ MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 # 🌍 LOCALIZAÇÃO E SEGURANÇA
 # ==========================================
 LANGUAGE_CODE = 'pt-br'
+
+REST_FRAMEWORK = {
+    "DEFAULT_SCHEMA_CLASS": "integracoes_api.schema.IntegracoesApiSchema",
+    "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
+    "PAGE_SIZE": 20,
+}
 TIME_ZONE = 'America/Fortaleza'
 USE_I18N = True
 USE_TZ = False

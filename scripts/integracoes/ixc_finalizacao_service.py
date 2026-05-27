@@ -347,6 +347,7 @@ def finalizar_os_existente(
         registros = buscar_registros_fechamento_os(os_id, limite=1)
         return {
             "ok": True,
+            "already_closed": True,
             "message": f"O.S. {os_id} já está finalizada no IXC.",
             "detalhes_os": detalhes_os,
             "os_atualizada": detalhes_os,
@@ -381,6 +382,7 @@ def finalizar_os_existente(
     sucesso = sucesso_api and normalizar_texto(os_atualizada.get("status")).upper() == "F"
     return {
         "ok": sucesso,
+        "already_closed": False,
         "endpoint": endpoint,
         "status_code": status_code,
         "body": body,

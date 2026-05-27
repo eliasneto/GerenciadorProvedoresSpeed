@@ -41,6 +41,7 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'rest_framework',
     
     # Suas Apps
     'core',
@@ -50,6 +51,7 @@ INSTALLED_APPS = [
     'clientes',
     'core_admin',
     'backoffice',
+    'integracoes_api',
 ]
 
 # ============================================
@@ -280,3 +282,9 @@ GRAPH_EMAIL_REPLIES_MAILBOX = config('GRAPH_EMAIL_REPLIES_MAILBOX', default=DEFA
 GRAPH_EMAIL_REPLIES_INITIAL_LOOKBACK_DAYS = config('GRAPH_EMAIL_REPLIES_INITIAL_LOOKBACK_DAYS', default=15, cast=int)
 GRAPH_EMAIL_REPLIES_TIMEOUT = config('GRAPH_EMAIL_REPLIES_TIMEOUT', default=30, cast=int)
 GRAPH_EMAIL_REPLIES_MAX_PAGES_PER_RUN = config('GRAPH_EMAIL_REPLIES_MAX_PAGES_PER_RUN', default=20, cast=int)
+
+REST_FRAMEWORK = {
+    "DEFAULT_SCHEMA_CLASS": "integracoes_api.schema.IntegracoesApiSchema",
+    "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
+    "PAGE_SIZE": 20,
+}

@@ -95,6 +95,36 @@ def _registrar_auditoria_status_cotacao(
     )
 
 
+def _status_os_ixc_para_operador(alterar_os_ixc, resultado_ixc=None):
+    if not alterar_os_ixc:
+        return "Não alterada"
+    if isinstance(resultado_ixc, dict) and resultado_ixc.get('already_closed'):
+        return "Já estava finalizada"
+    return "Finalizada agora"
+
+
+def _detalhe_os_ixc_para_historico(alterar_os_ixc, observacao_contratacao='', resultado_ixc=None):
+    detalhe = f"O.S. no IXC: {_status_os_ixc_para_operador(alterar_os_ixc, resultado_ixc)}"
+    if alterar_os_ixc and observacao_contratacao:
+        detalhe += f"\nObservação enviada ao IXC: {observacao_contratacao}"
+    return detalhe
+
+
+def _detalhe_os_ixc_para_auditoria(alterar_os_ixc, observacao_contratacao='', resultado_ixc=None):
+    detalhe = f"Status da O.S. no IXC: {_status_os_ixc_para_operador(alterar_os_ixc, resultado_ixc)}."
+    if alterar_os_ixc and observacao_contratacao:
+        detalhe += f" Observacao enviada ao IXC: {observacao_contratacao}."
+    return detalhe.strip()
+
+
+def _mensagem_os_ixc_ja_finalizada(propostas):
+    if not propostas:
+        return ""
+    if len(propostas) == 1:
+        return f"A O.S. da cotação #{propostas[0].codigo_exibicao} já estava finalizada no IXC e o sistema tratou isso como sucesso."
+    return f"{len(propostas)} O.S. já estavam finalizadas no IXC e o sistema tratou esses casos como sucesso."
+
+
 def _baixar_endereco_da_fila_lastmile(endereco):
     if not endereco:
         return
@@ -909,6 +939,8 @@ def proposal_batch_status_update(request, pk):
         if novo_status == 'aguardando_contratacao':
             falhas_ixc = []
             propostas_com_os_lastmile = _propostas_com_os_lastmile(propostas_lote)
+            resultados_ixc_por_proposta = {}
+            propostas_com_os_ja_finalizada = []
 
             if alterar_os_ixc:
                 if not observacao_contratacao:
@@ -943,6 +975,9 @@ def proposal_batch_status_update(request, pk):
                         })
                         continue
 
+                    resultados_ixc_por_proposta[item.id] = resultado_ixc
+                    if resultado_ixc.get('already_closed'):
+                        propostas_com_os_ja_finalizada.append(item)
                     _baixar_endereco_da_fila_lastmile(item.client_address)
 
             if falhas_ixc:
@@ -958,6 +993,9 @@ def proposal_batch_status_update(request, pk):
                     f"Não foi possível finalizar a O.S. no IXC para a cotação #{primeira_falha['proposal'].codigo_exibicao}. {resumir_erro_finalizacao(primeira_falha['resultado'])}",
                 )
                 return redirect(_append_next(reverse('proposal_batch_detail', args=[proposal.pk]), next_param))
+
+            if propostas_com_os_ja_finalizada:
+                messages.info(request, _mensagem_os_ixc_ja_finalizada(propostas_com_os_ja_finalizada))
 
         if novo_status == 'ativa':
             messages.success(request, "Cotação marcada como viável. Complete agora os dados técnicos e financeiros.")
@@ -985,10 +1023,14 @@ def proposal_batch_status_update(request, pk):
                 if novo_status == 'encerrada':
                     detalhe_item_inviavel = f"\nMotivo: {motivo_inviavel.nome}\nObservação: {observacao_inviavel}"
                 elif novo_status == 'aguardando_contratacao':
-                    if alterar_os_ixc:
-                        detalhe_item_contratacao = f"\nO.S. no IXC alterada: Sim\nObservação enviada ao IXC: {observacao_contratacao}"
-                    else:
-                        detalhe_item_contratacao = "\nO.S. no IXC alterada: Não"
+                    detalhe_item_contratacao = (
+                        "\n"
+                        + _detalhe_os_ixc_para_historico(
+                            alterar_os_ixc,
+                            observacao_contratacao,
+                            resultados_ixc_por_proposta.get(item.id),
+                        )
+                    )
 
                 _registrar_historico_proposta(
                     item,
@@ -1014,7 +1056,7 @@ def proposal_batch_status_update(request, pk):
                         f"Atualizacao em lote da cotacao #{item.codigo_exibicao}."
                         f"{f' Motivo inviavel: {motivo_inviavel.nome}.' if novo_status == 'encerrada' and motivo_inviavel else ''}"
                         f"{f' Observacao inviavel: {observacao_inviavel}.' if novo_status == 'encerrada' and observacao_inviavel else ''}"
-                        f"{f' Observacao enviada ao IXC: {observacao_contratacao}.' if novo_status == 'aguardando_contratacao' and observacao_contratacao else ''}"
+                        f"{f' {_detalhe_os_ixc_para_auditoria(alterar_os_ixc, observacao_contratacao, resultados_ixc_por_proposta.get(item.id))}' if novo_status == 'aguardando_contratacao' else ''}"
                     ).strip(),
                 )
 
@@ -1023,10 +1065,16 @@ def proposal_batch_status_update(request, pk):
             if novo_status == 'encerrada':
                 detalhe_lote_inviavel = f"Motivo: {motivo_inviavel.nome}\nObservação: {observacao_inviavel}\n"
             elif novo_status == 'aguardando_contratacao':
-                if alterar_os_ixc:
-                    detalhe_lote_contratacao = f"O.S. no IXC alterada: Sim\nObservação enviada ao IXC: {observacao_contratacao}\n"
+                if propostas_com_os_lastmile:
+                    detalhes_os_lote = [
+                        f"Cotação #{item.codigo_exibicao}: {_status_os_ixc_para_operador(alterar_os_ixc, resultados_ixc_por_proposta.get(item.id))}"
+                        for item in propostas_com_os_lastmile
+                    ]
+                    detalhe_lote_contratacao = "Status das O.S. no IXC:\n" + "\n".join(detalhes_os_lote) + "\n"
+                    if alterar_os_ixc and observacao_contratacao:
+                        detalhe_lote_contratacao += f"Observação enviada ao IXC: {observacao_contratacao}\n"
                 else:
-                    detalhe_lote_contratacao = "O.S. no IXC alterada: Não\n"
+                    detalhe_lote_contratacao = f"{_detalhe_os_ixc_para_historico(alterar_os_ixc, observacao_contratacao)}\n"
 
             RegistroHistorico.objects.create(
                 tipo='sistema',
@@ -1122,6 +1170,8 @@ def proposal_update(request, pk):
                 propostas_com_os_lastmile = _propostas_com_os_lastmile(propostas_lote)
 
                 falhas_ixc = []
+                resultados_ixc_por_proposta = {}
+                propostas_com_os_ja_finalizada = []
                 if alterar_os_ixc:
                     if not observacao_contratacao:
                         messages.error(request, "Preencha a observação para alterar a O.S. no IXC antes de enviar a cotação para aguardando contratação.")
@@ -1167,6 +1217,9 @@ def proposal_update(request, pk):
                             })
                             continue
 
+                        resultados_ixc_por_proposta[item.id] = resultado_ixc
+                        if resultado_ixc.get('already_closed'):
+                            propostas_com_os_ja_finalizada.append(item)
                         _baixar_endereco_da_fila_lastmile(item.client_address)
 
                 if falhas_ixc:
@@ -1206,6 +1259,9 @@ def proposal_update(request, pk):
                         'outras_cotacoes_por_endereco': outras_cotacoes_por_endereco,
                         'permite_alterar_os_ixc': permite_alterar_os_ixc,
                     })
+
+                if propostas_com_os_ja_finalizada:
+                    messages.info(request, _mensagem_os_ixc_ja_finalizada(propostas_com_os_ja_finalizada))
 
                 partner.cnpj_cpf = form.cleaned_data.get('partner_cnpj_cpf') or partner.cnpj_cpf
                 partner.save(update_fields=['cnpj_cpf'])
@@ -1273,8 +1329,7 @@ def proposal_update(request, pk):
                             "Dados técnicos e financeiros preenchidos após proposta viável.\n\n"
                             f"ID da proposta: #{item.codigo_exibicao}\n"
                             f"Unidade: {item.client_address or '--'}\n"
-                            f"O.S. no IXC alterada: {'Sim' if alterar_os_ixc else 'Não'}"
-                            f"{f'\nObservação enviada ao IXC: {observacao_contratacao}' if alterar_os_ixc else ''}"
+                            f"{_detalhe_os_ixc_para_historico(alterar_os_ixc, observacao_contratacao, resultados_ixc_por_proposta.get(item.id))}"
                         ),
                     )
                     _registrar_auditoria_status_cotacao(
@@ -1286,17 +1341,27 @@ def proposal_update(request, pk):
                         integrou_ixc=alterar_os_ixc,
                         detalhes=(
                             f"Conversao de cotacao viavel concluida para a proposta #{item.codigo_exibicao}."
-                            f"{f' Observacao enviada ao IXC: {observacao_contratacao}.' if alterar_os_ixc and observacao_contratacao else ''}"
+                            f" {_detalhe_os_ixc_para_auditoria(alterar_os_ixc, observacao_contratacao, resultados_ixc_por_proposta.get(item.id))}"
                         ).strip(),
                     )
+
+                if propostas_com_os_lastmile:
+                    detalhes_os_lote = [
+                        f"Cotação #{item.codigo_exibicao}: {_status_os_ixc_para_operador(alterar_os_ixc, resultados_ixc_por_proposta.get(item.id))}"
+                        for item in propostas_com_os_lastmile
+                    ]
+                    detalhe_lote_os_ixc = "Status das O.S. no IXC:\n" + "\n".join(detalhes_os_lote) + "\n"
+                    if alterar_os_ixc and observacao_contratacao:
+                        detalhe_lote_os_ixc += f"Observação enviada ao IXC: {observacao_contratacao}\n"
+                else:
+                    detalhe_lote_os_ixc = f"{_detalhe_os_ixc_para_historico(alterar_os_ixc, observacao_contratacao)}\n"
 
                 RegistroHistorico.objects.create(
                     tipo='sistema',
                     acao=(
                         "Proposta enviada para aguardando contratação após complementação técnica e financeira.\n\n"
                         f"ID da proposta: #{proposal.codigo_exibicao}\n"
-                        f"O.S. no IXC alterada: {'Sim' if alterar_os_ixc else 'Não'}\n"
-                        f"{f'Observação enviada ao IXC: {observacao_contratacao}\n' if alterar_os_ixc else ''}"
+                        f"{detalhe_lote_os_ixc}"
                         f"Quantidade de logins impactados: {len(propostas_lote)}"
                     ),
                     usuario=request.user,
