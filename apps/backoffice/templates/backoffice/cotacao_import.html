@@ -33,15 +33,47 @@
                 </a>
             </div>
 
+            {% if logins_ixc_em_andamento %}
+            <div class="mb-6 rounded-2xl border border-ageis-yellow/40 bg-ageis-yellow/10 p-4">
+                <div class="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-gray-700">
+                    <i data-lucide="loader-circle" class="w-4 h-4 animate-spin text-ageis-yellow"></i>
+                    Automacao em andamento
+                </div>
+                <p class="mt-2 text-sm font-black text-gray-900 break-all">{{ logins_ixc_em_andamento.arquivo_nome }}</p>
+                <p class="mt-2 text-xs font-medium text-gray-600">{{ logins_ixc_em_andamento.mensagem }}</p>
+                <div class="mt-3 grid grid-cols-2 gap-3 text-[10px] font-black uppercase tracking-widest text-gray-500">
+                    <div>Processadas: <span class="text-gray-900">{{ logins_ixc_em_andamento.processadas }}{% if logins_ixc_em_andamento.total_previsto %}/{{ logins_ixc_em_andamento.total_previsto }}{% endif %}</span></div>
+                    <div>Ultima linha: <span class="text-gray-900">{{ logins_ixc_em_andamento.ultima_linha_processada|default:"--" }}</span></div>
+                    <div>Sucessos: <span class="text-gray-900">{{ logins_ixc_em_andamento.sucessos }}</span></div>
+                    <div>Erros: <span class="text-gray-900">{{ logins_ixc_em_andamento.erros }}</span></div>
+                </div>
+            </div>
+            {% endif %}
+
+            {% if logins_ixc_relatorio_disponivel %}
+            <div class="mb-6 rounded-2xl border border-green-200 bg-green-50 p-4">
+                <div class="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-green-700">
+                    <i data-lucide="download" class="w-4 h-4"></i>
+                    Relatorio disponivel
+                </div>
+                <p class="mt-2 text-sm font-black text-gray-900 break-all">{{ logins_ixc_relatorio_disponivel.relatorio_nome_arquivo }}</p>
+                <p class="mt-2 text-xs font-medium text-gray-600">Esse link fica visivel ate voce clicar pelo menos uma vez para salvar o arquivo.</p>
+                <a href="{{ logins_ixc_relatorio_disponivel.url_download }}" class="mt-4 inline-flex items-center gap-2 rounded-xl bg-ageis-black px-4 py-3 text-[10px] font-black uppercase tracking-widest text-ageis-yellow hover:bg-gray-900 transition-colors">
+                    <i data-lucide="download" class="w-3 h-3"></i>
+                    Baixar ultimo relatorio
+                </a>
+            </div>
+            {% endif %}
+
             <form method="POST" action="{% url 'backoffice:cotacao_import' %}" enctype="multipart/form-data" class="space-y-6 flex-1 flex flex-col justify-end" id="formImportacaoIXC">
                 {% csrf_token %}
                 
                 <div>
                     <label class="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Arquivo de Logins</label>
                     
-                    <input type="file" name="arquivo_cotacao" id="arquivo_cotacao" accept=".xlsx, .xls, .csv" required class="hidden">
+                    <input type="file" name="arquivo_cotacao" id="arquivo_cotacao" accept=".xlsx, .xls, .csv" required {% if logins_ixc_em_andamento %}disabled{% endif %} class="hidden">
                     
-                    <label for="arquivo_cotacao" class="flex items-center w-full bg-gray-50 border border-gray-100 rounded-xl cursor-pointer hover:bg-gray-100 transition-all overflow-hidden group">
+                    <label for="arquivo_cotacao" class="flex items-center w-full bg-gray-50 border border-gray-100 rounded-xl cursor-pointer hover:bg-gray-100 transition-all overflow-hidden group {% if logins_ixc_em_andamento %}opacity-60 cursor-not-allowed{% endif %}">
                         <div class="bg-gray-900 text-ageis-yellow group-hover:text-white text-[10px] font-black uppercase tracking-wider py-3 px-4 shadow-sm transition-all flex items-center gap-2">
                             <i data-lucide="upload-cloud" class="w-3 h-3"></i> Planilha
                         </div>
@@ -49,7 +81,7 @@
                     </label>
                 </div>
 
-                <div id="areaLoading" class="hidden flex flex-col items-center justify-center gap-3 mt-4 py-2">
+                <div id="areaLoading" class="{% if logins_ixc_em_andamento %}flex{% else %}hidden{% endif %} flex-col items-center justify-center gap-3 mt-4 py-2">
                     <div class="w-6 h-6 border-4 border-gray-100 border-t-ageis-yellow rounded-full animate-spin"></div>
                     <span class="text-[10px] font-black uppercase tracking-widest text-gray-500">Criando Logins...</span>
                 </div>
@@ -59,9 +91,9 @@
                     <span class="text-[10px] font-black uppercase tracking-widest text-green-700">Relatório Baixado!</span>
                 </div>
 
-                <button type="submit" id="btnSubmit" class="w-full bg-ageis-black hover:bg-gray-900 text-ageis-yellow font-black uppercase italic tracking-widest py-4 rounded-2xl shadow-lg transition-all flex items-center justify-center gap-2 group mt-auto">
+                <button type="submit" id="btnSubmit" {% if logins_ixc_em_andamento %}disabled{% endif %} class="w-full bg-ageis-black hover:bg-gray-900 text-ageis-yellow font-black uppercase italic tracking-widest py-4 rounded-2xl shadow-lg transition-all flex items-center justify-center gap-2 group mt-auto disabled:opacity-60 disabled:cursor-not-allowed {% if logins_ixc_em_andamento %}hidden{% endif %}">
                     <i data-lucide="play" class="w-4 h-4 group-hover:scale-110 transition-transform"></i>
-                    Gerar Logins
+                    {% if logins_ixc_em_andamento %}Importacao em andamento{% else %}Gerar Logins{% endif %}
                 </button>
             </form>
         </div>
@@ -87,15 +119,47 @@
                 </p>
             </div>
 
+            {% if atendimento_ixc_em_andamento %}
+            <div class="mb-6 rounded-2xl border border-ageis-yellow/40 bg-ageis-yellow/10 p-4">
+                <div class="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-gray-700">
+                    <i data-lucide="loader-circle" class="w-4 h-4 animate-spin text-ageis-yellow"></i>
+                    Automacao em andamento
+                </div>
+                <p class="mt-2 text-sm font-black text-gray-900 break-all">{{ atendimento_ixc_em_andamento.arquivo_nome }}</p>
+                <p class="mt-2 text-xs font-medium text-gray-600">{{ atendimento_ixc_em_andamento.mensagem }}</p>
+                <div class="mt-3 grid grid-cols-2 gap-3 text-[10px] font-black uppercase tracking-widest text-gray-500">
+                    <div>Processadas: <span class="text-gray-900">{{ atendimento_ixc_em_andamento.processadas }}{% if atendimento_ixc_em_andamento.total_previsto %}/{{ atendimento_ixc_em_andamento.total_previsto }}{% endif %}</span></div>
+                    <div>Ultima linha: <span class="text-gray-900">{{ atendimento_ixc_em_andamento.ultima_linha_processada|default:"--" }}</span></div>
+                    <div>Sucessos: <span class="text-gray-900">{{ atendimento_ixc_em_andamento.sucessos }}</span></div>
+                    <div>Ultimo ID IXC: <span class="text-gray-900">{{ atendimento_ixc_em_andamento.ultimo_id_ixc_criado|default:"--" }}</span></div>
+                </div>
+            </div>
+            {% endif %}
+
+            {% if atendimento_ixc_relatorio_disponivel %}
+            <div class="mb-6 rounded-2xl border border-green-200 bg-green-50 p-4">
+                <div class="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-green-700">
+                    <i data-lucide="download" class="w-4 h-4"></i>
+                    Relatorio disponivel
+                </div>
+                <p class="mt-2 text-sm font-black text-gray-900 break-all">{{ atendimento_ixc_relatorio_disponivel.relatorio_nome_arquivo }}</p>
+                <p class="mt-2 text-xs font-medium text-gray-600">Esse link fica visivel ate voce clicar pelo menos uma vez para salvar o arquivo.</p>
+                <a href="{{ atendimento_ixc_relatorio_disponivel.url_download }}" class="mt-4 inline-flex items-center gap-2 rounded-xl bg-ageis-black px-4 py-3 text-[10px] font-black uppercase tracking-widest text-ageis-yellow hover:bg-gray-900 transition-colors">
+                    <i data-lucide="download" class="w-3 h-3"></i>
+                    Baixar ultimo relatorio
+                </a>
+            </div>
+            {% endif %}
+
             <form method="POST" action="{% url 'backoffice:atendimento_import' %}" enctype="multipart/form-data" class="space-y-6 flex-1 flex flex-col justify-end" id="formImportacaoOS">
                 {% csrf_token %}
                 
                 <div>
                     <label class="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Arquivo de OS</label>
                     
-                    <input type="file" name="arquivo_atendimento" id="arquivo_atendimento" accept=".xlsx, .xls, .csv" required class="hidden">
+                    <input type="file" name="arquivo_atendimento" id="arquivo_atendimento" accept=".xlsx, .xls, .csv" required {% if atendimento_ixc_em_andamento %}disabled{% endif %} class="hidden">
                     
-                    <label for="arquivo_atendimento" class="flex items-center w-full bg-gray-50 border border-gray-100 rounded-xl cursor-pointer hover:bg-gray-100 transition-all overflow-hidden group">
+                    <label for="arquivo_atendimento" class="flex items-center w-full bg-gray-50 border border-gray-100 rounded-xl cursor-pointer hover:bg-gray-100 transition-all overflow-hidden group {% if atendimento_ixc_em_andamento %}opacity-60 cursor-not-allowed{% endif %}">
                         <div class="bg-gray-900 text-ageis-yellow group-hover:text-white text-[10px] font-black uppercase tracking-wider py-3 px-4 shadow-sm transition-all flex items-center gap-2">
                             <i data-lucide="upload-cloud" class="w-3 h-3"></i> Planilha
                         </div>
@@ -103,7 +167,7 @@
                     </label>
                 </div>
 
-                <div id="areaLoadingOS" class="hidden flex flex-col items-center justify-center gap-3 mt-4 py-2">
+                <div id="areaLoadingOS" class="{% if atendimento_ixc_em_andamento %}flex{% else %}hidden{% endif %} flex-col items-center justify-center gap-3 mt-4 py-2">
                     <div class="w-6 h-6 border-4 border-gray-100 border-t-ageis-yellow rounded-full animate-spin"></div>
                     <span class="text-[10px] font-black uppercase tracking-widest text-gray-500">Abrindo OS...</span>
                 </div>
@@ -113,9 +177,9 @@
                     <span class="text-[10px] font-black uppercase tracking-widest text-green-700">Relatório Baixado!</span>
                 </div>
 
-                <button type="submit" id="btnSubmitOS" class="w-full bg-ageis-black hover:bg-gray-900 text-ageis-yellow font-black uppercase italic tracking-widest py-4 rounded-2xl shadow-lg transition-all flex items-center justify-center gap-2 group mt-auto">
+                <button type="submit" id="btnSubmitOS" {% if atendimento_ixc_em_andamento %}disabled{% endif %} class="w-full bg-ageis-black hover:bg-gray-900 text-ageis-yellow font-black uppercase italic tracking-widest py-4 rounded-2xl shadow-lg transition-all flex items-center justify-center gap-2 group mt-auto disabled:opacity-60 disabled:cursor-not-allowed {% if atendimento_ixc_em_andamento %}hidden{% endif %}">
                     <i data-lucide="play" class="w-4 h-4 group-hover:scale-110 transition-transform"></i>
-                    Gerar Atendimentos
+                    {% if atendimento_ixc_em_andamento %}Importacao em andamento{% else %}Gerar Atendimentos{% endif %}
                 </button>
             </form>
         </div>

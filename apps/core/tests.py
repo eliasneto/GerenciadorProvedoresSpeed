@@ -4,6 +4,11 @@ from django.test import RequestFactory, TestCase
 
 from core.admin import IntegrationAuditAdmin
 from core.admin_integration_exports import build_integration_audit_export
+from core.integration_audit import (
+    atualizar_auditoria_integracao,
+    criar_auditoria_integracao,
+    registrar_item_auditoria_integracao,
+)
 from core.models import IntegrationAudit, IntegrationAuditItem
 
 
@@ -75,3 +80,47 @@ class IntegrationAuditExportTests(TestCase):
             response["Content-Type"],
         )
         self.assertTrue(response.content.startswith(b"PK"))
+
+
+class IntegrationAuditProgressTests(TestCase):
+    def setUp(self):
+        self.user = get_user_model().objects.create_superuser(
+            username="progresso",
+            email="progresso@example.com",
+            password="senha-forte-123",
+        )
+
+    def test_atualizar_auditoria_integracao_mescla_progresso_sem_perder_detalhes(self):
+        audit = criar_auditoria_integracao(
+            integration="atendimento_ixc",
+            action="execucao_integracao",
+            usuario=self.user,
+            arquivo_nome="lote.xlsx",
+            detalhes={"colunas": ["Cliente_ID"], "processamento_status": "em_andamento"},
+        )
+
+        registrar_item_auditoria_integracao(
+            audit,
+            linha_numero=2,
+            status="sucesso",
+            mensagem="Criado",
+            dados_json={"Cliente_ID": 575, "ID_IXC": "8001"},
+        )
+        atualizar_auditoria_integracao(
+            audit,
+            total_registros=1,
+            total_sucessos=1,
+            total_erros=0,
+            detalhes={"ultimo_id_ixc_criado": "8001", "ultima_linha_processada": 2},
+        )
+
+        audit.refresh_from_db()
+        item = audit.items.get()
+
+        self.assertEqual(audit.total_registros, 1)
+        self.assertEqual(audit.total_sucessos, 1)
+        self.assertEqual(audit.total_erros, 0)
+        self.assertEqual(audit.detalhes_json["colunas"], ["Cliente_ID"])
+        self.assertEqual(audit.detalhes_json["ultimo_id_ixc_criado"], "8001")
+        self.assertEqual(audit.detalhes_json["ultima_linha_processada"], 2)
+        self.assertEqual(item.dados_json["ID_IXC"], "8001")

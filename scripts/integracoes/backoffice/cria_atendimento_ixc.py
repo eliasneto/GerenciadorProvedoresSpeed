@@ -85,33 +85,33 @@ def executar_abertura_atendimento(dados, usuario_sistema=None):
         linha.get("Cliente_ID"), "Cliente_ID", obrigatorio=True
     )
     if erro:
-        return False, erro
+        return False, erro, ""
 
     id_login, erro = normalizar_id_numerico(linha.get("Login_ID"), "Login_ID")
     if erro:
-        return False, erro
+        return False, erro, ""
 
     id_contrato, erro = normalizar_id_numerico(linha.get("Contrato_ID"), "Contrato_ID")
     if erro:
-        return False, erro
+        return False, erro, ""
 
     id_assunto, erro = normalizar_id_numerico(
         linha.get("Assunto_ID"), "Assunto_ID", obrigatorio=True
     )
     if erro:
-        return False, erro
+        return False, erro, ""
 
     id_filial, erro = normalizar_id_numerico(
         linha.get("Filial_ID"), "Filial_ID", obrigatorio=True
     )
     if erro:
-        return False, erro
+        return False, erro, ""
 
     id_ticket_setor, erro = normalizar_id_numerico(
         linha.get("Departamento_ID"), "Departamento_ID", obrigatorio=True
     )
     if erro:
-        return False, erro
+        return False, erro, ""
 
     titulo = limpar_texto(linha.get("Assunto_Descricao"))
     mensagem = limpar_texto(linha.get("Descricao"))
@@ -122,25 +122,25 @@ def executar_abertura_atendimento(dados, usuario_sistema=None):
             linha.get("Login_Contrato_ID"), "Login_ID"
         )
         if erro:
-            return False, erro
+            return False, erro, ""
 
     if not id_login:
-        return False, f"Login_ID invalido para cliente {id_cliente}"
+        return False, f"Login_ID invalido para cliente {id_cliente}", ""
 
     if not id_assunto:
-        return False, f"Assunto_ID invalido para cliente {id_cliente}"
+        return False, f"Assunto_ID invalido para cliente {id_cliente}", ""
 
     if not id_filial:
-        return False, f"Filial_ID invalido para cliente {id_cliente}"
+        return False, f"Filial_ID invalido para cliente {id_cliente}", ""
 
     if not id_ticket_setor:
-        return False, f"Departamento_ID invalido para cliente {id_cliente}"
+        return False, f"Departamento_ID invalido para cliente {id_cliente}", ""
 
     if not titulo:
         titulo = "Atendimento via API"
 
     if not mensagem:
-        return False, f"Descricao vazia para cliente {id_cliente}"
+        return False, f"Descricao vazia para cliente {id_cliente}", ""
 
     identificacao_usuario = montar_identificacao_usuario_importacao(usuario_sistema)
     if identificacao_usuario:
@@ -203,32 +203,32 @@ def executar_abertura_atendimento(dados, usuario_sistema=None):
         try:
             resposta = response.json()
         except Exception:
-            return False, f"Erro HTTP {response.status_code}: {response.text[:500]}"
+            return False, f"Erro HTTP {response.status_code}: {response.text[:500]}", ""
 
         print("\n--- DEBUG RESPOSTA TICKET ---")
         print(json.dumps(resposta, indent=2, ensure_ascii=False))
         print("-----------------------------\n")
 
         if response.status_code == 401:
-            return False, "Erro 401: token invalido ou sem permissao"
+            return False, "Erro 401: token invalido ou sem permissao", ""
 
         if response.status_code != 200:
-            return False, f"Erro HTTP {response.status_code}"
+            return False, f"Erro HTTP {response.status_code}", ""
 
         if resposta.get("type") != "success":
-            return False, f"IXC negou o ticket: {resposta.get('message')}"
+            return False, f"IXC negou o ticket: {resposta.get('message')}", ""
 
         id_ticket = resposta.get("id")
 
         if not id_ticket:
-            return False, "Ticket criado sem ID retornado pela API"
+            return False, "Ticket criado sem ID retornado pela API", ""
 
         print(f"[+] Ticket criado com sucesso. ID: {id_ticket}")
 
         return True, (
             f"Ticket aberto com sucesso! ID: {id_ticket} | "
             f"Aguardando workflow abrir a primeira OS automaticamente."
-        )
+        ), str(id_ticket)
 
     except Exception as e:
-        return False, f"Erro Tecnico: {str(e)}"
+        return False, f"Erro Tecnico: {str(e)}", ""

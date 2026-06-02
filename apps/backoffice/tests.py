@@ -1,8 +1,18 @@
 import pandas as pd
-from django.test import SimpleTestCase
+from django.http import HttpResponse
+from django.test import RequestFactory, SimpleTestCase
 from unittest.mock import Mock, patch
 
-from apps.backoffice.views import serializar_linha_para_auditoria
+from apps.backoffice.views import (
+    buscar_execucao_em_andamento,
+    construir_abas_relatorio_atendimento,
+    contar_registros_atendimento_importaveis,
+    obter_limite_registros_atendimento_ixc,
+    render_backoffice_automacoes,
+    serializar_relatorio_disponivel,
+    serializar_execucao_em_andamento,
+    serializar_linha_para_auditoria,
+)
 from scripts.integracoes.backoffice.cria_atendimento_ixc import (
     executar_abertura_atendimento,
     normalizar_id_numerico,
@@ -35,7 +45,7 @@ class ValidacaoIdsAtendimentoTests(SimpleTestCase):
         self.assertIn("apenas o ID numerico do IXC", erro)
 
     def test_executar_abertura_atendimento_barra_login_id_textual(self):
-        status, mensagem = executar_abertura_atendimento(
+        status, mensagem, id_ixc = executar_abertura_atendimento(
             {
                 "Cliente_ID": 575,
                 "Login_ID": "Rua das Flores, 100",
@@ -49,8 +59,34 @@ class ValidacaoIdsAtendimentoTests(SimpleTestCase):
         )
 
         self.assertFalse(status)
+        self.assertEqual(id_ixc, "")
         self.assertIn("Login_ID", mensagem)
         self.assertIn("apenas o ID numerico do IXC", mensagem)
+
+    @patch("scripts.integracoes.backoffice.cria_atendimento_ixc.requests.post")
+    def test_executar_abertura_atendimento_retorna_id_ticket_criado(self, mock_post):
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.text = '{"type":"success","id":"778899"}'
+        mock_response.json.return_value = {"type": "success", "id": "778899"}
+        mock_post.return_value = mock_response
+
+        status, mensagem, id_ixc = executar_abertura_atendimento(
+            {
+                "Cliente_ID": 575,
+                "Login_ID": 4047,
+                "Contrato_ID": 27,
+                "Filial_ID": 1,
+                "Assunto_ID": 18,
+                "Departamento_ID": 4,
+                "Assunto_Descricao": "Teste",
+                "Descricao": "Descricao valida",
+            }
+        )
+
+        self.assertTrue(status)
+        self.assertEqual(id_ixc, "778899")
+        self.assertIn("778899", mensagem)
 
 
 class AuditoriaImportacaoBackofficeTests(SimpleTestCase):
@@ -74,6 +110,156 @@ class AuditoriaImportacaoBackofficeTests(SimpleTestCase):
         self.assertEqual(dados["ID_IXC"], "998877")
         self.assertEqual(dados["Status_Importacao"], "SUCESSO")
         self.assertEqual(dados["Mensagem_Importacao"], "Criado com sucesso!")
+
+    def test_contar_registros_atendimento_importaveis_ignora_linhas_sem_cliente(self):
+        df = pd.DataFrame(
+            [
+                {"Cliente_ID": 575, "Login_ID": 1},
+                {"Cliente_ID": None, "Login_ID": 2},
+                {"Cliente_ID": 576, "Login_ID": 3},
+            ]
+        )
+
+        total = contar_registros_atendimento_importaveis(df)
+
+        self.assertEqual(total, 2)
+
+    def test_obter_limite_registros_atendimento_ixc_ler_env_valido(self):
+        with patch.dict("os.environ", {"ATENDIMENTO_IXC_MAX_REGISTROS_POR_PROCESSAMENTO": "250"}):
+            self.assertEqual(obter_limite_registros_atendimento_ixc(), 250)
+
+    def test_obter_limite_registros_atendimento_ixc_faz_fallback_para_padrao(self):
+        with patch.dict("os.environ", {"ATENDIMENTO_IXC_MAX_REGISTROS_POR_PROCESSAMENTO": "abc"}):
+            self.assertEqual(obter_limite_registros_atendimento_ixc(), 1000)
+
+    def test_construir_abas_relatorio_atendimento_separa_criados_erros_e_pendentes(self):
+        df = pd.DataFrame(
+            [
+                {
+                    "Cliente_ID": 575,
+                    "Login_ID": 1,
+                    "Status_Importacao": "SUCESSO",
+                    "Mensagem_Importacao": "OK",
+                    "ID_IXC": "8001",
+                },
+                {
+                    "Cliente_ID": 576,
+                    "Login_ID": 2,
+                    "Status_Importacao": "ERRO",
+                    "Mensagem_Importacao": "Falha",
+                    "ID_IXC": "",
+                },
+                {
+                    "Cliente_ID": 577,
+                    "Login_ID": 3,
+                    "Status_Importacao": "",
+                    "Mensagem_Importacao": "",
+                    "ID_IXC": "",
+                },
+            ]
+        )
+
+        abas = construir_abas_relatorio_atendimento(
+            df,
+            arquivo_nome="lote.xlsx",
+            total_registros=3,
+            sucessos=1,
+            falhas=1,
+            limite_registros=1000,
+            ultimo_id_ixc="8001",
+            ultima_linha_processada=3,
+        )
+
+        nomes_abas = [nome for nome, _ in abas]
+        self.assertEqual(nomes_abas, ["Resumo", "Criados", "Erros", "Pendentes", "Completo"])
+        self.assertEqual(len(dict(abas)["Criados"]), 1)
+        self.assertEqual(len(dict(abas)["Erros"]), 1)
+        self.assertEqual(len(dict(abas)["Pendentes"]), 1)
+        self.assertEqual(dict(abas)["Resumo"].iloc[0]["Valor"], "lote.xlsx")
+
+
+class BackofficeAutomacoesRenderTests(SimpleTestCase):
+    def setUp(self):
+        self.factory = RequestFactory()
+
+    def test_serializar_execucao_em_andamento_retorna_campos_de_progresso(self):
+        audit = Mock()
+        audit.id = 99
+        audit.arquivo_nome = "lote.xlsx"
+        audit.total_registros = 15
+        audit.total_sucessos = 12
+        audit.total_erros = 3
+        audit.criado_em = "2026-05-29T10:00:00"
+        audit.detalhes_json = {
+            "mensagem": "Criando atendimentos no IXC.",
+            "total_previsto": 40,
+            "ultima_linha_processada": 20,
+            "ultimo_id_ixc_criado": "8123",
+        }
+
+        payload = serializar_execucao_em_andamento(audit)
+
+        self.assertEqual(payload["arquivo_nome"], "lote.xlsx")
+        self.assertEqual(payload["processadas"], 15)
+        self.assertEqual(payload["total_previsto"], 40)
+        self.assertEqual(payload["ultimo_id_ixc_criado"], "8123")
+
+    def test_serializar_relatorio_disponivel_retorna_link_e_nome(self):
+        audit = Mock()
+        audit.id = 55
+        audit.arquivo_nome = "lote.xlsx"
+        audit.detalhes_json = {
+            "relatorio_nome_arquivo": "Relatorio_Importacao_IXC.xlsx",
+            "relatorio_gerado_em": "2026-05-29T10:10:00",
+        }
+
+        with patch("apps.backoffice.views.reverse", return_value="/backoffice/relatorios/55/download/"):
+            payload = serializar_relatorio_disponivel(audit)
+
+        self.assertEqual(payload["relatorio_nome_arquivo"], "Relatorio_Importacao_IXC.xlsx")
+        self.assertEqual(payload["url_download"], "/backoffice/relatorios/55/download/")
+
+    @patch("apps.backoffice.views.render")
+    @patch("apps.backoffice.views.buscar_relatorio_disponivel")
+    @patch("apps.backoffice.views.buscar_execucao_em_andamento")
+    def test_render_backoffice_automacoes_envia_status_persistente_para_template(
+        self,
+        mock_buscar_execucao,
+        mock_buscar_relatorio,
+        mock_render,
+    ):
+        audit_logins = Mock()
+        audit_logins.id = 1
+        audit_logins.arquivo_nome = "logins.xlsx"
+        audit_logins.total_registros = 5
+        audit_logins.total_sucessos = 4
+        audit_logins.total_erros = 1
+        audit_logins.criado_em = "2026-05-29T10:00:00"
+        audit_logins.detalhes_json = {"mensagem": "Criando logins no IXC.", "total_previsto": 10}
+
+        audit_atendimento = Mock()
+        audit_atendimento.id = 2
+        audit_atendimento.arquivo_nome = "atendimentos.xlsx"
+        audit_atendimento.total_registros = 7
+        audit_atendimento.total_sucessos = 7
+        audit_atendimento.total_erros = 0
+        audit_atendimento.criado_em = "2026-05-29T10:00:00"
+        audit_atendimento.detalhes_json = {"mensagem": "Criando atendimentos no IXC.", "total_previsto": 20}
+
+        mock_buscar_execucao.side_effect = [audit_logins, audit_atendimento]
+        mock_buscar_relatorio.side_effect = [None, None]
+        mock_render.return_value = HttpResponse("ok")
+
+        request = self.factory.get("/backoffice/cotacao/importar/")
+        request.user = Mock(is_authenticated=True)
+
+        response = render_backoffice_automacoes(request)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(mock_render.call_args.args[1], "backoffice/cotacao_import.html")
+        contexto = mock_render.call_args.args[2]
+        self.assertEqual(contexto["logins_ixc_em_andamento"]["arquivo_nome"], "logins.xlsx")
+        self.assertEqual(contexto["atendimento_ixc_em_andamento"]["arquivo_nome"], "atendimentos.xlsx")
 
 
 class DesativacaoAtendimentoIXCTests(SimpleTestCase):
