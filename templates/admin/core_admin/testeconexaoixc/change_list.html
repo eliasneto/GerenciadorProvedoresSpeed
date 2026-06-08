@@ -1,0 +1,105 @@
+{% extends "admin/base_site.html" %}
+{% load i18n %}
+
+{% block content_title %}<h1>Teste de Conexao — API IXC</h1>{% endblock %}
+
+{% block content %}
+<div style="max-width:560px;margin:24px 0;">
+
+    <div id="ixc-idle" style="background:#fff;border:1px solid #ddd;border-radius:6px;padding:24px 28px;">
+        <p style="margin:0 0 6px;font-size:14px;color:#333;">
+            Clique no botao abaixo para verificar se a API do IXC esta respondendo corretamente.
+            O sistema tenta listar filiais (<code>/su_filial</code>) usando as credenciais configuradas no ambiente.
+        </p>
+        <p style="margin:0;font-size:12px;color:#888;">
+            URL atual: <code>{{ ixc_url }}</code>
+        </p>
+    </div>
+
+    <div id="ixc-loading" style="display:none;background:#fff;border:1px solid #ddd;border-radius:6px;padding:24px 28px;text-align:center;">
+        <p style="margin:0;font-size:14px;color:#555;">Testando conexao com a API do IXC...</p>
+    </div>
+
+    <div id="ixc-ok" style="display:none;background:#f0fdf4;border:1px solid #86efac;border-radius:6px;padding:20px 24px;">
+        <p style="margin:0 0 4px;font-weight:bold;color:#166534;font-size:14px;">&#10003; API respondendo normalmente</p>
+        <p id="ixc-ok-detalhe" style="margin:0;font-size:12px;color:#166534;"></p>
+    </div>
+
+    <div id="ixc-erro" style="display:none;background:#fef2f2;border:1px solid #fca5a5;border-radius:6px;padding:20px 24px;">
+        <p style="margin:0 0 8px;font-weight:bold;color:#991b1b;font-size:14px;">&#10007; Falha na conexao</p>
+        <pre id="ixc-erro-detalhe" style="margin:0;font-size:12px;color:#7f1d1d;white-space:pre-wrap;word-break:break-all;background:transparent;border:none;padding:0;font-family:monospace;"></pre>
+    </div>
+
+    <div style="margin-top:16px;display:flex;gap:10px;align-items:center;">
+        <button id="ixc-btn" type="button"
+            class="button default"
+            style="padding:8px 20px;font-size:13px;">
+            Testar conexao
+        </button>
+        <button id="ixc-btn-retry" type="button"
+            class="button"
+            style="display:none;padding:8px 20px;font-size:13px;">
+            Testar novamente
+        </button>
+    </div>
+
+</div>
+
+<script>
+(function () {
+    var btn = document.getElementById('ixc-btn');
+    var btnRetry = document.getElementById('ixc-btn-retry');
+    var elIdle = document.getElementById('ixc-idle');
+    var elLoading = document.getElementById('ixc-loading');
+    var elOk = document.getElementById('ixc-ok');
+    var elErro = document.getElementById('ixc-erro');
+    var elOkDetalhe = document.getElementById('ixc-ok-detalhe');
+    var elErroDetalhe = document.getElementById('ixc-erro-detalhe');
+
+    function mostrar(id) {
+        ['ixc-idle','ixc-loading','ixc-ok','ixc-erro'].forEach(function(i) {
+            document.getElementById(i).style.display = i === id ? 'block' : 'none';
+        });
+    }
+
+    function rodar() {
+        btn.style.display = 'none';
+        btnRetry.style.display = 'none';
+        mostrar('ixc-loading');
+
+        fetch('executar/', {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': '{{ csrf_token }}',
+                'X-Requested-With': 'XMLHttpRequest'
+            }
+        })
+        .then(function(r) {
+            if (!r.ok && r.headers.get('content-type') && r.headers.get('content-type').indexOf('json') === -1) {
+                throw new Error('HTTP ' + r.status + ' — resposta inesperada do servidor.');
+            }
+            return r.json();
+        })
+        .then(function(data) {
+            if (data.ok) {
+                elOkDetalhe.textContent = 'HTTP ' + (data.status_code || 200) + '  |  ' + (data.url || '');
+                mostrar('ixc-ok');
+            } else {
+                var msg = (data.status_code ? 'HTTP ' + data.status_code + '\n' : '') + (data.erro || 'Erro desconhecido.');
+                elErroDetalhe.textContent = msg;
+                mostrar('ixc-erro');
+            }
+            btnRetry.style.display = 'inline-block';
+        })
+        .catch(function(err) {
+            elErroDetalhe.textContent = err.message || String(err);
+            mostrar('ixc-erro');
+            btnRetry.style.display = 'inline-block';
+        });
+    }
+
+    btn.addEventListener('click', rodar);
+    btnRetry.addEventListener('click', rodar);
+})();
+</script>
+{% endblock %}

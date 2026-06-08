@@ -22,7 +22,7 @@ from django.core.exceptions import (
     TooManyFieldsSent,
     TooManyFilesSent,
 )
-from django.http import HttpResponse, UnreadablePostError
+from django.http import HttpResponse, JsonResponse, UnreadablePostError
 from django.http.multipartparser import MultiPartParserError
 from django.shortcuts import redirect, render
 from django.utils.datastructures import MultiValueDictKeyError
@@ -33,6 +33,7 @@ from core.views import grupo_Administrador_required
 from core_admin.models import ConfiguracaoEmailEnvio
 from auditoria.models import RestoreBackupAuditoria
 from scripts.integracoes.backoffice.cadastrar_cliente_ixc import executar_cadastro_cliente_ixc
+from scripts.integracoes.ixc_client import IXCClient
 from scripts.integracoes.backoffice.desativar_atendimento_ixc import executar_desativacao_atendimento
 from scripts.integracoes.backoffice.editar_atendimento_ixc import (
     COLUNAS_OBRIGATORIAS_EDICAO_ATENDIMENTO_IXC,
@@ -1660,7 +1661,10 @@ def cadastrar_clientes_ixc(request):
 
         for index, linha in df.iterrows():
             if pd.notna(linha.get("Razao_Social")) or pd.notna(linha.get("RAZAO_SOCIAL")):
-                status, mensagem, cliente_ixc_id = executar_cadastro_cliente_ixc(linha)
+                try:
+                    status, mensagem, cliente_ixc_id = executar_cadastro_cliente_ixc(linha)
+                except Exception as exc_linha:
+                    status, mensagem, cliente_ixc_id = False, f"Erro inesperado ao processar linha: {exc_linha}", ""
 
                 if status:
                     sucessos += 1
@@ -1793,3 +1797,31 @@ def smtp_test(request):
             "resultado_envio": resultado_envio,
         },
     )
+
+
+@user_passes_test(grupo_Administrador_required)
+@login_required
+def testar_api_ixc(request):
+    if request.method != "POST":
+        return JsonResponse({"ok": False, "erro": "Metodo nao permitido."}, status=405)
+
+    try:
+        client = IXCClient()
+        status_code, body = client.listar("/su_filial", {"rp": "1", "page": "1"})
+
+        if status_code == 200:
+            return JsonResponse({"ok": True, "status_code": status_code, "url": client.base_url})
+
+        mensagem = (
+            body.get("message")
+            or body.get("erro")
+            or body.get("error")
+            or body.get("raw")
+            or str(body)
+        )
+        return JsonResponse(
+            {"ok": False, "status_code": status_code, "erro": mensagem, "url": client.base_url}
+        )
+
+    except Exception as exc:
+        return JsonResponse({"ok": False, "erro": str(exc)})

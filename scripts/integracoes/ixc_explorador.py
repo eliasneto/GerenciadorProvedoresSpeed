@@ -1,3 +1,4 @@
+import os
 import requests
 import json
 import base64
@@ -5,7 +6,7 @@ import urllib3
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
-IXC_URL = "https://megainfraestrutura.com.br/webservice/v1"
+IXC_URL = os.getenv("IXC_URL", "https://megainfraestrutura.com.br/webservice/v1")
 IXC_TOKEN = "COLOQUE_SEU_TOKEN_AQUI" # Cole o mesmo token que funcionou no outro script!
 
 token_b64 = base64.b64encode(IXC_TOKEN.encode('utf-8')).decode('utf-8')

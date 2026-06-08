@@ -18,4 +18,5 @@ urlpatterns = [
     path('atendimentos/edicao-ixc/modelo/', views.download_template_edicao_atendimento_ixc, name='download_template_edicao_atendimento_ixc'),
     path('logins/edicao-ixc/modelo/', views.download_template_edicao_login_ixc, name='download_template_edicao_login_ixc'),
     path('clientes/cadastro-ixc/modelo/', views.download_template_cadastro_cliente_ixc, name='download_template_cadastro_cliente_ixc'),
+    path('testar-api-ixc/', views.testar_api_ixc, name='testar_api_ixc'),
 ]

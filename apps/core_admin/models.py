@@ -73,3 +73,11 @@ class ConfiguracaoEmailEnvio(models.Model):
         if configuracao:
             return configuracao
         return cls.objects.create()
+
+
+class TesteConexaoIXC(models.Model):
+    class Meta:
+        managed = False
+        default_permissions = []
+        verbose_name = 'Teste Conexao IXC'
+        verbose_name_plural = 'Teste Conexao IXC'

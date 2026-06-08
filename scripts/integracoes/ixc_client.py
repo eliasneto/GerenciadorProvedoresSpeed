@@ -48,13 +48,20 @@ class IXCClient:
 
     def post(self, endpoint, payload, include_ixcsoft=False):
         url = f"{self.base_url}/{str(endpoint).lstrip('/')}"
-        response = requests.post(
-            url,
-            headers=self.headers_listar if include_ixcsoft else self.headers_write,
-            data=json.dumps(payload),
-            verify=self.verify_ssl,
-            timeout=self.timeout,
-        )
+        try:
+            response = requests.post(
+                url,
+                headers=self.headers_listar if include_ixcsoft else self.headers_write,
+                data=json.dumps(payload),
+                verify=self.verify_ssl,
+                timeout=self.timeout,
+            )
+        except requests.exceptions.Timeout:
+            return 408, {"type": "error", "message": f"Timeout ao conectar com o IXC ({self.timeout}s)."}
+        except requests.exceptions.ConnectionError as exc:
+            return 503, {"type": "error", "message": f"Falha de conexao com o IXC: {exc}"}
+        except requests.exceptions.RequestException as exc:
+            return 500, {"type": "error", "message": f"Erro de rede ao acessar o IXC: {exc}"}
 
         try:
             body = response.json()

@@ -4,9 +4,13 @@ import MySQLdb
 from django.apps import apps
 from django.conf import settings
 from django.contrib import admin, messages
+from django.http import JsonResponse
+from django.urls import path
 from django.utils import timezone
 
-from .models import AcessoBancoDados, ConfiguracaoEmailEnvio, TabelaAcessoBanco
+from scripts.integracoes.ixc_client import IXCClient
+
+from .models import AcessoBancoDados, ConfiguracaoEmailEnvio, TabelaAcessoBanco, TesteConexaoIXC
 
 
 def sincronizar_tabelas_do_sistema():
@@ -151,3 +155,43 @@ class ConfiguracaoEmailEnvioAdmin(admin.ModelAdmin):
         if ConfiguracaoEmailEnvio.objects.exists():
             return False
         return super().has_add_permission(request)
+
+
+@admin.register(TesteConexaoIXC)
+class TesteConexaoIXCAdmin(admin.ModelAdmin):
+    change_list_template = 'admin/core_admin/testeconexaoixc/change_list.html'
+
+    def get_urls(self):
+        urls = super().get_urls()
+        custom = [
+            path('executar/', self.admin_site.admin_view(self._executar), name='core_admin_testeconexaoixc_executar'),
+        ]
+        return custom + urls
+
+    def changelist_view(self, request, extra_context=None):
+        from scripts.integracoes.ixc_client import IXCClient as _C
+        extra_context = extra_context or {}
+        extra_context['title'] = 'Teste de Conexao — API IXC'
+        extra_context['ixc_url'] = _C().base_url
+        return super().changelist_view(request, extra_context=extra_context)
+
+    def _executar(self, request):
+        if request.method != 'POST':
+            return JsonResponse({'ok': False, 'erro': 'Metodo nao permitido.'}, status=405)
+        try:
+            client = IXCClient()
+            status_code, body = client.listar('/su_filial', {'rp': '1', 'page': '1'})
+            if status_code == 200:
+                return JsonResponse({'ok': True, 'status_code': status_code, 'url': client.base_url})
+            mensagem = (
+                body.get('message') or body.get('erro') or body.get('error')
+                or body.get('raw') or str(body)
+            )
+            return JsonResponse({'ok': False, 'status_code': status_code, 'erro': mensagem, 'url': client.base_url})
+        except Exception as exc:
+            return JsonResponse({'ok': False, 'erro': str(exc)})
+
+    def has_add_permission(self, request): return False
+    def has_change_permission(self, request, obj=None): return False
+    def has_delete_permission(self, request, obj=None): return False
+    def get_queryset(self, request): return super().get_queryset(request).none()

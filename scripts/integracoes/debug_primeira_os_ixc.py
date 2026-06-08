@@ -27,8 +27,8 @@ from clientes.models import Endereco
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
-IXC_URL = "https://megainfraestrutura.com.br/webservice/v1"
-IXC_TOKEN = "76:54f35af33ea35f3b8a9a8fa14868322662d0465ebbb63fc56c3fb499ac3e1b61"
+IXC_URL = os.getenv("IXC_URL", "https://megainfraestrutura.com.br/webservice/v1")
+IXC_TOKEN = os.getenv("IXC_TOKEN", "76:54f35af33ea35f3b8a9a8fa14868322662d0465ebbb63fc56c3fb499ac3e1b61")
 
 TOKEN_B64 = base64.b64encode(IXC_TOKEN.encode('utf-8')).decode('utf-8')
 HEADERS = {
