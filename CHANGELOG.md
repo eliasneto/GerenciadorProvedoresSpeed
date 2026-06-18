@@ -2,6 +2,12 @@
 
 Este arquivo registra as versoes publicadas do sistema e os principais itens adicionados ou alterados em cada release.
 
+## v1.7.0 - 2026-06-10
+
+Melhorado:
+- automacoes de cadastro de clientes IXC e edicao de logins IXC passam a registrar o nome do usuario responsavel diretamente no IXC: no cadastro de cliente a identificacao e gravada no campo `obs` do cliente; na edicao de login a identificacao e adicionada ao campo `obs` do login sempre que esse campo estiver sendo alterado na planilha
+- comportamento alinhado com as automacoes de atendimento que ja registravam o usuario responsavel no campo de mensagem do ticket
+
 ## v1.6.0 - 2026-05-27
 
 Adicionado:

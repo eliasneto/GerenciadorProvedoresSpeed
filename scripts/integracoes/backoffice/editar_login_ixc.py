@@ -3,7 +3,10 @@ import unicodedata
 
 import pandas as pd
 
-from scripts.integracoes.backoffice.cria_atendimento_ixc import normalizar_id_numerico
+from scripts.integracoes.backoffice.cria_atendimento_ixc import (
+    montar_identificacao_usuario_importacao,
+    normalizar_id_numerico,
+)
 from scripts.integracoes.backoffice.cria_login_atendimento import (
     _atualizar_endereco_tecnico,
 )
@@ -307,7 +310,7 @@ def montar_observacao_atualizada(linha, login_atual):
     return "\n".join(linhas_finais).strip(), True
 
 
-def construir_payload_edicao_login_ixc(linha, login_atual):
+def construir_payload_edicao_login_ixc(linha, login_atual, usuario_sistema=None):
     payload = {}
     campos_alterados = []
 
@@ -377,6 +380,9 @@ def construir_payload_edicao_login_ixc(linha, login_atual):
         campos_alterados.append("End_Referencia")
 
     obs_final, houve_bloco_obs = montar_observacao_atualizada(linha, login_atual)
+    identificacao = montar_identificacao_usuario_importacao(usuario_sistema)
+    if houve_bloco_obs and identificacao:
+        obs_final = f"{obs_final}\n\n{identificacao}".strip() if obs_final else identificacao
     if houve_bloco_obs:
         payload["obs"] = obs_final
         for campo in ["Obs_Cliente", *MAPA_CAMPOS_TECNICOS_OBS.keys()]:
@@ -404,7 +410,7 @@ def resposta_indica_sucesso(status_code, body):
     return False
 
 
-def executar_edicao_login_ixc(dados):
+def executar_edicao_login_ixc(dados, usuario_sistema=None):
     linha = {str(k).replace("\ufeff", "").strip(): v for k, v in dados.items()}
 
     login_id, erro = normalizar_id_numerico(linha.get("Login_ID"), "Login_ID", obrigatorio=True)
@@ -421,7 +427,7 @@ def executar_edicao_login_ixc(dados):
     if erro_login:
         return False, erro_login, login_id or "", ""
 
-    payload, campos_alterados, erro_payload = construir_payload_edicao_login_ixc(linha, login_atual)
+    payload, campos_alterados, erro_payload = construir_payload_edicao_login_ixc(linha, login_atual, usuario_sistema=usuario_sistema)
     if erro_payload:
         return False, erro_payload, login_id or "", ""
 

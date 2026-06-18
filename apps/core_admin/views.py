@@ -1572,7 +1572,7 @@ def editar_logins_ixc(request):
 
         for index, linha in df.iterrows():
             if pd.notna(linha.get("Login_ID")):
-                status, mensagem, login_ixc_id, campos_alterados = executar_edicao_login_ixc(linha)
+                status, mensagem, login_ixc_id, campos_alterados = executar_edicao_login_ixc(linha, usuario_sistema=request.user)
 
                 if status:
                     sucessos += 1
@@ -1662,7 +1662,7 @@ def cadastrar_clientes_ixc(request):
         for index, linha in df.iterrows():
             if pd.notna(linha.get("Razao_Social")) or pd.notna(linha.get("RAZAO_SOCIAL")):
                 try:
-                    status, mensagem, cliente_ixc_id = executar_cadastro_cliente_ixc(linha)
+                    status, mensagem, cliente_ixc_id = executar_cadastro_cliente_ixc(linha, usuario_sistema=request.user)
                 except Exception as exc_linha:
                     status, mensagem, cliente_ixc_id = False, f"Erro inesperado ao processar linha: {exc_linha}", ""
 
@@ -1799,17 +1799,19 @@ def smtp_test(request):
     )
 
 
-@user_passes_test(grupo_Administrador_required)
-@login_required
 def testar_api_ixc(request):
+    if not request.user.is_authenticated:
+        return JsonResponse({"ok": False, "erro": "Sessao expirada. Recarregue a pagina."}, status=401)
+    if not grupo_Administrador_required(request.user):
+        return JsonResponse({"ok": False, "erro": "Permissao insuficiente."}, status=403)
     if request.method != "POST":
         return JsonResponse({"ok": False, "erro": "Metodo nao permitido."}, status=405)
 
     try:
         client = IXCClient()
-        status_code, body = client.listar("/su_filial", {"rp": "1", "page": "1"})
+        status_code, body = client.listar("/cliente", {"rp": "1", "page": "1"})
 
-        if status_code == 200:
+        if status_code == 200 and body.get("type") != "error":
             return JsonResponse({"ok": True, "status_code": status_code, "url": client.base_url})
 
         mensagem = (

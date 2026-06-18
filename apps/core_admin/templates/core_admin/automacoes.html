@@ -669,6 +669,14 @@
                         },
                     });
 
+                    const contentType = response.headers.get('content-type') || '';
+                    if (!contentType.includes('application/json')) {
+                        throw new Error(
+                            response.status === 401 ? 'Sessao expirada. Recarregue a pagina (F5).' :
+                            response.status === 403 ? 'CSRF invalido ou sessao expirada. Recarregue a pagina (F5).' :
+                            'Resposta inesperada do servidor (HTTP ' + response.status + '). Recarregue a pagina.'
+                        );
+                    }
                     const data = await response.json();
                     ixcTestLoading.classList.add('hidden');
 

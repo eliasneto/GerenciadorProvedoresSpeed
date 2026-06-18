@@ -180,8 +180,8 @@ class TesteConexaoIXCAdmin(admin.ModelAdmin):
             return JsonResponse({'ok': False, 'erro': 'Metodo nao permitido.'}, status=405)
         try:
             client = IXCClient()
-            status_code, body = client.listar('/su_filial', {'rp': '1', 'page': '1'})
-            if status_code == 200:
+            status_code, body = client.listar('/cliente', {'rp': '1', 'page': '1'})
+            if status_code == 200 and body.get('type') != 'error':
                 return JsonResponse({'ok': True, 'status_code': status_code, 'url': client.base_url})
             mensagem = (
                 body.get('message') or body.get('erro') or body.get('error')

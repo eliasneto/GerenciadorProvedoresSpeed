@@ -3,7 +3,10 @@ from datetime import datetime
 
 import pandas as pd
 
-from scripts.integracoes.backoffice.cria_atendimento_ixc import normalizar_id_numerico
+from scripts.integracoes.backoffice.cria_atendimento_ixc import (
+    montar_identificacao_usuario_importacao,
+    normalizar_id_numerico,
+)
 from scripts.integracoes.ixc_client import IXCClient
 from scripts.integracoes.ixc_finalizacao_service import normalizar_texto
 
@@ -29,6 +32,27 @@ def normalizar_confirmacao_cadastro(valor):
 
 def somente_digitos(valor):
     return re.sub(r"\D", "", limpar_texto(valor))
+
+
+_PADRAO_CEP = re.compile(r"\d{5}[-\s]{0,2}\d{3}")
+
+
+def extrair_logradouro(valor):
+    """Extrai apenas o logradouro quando o campo vem com endereço completo concatenado.
+
+    Formato típico: 'NOME DA RUA, 123 BAIRRO. 00000-000 Cidade - UF.'
+    Se o campo contém um CEP embutido (incluindo CEPs quebrados por newline),
+    tudo a partir da primeira vírgula é descartado, restando só o logradouro.
+    Caso contrário, retorna o valor limpo sem alteração.
+    Sempre limita a 40 caracteres (limite do campo Street no SAP).
+    """
+    texto = limpar_texto(valor)
+    # Normaliza quebras de linha para não quebrar a detecção de CEP
+    texto_normalizado = re.sub(r"[\r\n]+", " ", texto)
+    if _PADRAO_CEP.search(texto_normalizado):
+        if "," in texto_normalizado:
+            texto_normalizado = texto_normalizado.split(",")[0]
+    return texto_normalizado.strip()[:40]
 
 
 def formatar_documento_ixc(valor):
@@ -203,7 +227,7 @@ def montar_payload_cliente_ixc(linha, cidade_id_ixc, uf_id_ixc=""):
         "crm_data_novo": hoje,
         "convert_cliente_forn": "N",
         "cep": normalizar_cep(linha.get("CEP")),
-        "endereco": limpar_texto(linha.get("Endereco") or linha.get("ENDERECO")),
+        "endereco": extrair_logradouro(linha.get("Endereco") or linha.get("ENDERECO")),
         "numero": normalizar_numero_endereco(linha.get("Numero") or linha.get("NUMERO")),
         "bairro": limpar_texto(linha.get("Bairro") or linha.get("BAIRRO")),
         "cidade": cidade_id_ixc,
@@ -225,9 +249,8 @@ def montar_payload_cliente_ixc(linha, cidade_id_ixc, uf_id_ixc=""):
     filial_id, _ = normalizar_id_numerico(linha.get("Filial_ID"), "Filial_ID")
     vendedor_id, _ = normalizar_id_numerico(linha.get("Vendedor_ID"), "Vendedor_ID")
 
-    if tipo_cliente_id:
-        payload["id_tipo_cliente"] = tipo_cliente_id
-    payload["tipo_assinante"] = tipo_assinante_id or "3"
+    payload["id_tipo_cliente"] = tipo_cliente_id
+    payload["tipo_assinante"] = tipo_assinante_id
     classificacao_iss_raw = limpar_texto(
         linha.get("Tipo_Cliente_Fiscal") or linha.get("Classificacao_ISS")
     )
@@ -241,14 +264,14 @@ def montar_payload_cliente_ixc(linha, cidade_id_ixc, uf_id_ixc=""):
     payload["iss_classificacao_padrao"] = classificacao_iss
     tipo_localidade_raw = limpar_texto(linha.get("Tipo_Localidade")).upper()
     payload["tipo_localidade"] = tipo_localidade_raw if tipo_localidade_raw in {"U", "R"} else "U"
-    payload["filial_id"] = filial_id or "1"
+    payload["filial_id"] = filial_id
     if vendedor_id:
         payload["id_vendedor"] = vendedor_id
 
     return {chave: valor for chave, valor in payload.items() if valor not in (None, "")}
 
 
-def executar_cadastro_cliente_ixc(dados):
+def executar_cadastro_cliente_ixc(dados, usuario_sistema=None):
     linha = {str(k).replace("\ufeff", "").strip(): v for k, v in dados.items()}
 
     razao_social = limpar_texto(linha.get("Razao_Social") or linha.get("RAZAO_SOCIAL"))
@@ -263,6 +286,14 @@ def executar_cadastro_cliente_ixc(dados):
     )
     if not confirmado:
         return False, erro_confirmacao, ""
+
+    if len(documento) not in (11, 14):
+        return (
+            False,
+            f"CNPJ_CPF invalido: esperado 11 digitos (CPF) ou 14 digitos (CNPJ), mas foram informados {len(documento)} digitos."
+            " Corrija o campo antes de importar — documentos fora desse formato causam erro 'StartIndex' na integracao SAP.",
+            "",
+        )
 
     cidade_id_ixc, uf_id_ixc, erro_cidade = resolver_cidade_ixc(linha.get("Cidade_ID_IXC"))
     if erro_cidade:
@@ -286,7 +317,30 @@ def executar_cadastro_cliente_ixc(dados):
     if not limpar_texto(linha.get("Telefone")):
         return False, "Telefone obrigatorio para cadastro do cliente no IXC.", ""
 
+    if not somente_digitos(linha.get("Tipo_Cliente_ID")):
+        return (
+            False,
+            "Tipo_Cliente_ID obrigatorio. Valores validos no IXC: 5=Telebras, 6=OI, 7=BNB, 8=Privado, 9=Orgaos Publicos e Outros.",
+            "",
+        )
+    if not somente_digitos(linha.get("Tipo_Assinante_ID")):
+        return (
+            False,
+            "Tipo_Assinante_ID obrigatorio. Valores validos: 1=Comercial/Industrial, 2=Poder Publico, 3=Residencial/PF, 4=Publico, 5=Semi-Publico, 6=Outros.",
+            "",
+        )
+    if not somente_digitos(linha.get("Filial_ID")):
+        return (
+            False,
+            "Filial_ID obrigatorio. Consulte a aba Instrucoes_Ajuda da planilha para ver os IDs das filiais disponíveis.",
+            "",
+        )
+
     payload = montar_payload_cliente_ixc(linha, cidade_id_ixc, uf_id_ixc)
+    identificacao = montar_identificacao_usuario_importacao(usuario_sistema)
+    if identificacao:
+        obs_existente = payload.get("obs", "")
+        payload["obs"] = f"{obs_existente}\n\n{identificacao}".strip() if obs_existente else identificacao
     status_code, body = IXCClient().escrever("cliente", payload)
 
     cliente_ixc_id = ""
