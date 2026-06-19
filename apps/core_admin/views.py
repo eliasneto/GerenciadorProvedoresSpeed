@@ -32,7 +32,7 @@ from core.models import IntegrationAudit
 from core.views import grupo_Administrador_required
 from core_admin.models import ConfiguracaoEmailEnvio
 from auditoria.models import RestoreBackupAuditoria
-from scripts.integracoes.backoffice.cadastrar_cliente_ixc import executar_cadastro_cliente_ixc
+from scripts.integracoes.backoffice.cadastrar_cliente_ixc import executar_cadastro_cliente_ixc, validar_linha_pre_envio
 from scripts.integracoes.ixc_client import IXCClient
 from scripts.integracoes.backoffice.desativar_atendimento_ixc import executar_desativacao_atendimento
 from scripts.integracoes.backoffice.editar_atendimento_ixc import (
@@ -1712,6 +1712,87 @@ def cadastrar_clientes_ixc(request):
             itens=itens_importados,
         )
 
+        # --- fase 1: pre-validacao de todos os registros ---
+        opcoes_tipo_cliente = _buscar_opcoes_ixc("cliente_tipo")
+        opcoes_filial = _buscar_opcoes_ixc("filial")
+        ids_tipo_cliente = {id_ for id_, _ in opcoes_tipo_cliente} if opcoes_tipo_cliente else None
+        ids_filial = {id_ for id_, _ in opcoes_filial} if opcoes_filial else None
+
+        df["Status_Validacao"] = ""
+        df["Erros_Validacao"] = ""
+
+        total_com_erro = 0
+        total_ok = 0
+
+        for index, linha in df.iterrows():
+            if not (pd.notna(linha.get("Razao_Social")) or pd.notna(linha.get("RAZAO_SOCIAL"))):
+                continue
+            erros = validar_linha_pre_envio(dict(linha), ids_tipo_cliente, ids_filial)
+            if erros:
+                df.at[index, "Status_Validacao"] = "ERRO"
+                df.at[index, "Erros_Validacao"] = " | ".join(erros)
+                total_com_erro += 1
+            else:
+                df.at[index, "Status_Validacao"] = "OK — apto para envio"
+                total_ok += 1
+
+        if total_com_erro > 0:
+            registrar_auditoria_integracao(
+                integration=CADASTRO_CLIENTE_IXC_INTEGRATION,
+                action="validacao_planilha_recusada",
+                usuario=request.user,
+                arquivo_nome=arquivo.name,
+                total_registros=total_com_erro + total_ok,
+                total_erros=total_com_erro,
+                detalhes={
+                    "motivo": "planilha recusada na validacao pre-envio",
+                    "registros_com_erro": total_com_erro,
+                    "registros_ok": total_ok,
+                },
+            )
+
+            df_report = df[df["Status_Validacao"] != ""].copy()
+            output = BytesIO()
+            with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
+                df_report.to_excel(writer, index=False, sheet_name="Validacao_Cadastro_Clientes_IXC")
+                workbook = writer.book
+                worksheet = writer.sheets["Validacao_Cadastro_Clientes_IXC"]
+
+                fmt_erro = workbook.add_format({"bg_color": "#FEE2E2", "font_color": "#991B1B", "bold": True, "border": 1})
+                fmt_ok = workbook.add_format({"bg_color": "#DCFCE7", "font_color": "#166534", "bold": True, "border": 1})
+
+                status_col = list(df_report.columns).index("Status_Validacao")
+                erros_col = list(df_report.columns).index("Erros_Validacao")
+                num_rows = len(df_report)
+
+                worksheet.conditional_format(
+                    1, status_col, num_rows, status_col,
+                    {"type": "text", "criteria": "containing", "value": "ERRO", "format": fmt_erro},
+                )
+                worksheet.conditional_format(
+                    1, status_col, num_rows, status_col,
+                    {"type": "text", "criteria": "containing", "value": "OK", "format": fmt_ok},
+                )
+
+                for col_num, col_name in enumerate(df_report.columns):
+                    if col_name == "Erros_Validacao":
+                        worksheet.set_column(col_num, col_num, 90)
+                    elif col_name == "Status_Validacao":
+                        worksheet.set_column(col_num, col_num, 24)
+                    elif col_name in {"Razao_Social", "Nome_Fantasia", "Endereco", "Observacao"}:
+                        worksheet.set_column(col_num, col_num, 36)
+                    else:
+                        worksheet.set_column(col_num, col_num, 22)
+
+            response = HttpResponse(
+                output.getvalue(),
+                content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            )
+            response["Content-Disposition"] = "attachment; filename=Validacao_Cadastro_Clientes_IXC.xlsx"
+            return response
+
+        # --- fase 2: envio ao IXC (somente se todos passaram na validacao) ---
+        df = df.drop(columns=["Status_Validacao", "Erros_Validacao"])
         df["Status_Importacao"] = ""
         df["Mensagem_Importacao"] = ""
         df["ID_IXC"] = ""

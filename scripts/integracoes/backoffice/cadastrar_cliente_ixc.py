@@ -271,6 +271,111 @@ def montar_payload_cliente_ixc(linha, cidade_id_ixc, uf_id_ixc=""):
     return {chave: valor for chave, valor in payload.items() if valor not in (None, "")}
 
 
+def _calcular_digito_verificador(digitos, pesos):
+    soma = sum(d * p for d, p in zip(digitos, pesos))
+    resto = soma % 11
+    return 0 if resto < 2 else 11 - resto
+
+
+def validar_cpf(digitos_str):
+    if len(digitos_str) != 11 or len(set(digitos_str)) == 1:
+        return False
+    d = [int(c) for c in digitos_str]
+    d1 = _calcular_digito_verificador(d[:9], range(10, 1, -1))
+    d2 = _calcular_digito_verificador(d[:10], range(11, 1, -1))
+    return d[9] == d1 and d[10] == d2
+
+
+def validar_cnpj(digitos_str):
+    if len(digitos_str) != 14 or len(set(digitos_str)) == 1:
+        return False
+    d = [int(c) for c in digitos_str]
+    d1 = _calcular_digito_verificador(d[:12], [5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2])
+    d2 = _calcular_digito_verificador(d[:13], [6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2])
+    return d[12] == d1 and d[13] == d2
+
+
+def validar_documento_fiscal(valor):
+    digitos = somente_digitos(valor)
+    if not digitos:
+        return True, None
+    if len(digitos) == 11:
+        ok = validar_cpf(digitos)
+        return ok, (None if ok else f"CPF '{digitos}' invalido — digitos verificadores nao conferem.")
+    if len(digitos) == 14:
+        ok = validar_cnpj(digitos)
+        return ok, (None if ok else f"CNPJ '{digitos}' invalido — digitos verificadores nao conferem.")
+    return False, f"CNPJ_CPF invalido: esperado 11 digitos (CPF) ou 14 digitos (CNPJ), encontrado {len(digitos)}."
+
+
+def _ordenar_ids(ids):
+    return sorted(ids, key=lambda x: int(x) if x.isdigit() else x)
+
+
+def validar_linha_pre_envio(linha, ids_tipo_cliente_validos=None, ids_filial_validos=None):
+    linha = {str(k).replace("﻿", "").strip(): v for k, v in linha.items()}
+    erros = []
+
+    for campo in ("Razao_Social", "CNPJ_CPF", "CEP", "Endereco", "Bairro", "Cidade_ID_IXC", "Email", "Telefone", "Tipo_Cliente_ID", "Filial_ID"):
+        if not limpar_texto(linha.get(campo)):
+            erros.append(f"{campo} e obrigatorio e nao foi informado.")
+
+    confirmado, erro_conf = normalizar_confirmacao_cadastro(linha.get("Confirmar_Cadastro"))
+    if not confirmado:
+        erros.append(erro_conf)
+
+    doc_valor = limpar_texto(linha.get("CNPJ_CPF"))
+    if doc_valor:
+        valido, msg_doc = validar_documento_fiscal(doc_valor)
+        if not valido and msg_doc:
+            erros.append(msg_doc)
+
+    tipo_cliente_raw = somente_digitos(limpar_texto(linha.get("Tipo_Cliente_ID", "")))
+    if tipo_cliente_raw and ids_tipo_cliente_validos:
+        if tipo_cliente_raw not in ids_tipo_cliente_validos:
+            erros.append(
+                f"Tipo_Cliente_ID '{tipo_cliente_raw}' nao e uma opcao valida no IXC. "
+                f"IDs aceitos: {', '.join(_ordenar_ids(ids_tipo_cliente_validos))}."
+            )
+
+    filial_raw = somente_digitos(limpar_texto(linha.get("Filial_ID", "")))
+    if filial_raw and ids_filial_validos:
+        if filial_raw not in ids_filial_validos:
+            erros.append(
+                f"Filial_ID '{filial_raw}' nao e uma opcao valida no IXC. "
+                f"IDs aceitos: {', '.join(_ordenar_ids(ids_filial_validos))}."
+            )
+
+    tipo_assinante_raw = somente_digitos(limpar_texto(linha.get("Tipo_Assinante_ID", "")))
+    if tipo_assinante_raw and tipo_assinante_raw not in {"1", "2", "3", "4", "5", "6"}:
+        erros.append(
+            f"Tipo_Assinante_ID '{tipo_assinante_raw}' invalido. "
+            "Valores aceitos: 1=Comercial/Industrial, 2=Poder Publico, 3=Residencial/PF, 4=Publico, 5=Semi-Publico, 6=Outros."
+        )
+
+    tipo_loc = limpar_texto(linha.get("Tipo_Localidade", "")).upper()
+    if tipo_loc and tipo_loc not in {"U", "R"}:
+        erros.append(f"Tipo_Localidade '{tipo_loc}' invalido. Use U (Urbano) ou R (Rural).")
+
+    fiscal_raw = limpar_texto(linha.get("Tipo_Cliente_Fiscal", ""))
+    if fiscal_raw:
+        try:
+            fiscal_norm = str(int(fiscal_raw)).zfill(2)
+        except (ValueError, TypeError):
+            fiscal_norm = fiscal_raw
+        if fiscal_norm not in {"01", "02", "03", "04", "05", "99"}:
+            erros.append(
+                f"Tipo_Cliente_Fiscal '{fiscal_raw}' invalido. "
+                "Valores aceitos: 01=Comercial, 02=Industrial, 03=Servicos, 04=Prod.Rural, 05=Simples, 99=Outros."
+            )
+
+    ativo_raw = limpar_texto(linha.get("Ativo", "")).upper()
+    if ativo_raw and ativo_raw not in {"S", "N"}:
+        erros.append(f"Ativo '{ativo_raw}' invalido. Use S (ativo) ou N (inativo).")
+
+    return erros
+
+
 def executar_cadastro_cliente_ixc(dados, usuario_sistema=None):
     linha = {str(k).replace("\ufeff", "").strip(): v for k, v in dados.items()}
 

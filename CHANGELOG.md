@@ -2,6 +2,18 @@
 
 Este arquivo registra as versoes publicadas do sistema e os principais itens adicionados ou alterados em cada release.
 
+## v1.7.2 - 2026-06-19
+
+Adicionado:
+- validacao matematica de CPF e CNPJ antes de enviar ao IXC: digitos verificadores sao conferidos e o cadastro e bloqueado se o documento for invalido
+- pre-validacao completa de toda a planilha antes de qualquer envio ao IXC: todos os registros sao verificados de uma vez e, se qualquer linha estiver invalida, a planilha inteira e recusada sem enviar nenhum dado
+- relatorio de validacao retornado como Excel quando a planilha e recusada: cada linha recebe `Status_Validacao` (ERRO em vermelho / OK em verde) e `Erros_Validacao` com todos os problemas encontrados, permitindo correcao antes de reenvio
+- validacao de valores permitidos para campos de opcao: `Tipo_Cliente_ID` e `Filial_ID` sao conferidos contra as opcoes reais do IXC; `Tipo_Assinante_ID` e conferido contra os valores 1-6; `Tipo_Localidade` aceita apenas U ou R; `Tipo_Cliente_Fiscal` aceita apenas 01-05 e 99; `Ativo` aceita apenas S ou N
+
+Melhorado:
+- `Tipo_Cliente_ID` e `Filial_ID` marcados com `*` vermelho na planilha modelo, tornando obrigatoriedade visivel antes mesmo do upload
+- instrucoes da aba `Instrucoes_Ajuda` atualizadas para refletir a nova obrigatoriedade desses campos
+
 ## v1.7.1 - 2026-06-19
 
 Melhorado:
