@@ -1,0 +1,5 @@
+{
+    "powerquery.client.additionalSymbolsDirectories": [
+        "c:/Projetos/sgpspeed/GerenciadorProvedoresSpeed/.vscode/excel-pq-symbols"
+    ]
+}

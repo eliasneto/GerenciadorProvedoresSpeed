@@ -34,7 +34,7 @@ class IXCClient:
         token_b64 = base64.b64encode(self.token.encode("utf-8")).decode("utf-8")
         return {
             "Authorization": f"Basic {token_b64}",
-            "Content-Type": "application/json",
+            "Content-Type": "application/json; charset=utf-8",
             "ixcsoft": "listar",
         }
 
@@ -43,7 +43,7 @@ class IXCClient:
         token_b64 = base64.b64encode(self.token.encode("utf-8")).decode("utf-8")
         return {
             "Authorization": f"Basic {token_b64}",
-            "Content-Type": "application/json",
+            "Content-Type": "application/json; charset=utf-8",
         }
 
     def post(self, endpoint, payload, include_ixcsoft=False):
@@ -52,7 +52,7 @@ class IXCClient:
             response = requests.post(
                 url,
                 headers=self.headers_listar if include_ixcsoft else self.headers_write,
-                data=json.dumps(payload),
+                data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
                 verify=self.verify_ssl,
                 timeout=self.timeout,
             )
@@ -81,7 +81,7 @@ class IXCClient:
         response = requests.put(
             url,
             headers=self.headers_write,
-            data=json.dumps(payload),
+            data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
             verify=self.verify_ssl,
             timeout=self.timeout,
         )
@@ -98,7 +98,7 @@ class IXCClient:
         response = requests.delete(
             url,
             headers=self.headers_write,
-            data=json.dumps(payload or {}),
+            data=json.dumps(payload or {}, ensure_ascii=False).encode("utf-8"),
             verify=self.verify_ssl,
             timeout=self.timeout,
         )

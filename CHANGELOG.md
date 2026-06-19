@@ -2,6 +2,11 @@
 
 Este arquivo registra as versoes publicadas do sistema e os principais itens adicionados ou alterados em cada release.
 
+## v1.7.1 - 2026-06-19
+
+Melhorado:
+- integracao com o IXC passa a enviar dados em UTF-8 real: o `Content-Type` dos headers foi atualizado para `application/json; charset=utf-8` e a serializacao do payload foi ajustada para `json.dumps(..., ensure_ascii=False).encode("utf-8")`, garantindo que caracteres acentuados como `a`, `e`, `o` e `c` sejam transmitidos corretamente em vez de serem escapados como `\uXXXX`
+
 ## v1.7.0 - 2026-06-10
 
 Melhorado:

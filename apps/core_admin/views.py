@@ -734,9 +734,36 @@ def download_template_desativacao_atendimento(request):
     return response
 
 
+def _buscar_opcoes_ixc(endpoint, campo_nome="nome", limite=200):
+    payload = {
+        "qtype": "id",
+        "query": "0",
+        "oper": ">",
+        "page": "1",
+        "rp": str(limite),
+        "sortname": "id",
+        "sortorder": "asc",
+    }
+    try:
+        status_code, body = IXCClient().listar(endpoint, payload)
+        if status_code != 200 or not isinstance(body, dict):
+            return []
+        registros = body.get("registros") or []
+        return [
+            (str(r.get("id") or "").strip(), str(r.get(campo_nome) or r.get("nome") or r.get("razao") or "").strip())
+            for r in registros
+            if str(r.get("id") or "").strip()
+        ]
+    except Exception:
+        return []
+
+
 @user_passes_test(grupo_Administrador_required)
 @login_required
 def download_template_cadastro_cliente_ixc(request):
+    opcoes_tipo_cliente = _buscar_opcoes_ixc("cliente_tipo")
+    opcoes_filial = _buscar_opcoes_ixc("filial")
+
     colunas = [
         "Razao_Social",
         "CNPJ_CPF",
@@ -775,6 +802,8 @@ def download_template_cadastro_cliente_ixc(request):
         "Cidade_ID_IXC",
         "Email",
         "Telefone",
+        "Tipo_Cliente_ID",
+        "Filial_ID",
         "Confirmar_Cadastro",
     }
     instrucoes_campos = [
@@ -908,8 +937,12 @@ def download_template_cadastro_cliente_ixc(request):
             "Campo": "Tipo_Cliente_ID",
             "Descricao": "ID do tipo de cliente ja cadastrado no IXC.",
             "Tipo de dado": "Numero inteiro",
-            "Obrigatorio?": "Nao",
-            "Regras / Exemplo": "Use apenas o ID numerico do IXC.",
+            "Obrigatorio?": "Sim",
+            "Regras / Exemplo": (
+                "Opcoes disponiveis: "
+                + (", ".join(f"{id_} = {nome}" for id_, nome in opcoes_tipo_cliente) if opcoes_tipo_cliente else "consulte a aba Instrucoes_Ajuda")
+                + ". Use apenas o ID numerico."
+            ),
         },
         {
             "Campo": "Tipo_Assinante_ID",
@@ -922,8 +955,12 @@ def download_template_cadastro_cliente_ixc(request):
             "Campo": "Filial_ID",
             "Descricao": "ID da filial do IXC associada ao cliente.",
             "Tipo de dado": "Numero inteiro",
-            "Obrigatorio?": "Nao",
-            "Regras / Exemplo": "Use apenas o ID numerico do IXC.",
+            "Obrigatorio?": "Sim",
+            "Regras / Exemplo": (
+                "Opcoes disponiveis: "
+                + (", ".join(f"{id_} = {nome}" for id_, nome in opcoes_filial) if opcoes_filial else "consulte a aba Instrucoes_Ajuda")
+                + ". Use apenas o ID numerico."
+            ),
         },
         {
             "Campo": "Vendedor_ID",
@@ -1044,6 +1081,30 @@ def download_template_cadastro_cliente_ixc(request):
         larguras_ajuda = [24, 40, 18, 16, 55]
         for col_num, largura in enumerate(larguras_ajuda):
             worksheet_ajuda.set_column(col_num, col_num, largura)
+
+        secao_titulo_format = workbook.add_format({"bold": True, "bg_color": "#1E3A5F", "font_color": "#FFFFFF", "border": 1})
+        secao_header_format = workbook.add_format({"bold": True, "bg_color": "#DCFCE7", "border": 1})
+        secao_cell_format = workbook.add_format({"border": 1})
+
+        linha_ref = len(instrucoes_campos) + 2
+        for titulo, opcoes in [
+            ("Opcoes disponiveis: Tipo_Cliente_ID", opcoes_tipo_cliente),
+            ("Opcoes disponiveis: Filial_ID", opcoes_filial),
+        ]:
+            worksheet_ajuda.merge_range(linha_ref, 0, linha_ref, 1, titulo, secao_titulo_format)
+            linha_ref += 1
+            worksheet_ajuda.write(linha_ref, 0, "ID", secao_header_format)
+            worksheet_ajuda.write(linha_ref, 1, "Nome", secao_header_format)
+            linha_ref += 1
+            if opcoes:
+                for id_val, nome_val in opcoes:
+                    worksheet_ajuda.write(linha_ref, 0, id_val, secao_cell_format)
+                    worksheet_ajuda.write(linha_ref, 1, nome_val, secao_cell_format)
+                    linha_ref += 1
+            else:
+                worksheet_ajuda.merge_range(linha_ref, 0, linha_ref, 1, "Nao foi possivel carregar as opcoes do IXC. Consulte o sistema.", secao_cell_format)
+                linha_ref += 1
+            linha_ref += 1
 
         worksheet.data_validation(
             1,
