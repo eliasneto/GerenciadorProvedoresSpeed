@@ -9,4 +9,7 @@ urlpatterns = [
 
     path('atendimentos/modelo/', views.download_modelo_atendimento, name='download_modelo_atendimento'),
     path('atendimentos/importar/', views.atendimento_import, name='atendimento_import'),
+
+    path('clientes/cadastro-ixc/', views.cadastrar_clientes_ixc, name='cadastrar_clientes_ixc'),
+    path('clientes/cadastro-ixc/modelo/', views.download_template_cadastro_cliente_ixc, name='download_template_cadastro_cliente_ixc'),
 ]

@@ -8,15 +8,17 @@ from django.test import RequestFactory, SimpleTestCase
 
 from apps.core_admin.views import (
     _ler_dataframe_upload,
-    cadastrar_clientes_ixc,
     download_template_edicao_atendimento_ixc,
     download_template_edicao_login_ixc,
-    download_template_cadastro_cliente_ixc,
     desativar_atendimentos_ixc,
     editar_atendimentos_ixc,
     editar_logins_ixc,
     download_template_desativacao_atendimento,
     import_prospects,
+)
+from apps.backoffice.views import (
+    cadastrar_clientes_ixc,
+    download_template_cadastro_cliente_ixc,
 )
 
 
@@ -75,7 +77,7 @@ class CoreAdminViewsTests(SimpleTestCase):
         )
         mock_auditoria.assert_called_once()
 
-    @patch("apps.core_admin.views.registrar_auditoria_integracao")
+    @patch("apps.backoffice.views.registrar_auditoria_integracao")
     def test_download_template_cadastro_cliente_ixc_retorna_planilha(self, mock_auditoria):
         request = self.factory.get("/administracao/clientes/cadastro-ixc/modelo/")
         request.user = self.user
@@ -281,9 +283,9 @@ class CoreAdminViewsTests(SimpleTestCase):
         mock_executar.assert_called_once()
         self.assertEqual(mock_auditoria.call_count, 2)
 
-    @patch("apps.core_admin.views._ler_dataframe_upload")
-    @patch("apps.core_admin.views.registrar_auditoria_integracao")
-    @patch("apps.core_admin.views.executar_cadastro_cliente_ixc")
+    @patch("apps.backoffice.views._ler_dataframe_upload")
+    @patch("apps.backoffice.views.registrar_auditoria_integracao")
+    @patch("apps.backoffice.views.executar_cadastro_cliente_ixc")
     def test_cadastrar_clientes_ixc_processa_planilha_e_retorna_relatorio(
         self,
         mock_executar,

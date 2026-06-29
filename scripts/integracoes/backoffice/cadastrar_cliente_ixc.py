@@ -373,6 +373,24 @@ def validar_linha_pre_envio(linha, ids_tipo_cliente_validos=None, ids_filial_val
     if ativo_raw and ativo_raw not in {"S", "N"}:
         erros.append(f"Ativo '{ativo_raw}' invalido. Use S (ativo) ou N (inativo).")
 
+    endereco_raw = limpar_texto(linha.get("Endereco", "") or linha.get("ENDERECO", ""))
+    if endereco_raw:
+        endereco_processado = extrair_logradouro(endereco_raw)
+        if len(endereco_processado) < 3:
+            erros.append(
+                f"Endereco '{endereco_raw[:60]}' ficaria com apenas '{endereco_processado}' apos remocao de CEP/cidade embutidos. "
+                "Informe somente o nome do logradouro no campo Endereco (ex.: RUA VILA SONIA)."
+            )
+
+    numero_raw = limpar_texto(linha.get("Numero", "") or linha.get("NUMERO", ""))
+    if numero_raw:
+        numero_processado = normalizar_numero_endereco(numero_raw)
+        if numero_processado != "SN" and not numero_processado.isdigit():
+            erros.append(
+                f"Numero '{numero_raw}' invalido. Use apenas digitos (ex.: 927) ou SN para sem numero. "
+                "Informacoes extras devem ir no campo Complemento."
+            )
+
     return erros
 
 
@@ -412,7 +430,7 @@ def executar_cadastro_cliente_ixc(dados, usuario_sistema=None):
         if cliente_existente:
             cliente_ixc_id = limpar_texto(cliente_existente.get("id"))
             return (
-                True,
+                False,
                 f"Cliente ja existente no IXC (ID {cliente_ixc_id}). Nenhuma alteracao feita para {razao_social}.",
                 cliente_ixc_id,
             )

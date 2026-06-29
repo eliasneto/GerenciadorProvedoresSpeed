@@ -17,6 +17,9 @@ MENSAGEM_CAMPO_ID_NUMERICO = (
     "deve conter apenas o ID numerico do IXC. Nao use endereco, nome ou outro texto."
 )
 
+TIPOS_PROCESSO = ["Avulso", "Cotacao Parceiro", "Outro"]
+WORKFLOW_COTACAO_PARCEIRO = "18"
+
 
 def get_headers():
     token_b64 = base64.b64encode(IXC_TOKEN.encode()).decode()
@@ -76,6 +79,40 @@ def montar_identificacao_usuario_importacao(usuario_sistema=None):
     return f"Importado por: {identificador} em {momento}"
 
 
+def validar_tipo_processo(linha):
+    tipo = limpar_texto(linha.get("Tipo_Processo"))
+
+    if not tipo:
+        return False, "Tipo_Processo e obrigatorio. Use: Avulso, Cotacao Parceiro ou Outro."
+
+    if tipo not in TIPOS_PROCESSO:
+        return False, f"Tipo_Processo invalido: '{tipo}'. Use: Avulso, Cotacao Parceiro ou Outro."
+
+    workflow_raw = linha.get("Workflow_ID")
+    workflow_id, erro = normalizar_id_numerico(workflow_raw, "Workflow_ID")
+    if erro:
+        return False, erro
+
+    if tipo == "Avulso":
+        if workflow_id:
+            return False, (
+                f"Tipo_Processo 'Avulso' exige Workflow_ID vazio, "
+                f"mas foi informado '{workflow_id}'."
+            )
+    elif tipo == "Cotacao Parceiro":
+        if workflow_id != WORKFLOW_COTACAO_PARCEIRO:
+            detalhe = f"'{workflow_id}'" if workflow_id else "vazio"
+            return False, (
+                f"Tipo_Processo 'Cotacao Parceiro' exige Workflow_ID={WORKFLOW_COTACAO_PARCEIRO}, "
+                f"mas foi informado {detalhe}."
+            )
+    elif tipo == "Outro":
+        if not workflow_id:
+            return False, "Tipo_Processo 'Outro' exige Workflow_ID preenchido."
+
+    return True, None
+
+
 def executar_abertura_atendimento(dados, usuario_sistema=None):
     endpoint_ticket = f"{IXC_URL}/su_ticket"
     headers = get_headers()
@@ -92,7 +129,9 @@ def executar_abertura_atendimento(dados, usuario_sistema=None):
     if erro:
         return False, erro
 
-    id_contrato, erro = normalizar_id_numerico(linha.get("Contrato_ID"), "Contrato_ID")
+    id_contrato, erro = normalizar_id_numerico(
+        linha.get("Contrato_ID"), "Contrato_ID", obrigatorio=True
+    )
     if erro:
         return False, erro
 
@@ -118,6 +157,10 @@ def executar_abertura_atendimento(dados, usuario_sistema=None):
     mensagem = limpar_texto(linha.get("Descricao"))
     endereco = limpar_texto(linha.get("Endereco"))
 
+    id_wfl_processo, erro = normalizar_id_numerico(linha.get("Workflow_ID"), "Workflow_ID")
+    if erro:
+        return False, erro
+
     if not id_login:
         id_login, erro = normalizar_id_numerico(
             linha.get("Login_Contrato_ID"), "Login_ID"
@@ -138,7 +181,7 @@ def executar_abertura_atendimento(dados, usuario_sistema=None):
         return False, f"Departamento_ID invalido para cliente {id_cliente}"
 
     if not titulo:
-        titulo = "Atendimento via API"
+        return False, f"Assunto_Descricao vazio para cliente {id_cliente}"
 
     if not mensagem:
         return False, f"Descricao vazia para cliente {id_cliente}"
@@ -159,7 +202,7 @@ def executar_abertura_atendimento(dados, usuario_sistema=None):
         "origem_endereco": "L",
         "origem_endereco_estrutura": "E",
         "endereco": endereco,
-        "id_wfl_processo": "18",
+        "id_wfl_processo": id_wfl_processo,
         "id_ticket_setor": id_ticket_setor,
         "id_usuarios": USUARIO_IXC_PADRAO,
         "prioridade": "M",
@@ -226,10 +269,7 @@ def executar_abertura_atendimento(dados, usuario_sistema=None):
 
         print(f"[+] Ticket criado com sucesso. ID: {id_ticket}")
 
-        return True, (
-            f"Ticket aberto com sucesso! ID: {id_ticket} | "
-            f"Aguardando workflow abrir a primeira OS automaticamente."
-        )
+        return True, f"Atendimento aberto com sucesso! ID: {id_ticket}"
 
     except Exception as e:
         return False, f"Erro Tecnico: {str(e)}"

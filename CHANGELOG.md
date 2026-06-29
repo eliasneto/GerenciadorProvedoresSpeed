@@ -2,6 +2,17 @@
 
 Este arquivo registra as versoes publicadas do sistema e os principais itens adicionados ou alterados em cada release.
 
+## v1.7.4 - 2026-06-19
+
+Corrigido:
+- cadastro de cliente com CNPJ/CPF ja existente no IXC passa a retornar `ERRO` no relatorio em vez de `SUCESSO`, deixando claro que nenhum cliente foi criado e que o registro precisa de revisao
+
+## v1.7.3 - 2026-06-19
+
+Melhorado:
+- pre-validacao da planilha de clientes passa a checar se o campo `Endereco` resultaria em menos de 3 caracteres apos a remocao automatica de CEP e cidade embutidos, bloqueando o registro com mensagem clara antes de enviar ao IXC
+- pre-validacao passa a checar se o campo `Numero` contem caracteres invalidos alem de digitos e SN, orientando o operador a mover informacoes extras para o campo `Complemento`
+
 ## v1.7.2 - 2026-06-19
 
 Adicionado:
