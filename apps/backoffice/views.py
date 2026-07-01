@@ -1,14 +1,19 @@
 from io import BytesIO
 import re
+from urllib.parse import urlencode
 
 import pandas as pd
 from django.contrib import messages
+from django.contrib.auth import get_user_model
 from django.contrib.auth.decorators import login_required, user_passes_test
 from django.core.exceptions import PermissionDenied
+from django.core.paginator import Paginator
+from django.db.models import Sum
 from django.http import HttpResponse
 from django.shortcuts import redirect, render
 
 from apps.core.integration_audit import dataframe_to_records, registrar_auditoria_integracao
+from core.models import IntegrationAudit
 from scripts.integracoes.backoffice.cadastrar_cliente_ixc import executar_cadastro_cliente_ixc, validar_linha_pre_envio
 from scripts.integracoes.backoffice.cria_atendimento_ixc import (
     executar_abertura_atendimento,
@@ -99,6 +104,87 @@ def aplicar_validacao_campos_id(workbook, worksheet, colunas, campos_id, campos_
 
 def serializar_linha_para_auditoria(dataframe, index):
     return {str(k).strip(): dataframe.at[index, k] for k in dataframe.columns}
+
+
+DASHBOARD_AUTOMACOES = [
+    {"integration": "logins_ixc", "label": "Logins IXC", "icone": "database"},
+    {"integration": "atendimento_ixc", "label": "Atendimento IXC", "icone": "headphones"},
+    {"integration": CADASTRO_CLIENTE_IXC_INTEGRATION, "label": "Clientes IXC", "icone": "user-round-plus"},
+]
+
+
+@user_passes_test(grupo_backoffice_required)
+@login_required
+def dashboard(request):
+    User = get_user_model()
+    integracoes_nomes = [item["integration"] for item in DASHBOARD_AUTOMACOES]
+
+    usuario_filtro = (request.GET.get("usuario") or "").strip()
+    integracao_filtro = (request.GET.get("integracao") or "").strip()
+    mes_filtro = (request.GET.get("mes") or "").strip()  # formato YYYY-MM (input type="month")
+
+    base_queryset = IntegrationAudit.objects.filter(
+        integration__in=integracoes_nomes,
+        action="execucao_integracao",
+    )
+
+    if usuario_filtro:
+        base_queryset = base_queryset.filter(usuario_id=usuario_filtro)
+
+    if integracao_filtro in integracoes_nomes:
+        base_queryset = base_queryset.filter(integration=integracao_filtro)
+
+    if mes_filtro:
+        try:
+            ano_str, mes_str = mes_filtro.split("-")
+            base_queryset = base_queryset.filter(criado_em__year=int(ano_str), criado_em__month=int(mes_str))
+        except (ValueError, AttributeError):
+            mes_filtro = ""
+
+    cards = []
+    for item in DASHBOARD_AUTOMACOES:
+        execucoes = base_queryset.filter(integration=item["integration"])
+        agregados = execucoes.aggregate(total_sucessos=Sum("total_sucessos"), total_erros=Sum("total_erros"))
+        cards.append({
+            **item,
+            "total_execucoes": execucoes.count(),
+            "total_sucessos": agregados["total_sucessos"] or 0,
+            "total_erros": agregados["total_erros"] or 0,
+            "ultima_execucao": execucoes.order_by("-criado_em").first(),
+        })
+
+    labels_por_integracao = {item["integration"]: item["label"] for item in DASHBOARD_AUTOMACOES}
+
+    paginator = Paginator(base_queryset.select_related("usuario").order_by("-criado_em"), 20)
+    page_number = request.GET.get("page")
+    page_obj = paginator.get_page(page_number)
+    for registro in page_obj:
+        registro.label = labels_por_integracao.get(registro.integration, registro.integration)
+        registro.usuario_nome = (
+            (registro.usuario.get_full_name() or registro.usuario.username)
+            if registro.usuario else "-"
+        )
+
+    usuarios_disponiveis = User.objects.filter(is_active=True).order_by("first_name", "last_name", "username")
+
+    filtros_query = urlencode({
+        k: v for k, v in {
+            "usuario": usuario_filtro,
+            "integracao": integracao_filtro,
+            "mes": mes_filtro,
+        }.items() if v
+    })
+
+    return render(request, "backoffice/dashboard.html", {
+        "cards": cards,
+        "page_obj": page_obj,
+        "usuarios_disponiveis": usuarios_disponiveis,
+        "automacoes_disponiveis": DASHBOARD_AUTOMACOES,
+        "usuario_filtro": usuario_filtro,
+        "integracao_filtro": integracao_filtro,
+        "mes_filtro": mes_filtro,
+        "filtros_query": filtros_query,
+    })
 
 
 @user_passes_test(grupo_backoffice_required)

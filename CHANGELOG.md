@@ -2,6 +2,13 @@
 
 Este arquivo registra as versoes publicadas do sistema e os principais itens adicionados ou alterados em cada release.
 
+## v1.8.0 - 2026-07-01
+
+Adicionado:
+- novo item `Dashboard` no submenu Backoffice, com visao consolidada das automacoes de Logins IXC, Atendimento IXC e Cadastro de Clientes IXC: total de execucoes, sucessos, erros e data da ultima execucao de cada uma
+- listagem de atividade recente no dashboard, com paginacao, mostrando automacao, arquivo, usuario responsavel, sucessos, erros e data de cada execucao
+- filtros por automacao, por usuario e por mes no dashboard, combinaveis entre si e aplicados tanto aos cards de estatisticas quanto a listagem de atividade
+
 ## v1.7.4 - 2026-06-19
 
 Corrigido:

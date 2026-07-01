@@ -193,12 +193,13 @@
 
             {% if request.user|has_group:"Backoffice" %}
             <div class="mb-1 relative">
-                <button onclick="toggleSubmenu('submenu-backoffice', 'seta-backoffice')" class="w-full flex items-center justify-between px-4 py-3 rounded-xl transition-all duration-200 group {% if 'cotacao' in request.path %} text-ageis-yellow bg-white/5 {% else %} text-gray-400 hover:text-white hover:bg-white/5 {% endif %}">
+                <button onclick="toggleSubmenu('submenu-backoffice', 'seta-backoffice')" class="w-full flex items-center justify-between px-4 py-3 rounded-xl transition-all duration-200 group {% if 'backoffice' in request.path %} text-ageis-yellow bg-white/5 {% else %} text-gray-400 hover:text-white hover:bg-white/5 {% endif %}">
                     <div class="flex items-center gap-3"><i data-lucide="briefcase" class="w-5 h-5 group-hover:scale-110 transition-transform"></i><span class="text-sm font-semibold">Backoffice</span></div>
-                    <i data-lucide="chevron-down" id="seta-backoffice" class="w-4 h-4 transition-transform duration-300 {% if 'cotacao' in request.path %} rotate-180 {% endif %}"></i>
+                    <i data-lucide="chevron-down" id="seta-backoffice" class="w-4 h-4 transition-transform duration-300 {% if 'backoffice' in request.path %} rotate-180 {% endif %}"></i>
                 </button>
-                <div id="submenu-backoffice" class="{% if 'cotacao' not in request.path %}hidden{% endif %} flex flex-col gap-1 bg-black/20 rounded-xl mt-1 py-2 overflow-hidden">
+                <div id="submenu-backoffice" class="{% if 'backoffice' not in request.path %}hidden{% endif %} flex flex-col gap-1 bg-black/20 rounded-xl mt-1 py-2 overflow-hidden">
                     <a href="{% url 'backoffice:cotacao_import' %}" class="pl-[3.25rem] pr-4 py-2 text-sm font-semibold transition-colors flex items-center gap-2 {% if 'cotacao' in request.path %} text-ageis-yellow {% else %} text-gray-500 hover:text-gray-300 {% endif %}"><div class="w-1.5 h-1.5 rounded-full {% if 'cotacao' in request.path %} bg-ageis-yellow {% else %} bg-gray-500 {% endif %}"></div> Automações</a>
+                    <a href="{% url 'backoffice:dashboard' %}" class="pl-[3.25rem] pr-4 py-2 text-sm font-semibold transition-colors flex items-center gap-2 {% if request.resolver_match.url_name == 'dashboard' %} text-ageis-yellow {% else %} text-gray-500 hover:text-gray-300 {% endif %}"><div class="w-1.5 h-1.5 rounded-full {% if request.resolver_match.url_name == 'dashboard' %} bg-ageis-yellow {% else %} bg-gray-500 {% endif %}"></div> Dashboard</a>
                 </div>
             </div>
             {% endif %}
