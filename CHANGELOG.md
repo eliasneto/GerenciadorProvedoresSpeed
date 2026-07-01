@@ -2,6 +2,11 @@
 
 Este arquivo registra as versoes publicadas do sistema e os principais itens adicionados ou alterados em cada release.
 
+## v1.8.1 - 2026-07-01
+
+Melhorado:
+- indicador de `Erros` removido dos cards de estatisticas e da listagem de atividade recente do dashboard de automacoes do Backoffice, mantendo apenas execucoes e sucessos
+
 ## v1.8.0 - 2026-07-01
 
 Adicionado:

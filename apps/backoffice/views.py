@@ -144,12 +144,11 @@ def dashboard(request):
     cards = []
     for item in DASHBOARD_AUTOMACOES:
         execucoes = base_queryset.filter(integration=item["integration"])
-        agregados = execucoes.aggregate(total_sucessos=Sum("total_sucessos"), total_erros=Sum("total_erros"))
+        agregados = execucoes.aggregate(total_sucessos=Sum("total_sucessos"))
         cards.append({
             **item,
             "total_execucoes": execucoes.count(),
             "total_sucessos": agregados["total_sucessos"] or 0,
-            "total_erros": agregados["total_erros"] or 0,
             "ultima_execucao": execucoes.order_by("-criado_em").first(),
         })
 
