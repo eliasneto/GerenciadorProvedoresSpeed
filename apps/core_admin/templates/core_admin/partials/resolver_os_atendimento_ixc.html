@@ -1,0 +1,144 @@
+<div class="bg-white p-8 rounded-[2rem] shadow-xl border border-gray-100 flex flex-col relative overflow-hidden transition-all hover:shadow-2xl">
+    <div class="flex items-center gap-4 mb-6">
+        <div class="w-12 h-12 bg-gray-900 rounded-2xl flex items-center justify-center shadow-md">
+            <i data-lucide="file-check-2" class="w-6 h-6 text-ageis-yellow"></i>
+        </div>
+        <div>
+            <h2 class="text-lg font-black text-gray-900 uppercase italic tracking-tight">Resolucao de O.S. do Atendimento</h2>
+            <p class="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Fecha as O.S. sem finalizar o atendimento</p>
+        </div>
+    </div>
+
+    <div class="border-2 border-dashed border-gray-200 rounded-2xl p-4 text-center mb-6 bg-gray-50/50">
+        <a href="{% url 'download_template_resolucao_os_atendimento' %}" class="inline-flex items-center gap-2 text-[10px] font-black text-gray-900 hover:text-ageis-yellow transition-colors uppercase tracking-widest">
+            <i data-lucide="download" class="w-3 h-3"></i> Baixar Planilha Modelo
+        </a>
+        <p class="mt-3 text-[10px] font-bold uppercase tracking-widest text-gray-400">
+            {% if ultima_resolucao_os_atendimento %}
+                Ultima auditoria: {{ ultima_resolucao_os_atendimento.total_sucessos }} sucessos e {{ ultima_resolucao_os_atendimento.total_erros }} erros.
+            {% else %}
+                Atendimento_ID, confirmacao, Tem_Anexo e Fechar_Todas_OS obrigatorios por linha. So fecha O.S. se o atendimento estiver "Em progresso" no IXC.
+            {% endif %}
+        </p>
+    </div>
+
+    <form id="resolucaoOsForm" method="POST" enctype="multipart/form-data" class="space-y-4 flex-1 flex flex-col justify-end" action="{% url 'resolver_os_atendimento_ixc' %}">
+        {% csrf_token %}
+
+        <div>
+            <label class="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">ZIP de Anexos (opcional)</label>
+            <input type="file" name="arquivo_zip_resolucao_os" id="resolucaoOsZip" accept=".zip" class="hidden">
+
+            <label for="resolucaoOsZip" class="flex items-center w-full bg-gray-50 border border-gray-100 rounded-xl cursor-pointer hover:bg-gray-100 transition-all overflow-hidden group">
+                <div class="bg-gray-900 text-ageis-yellow group-hover:text-white text-[10px] font-black uppercase tracking-wider py-3 px-4 shadow-sm transition-all flex items-center gap-2">
+                    <i data-lucide="paperclip" class="w-3 h-3"></i> ZIP
+                </div>
+                <span id="resolucaoOsZipName" class="text-xs font-medium text-gray-500 px-4 truncate flex-1">Nenhum arquivo...</span>
+            </label>
+            <p class="mt-2 text-[10px] font-medium text-gray-400">Necessario somente se alguma linha da planilha tiver Tem_Anexo = SIM. Cada PDF e casado pelo nome informado em Nome_Anexo.</p>
+        </div>
+
+        <div>
+            <label class="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Planilha de Atendimentos</label>
+            <input type="file" name="arquivo_planilha_resolucao_os" id="resolucaoOsFile" accept=".xlsx,.xls,.csv" required class="hidden">
+
+            <label for="resolucaoOsFile" class="flex items-center w-full bg-gray-50 border border-gray-100 rounded-xl cursor-pointer hover:bg-gray-100 transition-all overflow-hidden group">
+                <div class="bg-gray-900 text-ageis-yellow group-hover:text-white text-[10px] font-black uppercase tracking-wider py-3 px-4 shadow-sm transition-all flex items-center gap-2">
+                    <i data-lucide="upload-cloud" class="w-3 h-3"></i> Planilha
+                </div>
+                <span id="resolucaoOsFileName" class="text-xs font-medium text-gray-500 px-4 truncate flex-1">Nenhum arquivo...</span>
+            </label>
+        </div>
+
+        <div id="resolucaoOsLoading" class="hidden flex flex-col items-center justify-center gap-3 mt-4 py-2">
+            <div class="w-6 h-6 border-4 border-gray-100 border-t-ageis-yellow rounded-full animate-spin"></div>
+            <span class="text-[10px] font-black uppercase tracking-widest text-gray-500">Anexando e Fechando O.S...</span>
+        </div>
+
+        <div id="resolucaoOsSuccess" class="hidden flex items-center justify-center gap-2 mt-4 bg-green-50 border border-green-100 py-3 px-4 rounded-xl">
+            <i data-lucide="check-circle" class="w-5 h-5 text-green-500"></i>
+            <span class="text-[10px] font-black uppercase tracking-widest text-green-700">Relatorio Baixado!</span>
+        </div>
+
+        <button id="resolucaoOsSubmit" type="submit" class="w-full bg-ageis-black hover:bg-gray-900 text-ageis-yellow font-black uppercase italic tracking-widest py-4 rounded-2xl shadow-lg transition-all flex items-center justify-center gap-2 group mt-auto">
+            <i data-lucide="play" class="w-4 h-4 group-hover:scale-110 transition-transform"></i>
+            Resolver O.S.
+        </button>
+    </form>
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        const resolucaoOsForm = document.getElementById('resolucaoOsForm');
+        const resolucaoOsFile = document.getElementById('resolucaoOsFile');
+        const resolucaoOsFileName = document.getElementById('resolucaoOsFileName');
+        const resolucaoOsZip = document.getElementById('resolucaoOsZip');
+        const resolucaoOsZipName = document.getElementById('resolucaoOsZipName');
+        const resolucaoOsSubmit = document.getElementById('resolucaoOsSubmit');
+        const resolucaoOsLoading = document.getElementById('resolucaoOsLoading');
+        const resolucaoOsSuccess = document.getElementById('resolucaoOsSuccess');
+
+        if (resolucaoOsFile && resolucaoOsFileName) {
+            resolucaoOsFile.addEventListener('change', function (e) {
+                resolucaoOsFileName.textContent = e.target.files[0] ? e.target.files[0].name : 'Nenhum arquivo...';
+            });
+        }
+
+        if (resolucaoOsZip && resolucaoOsZipName) {
+            resolucaoOsZip.addEventListener('change', function (e) {
+                resolucaoOsZipName.textContent = e.target.files[0] ? e.target.files[0].name : 'Nenhum arquivo...';
+            });
+        }
+
+        if (resolucaoOsForm && resolucaoOsFile && resolucaoOsSubmit) {
+            resolucaoOsForm.addEventListener('submit', async function (e) {
+                e.preventDefault();
+                if (!resolucaoOsFile.files || !resolucaoOsFile.files.length) {
+                    return;
+                }
+
+                resolucaoOsSubmit.classList.add('hidden');
+                resolucaoOsSuccess.classList.add('hidden');
+                resolucaoOsLoading.classList.remove('hidden');
+
+                try {
+                    const formData = new FormData(resolucaoOsForm);
+                    const response = await fetch(resolucaoOsForm.action, {
+                        method: 'POST',
+                        body: formData,
+                        headers: { 'X-Requested-With': 'XMLHttpRequest' }
+                    });
+
+                    const contentType = response.headers.get('content-type') || '';
+                    if (!response.ok || !contentType.includes('spreadsheetml')) {
+                        window.location.reload();
+                        return;
+                    }
+
+                    const blob = await response.blob();
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = 'Relatorio_Resolucao_OS_Atendimentos_IXC.xlsx';
+                    document.body.appendChild(a);
+                    a.click();
+                    a.remove();
+                    window.URL.revokeObjectURL(url);
+
+                    resolucaoOsLoading.classList.add('hidden');
+                    resolucaoOsSuccess.classList.remove('hidden');
+                    resolucaoOsForm.reset();
+                    resolucaoOsFileName.textContent = 'Nenhum arquivo...';
+                    resolucaoOsZipName.textContent = 'Nenhum arquivo...';
+
+                    setTimeout(() => {
+                        resolucaoOsSuccess.classList.add('hidden');
+                        resolucaoOsSubmit.classList.remove('hidden');
+                    }, 5000);
+                } catch (error) {
+                    window.location.reload();
+                }
+            });
+        }
+    });
+</script>

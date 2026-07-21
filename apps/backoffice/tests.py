@@ -18,6 +18,10 @@ from scripts.integracoes.backoffice.desativar_atendimento_ixc import (
     listar_os_para_desativacao,
     normalizar_confirmacao_desativacao,
 )
+from scripts.integracoes.backoffice.resolver_os_atendimento_ixc import (
+    executar_resolucao_os_atendimento_ixc,
+    normalizar_confirmacao_resolucao,
+)
 from scripts.integracoes.ixc_ticket_arquivo_service import _sessao_painel_ixc
 
 
@@ -251,6 +255,183 @@ class DesativacaoAtendimentoIXCTests(SimpleTestCase):
         self.assertEqual([registro["id"] for registro in registros], ["6399", "6401"])
 
 
+class ResolucaoOsAtendimentoIXCTests(SimpleTestCase):
+    def test_confirmacao_resolucao_aceita_sim(self):
+        confirmado, erro = normalizar_confirmacao_resolucao("SIM")
+
+        self.assertTrue(confirmado)
+        self.assertIsNone(erro)
+
+    def test_executar_resolucao_bloqueia_sem_confirmacao(self):
+        status, mensagem, atendimento_id, os_fechadas = executar_resolucao_os_atendimento_ixc(
+            {"Atendimento_ID": 6385, "Confirmar_Resolucao": "NAO"},
+            zip_arquivos=None,
+        )
+
+        self.assertFalse(status)
+        self.assertEqual(atendimento_id, "6385")
+        self.assertEqual(os_fechadas, "")
+        self.assertIn("Confirmar_Resolucao", mensagem)
+
+    @patch("scripts.integracoes.backoffice.resolver_os_atendimento_ixc.buscar_atendimento_ixc_por_id")
+    def test_executar_resolucao_bloqueia_atendimento_nao_encontrado(self, mock_buscar_atendimento):
+        mock_buscar_atendimento.return_value = {}
+
+        status, mensagem, atendimento_id, os_fechadas = executar_resolucao_os_atendimento_ixc(
+            {
+                "Atendimento_ID": 5313,
+                "Confirmar_Resolucao": "SIM",
+                "Tem_Anexo": "NAO",
+                "Fechar_Todas_OS": "SIM",
+            },
+            zip_arquivos=None,
+        )
+
+        self.assertFalse(status)
+        self.assertEqual(atendimento_id, "5313")
+        self.assertEqual(os_fechadas, "")
+        self.assertIn("nao encontrado", mensagem)
+
+    @patch("scripts.integracoes.backoffice.resolver_os_atendimento_ixc.anexar_arquivo_ticket_ixc")
+    @patch("scripts.integracoes.backoffice.resolver_os_atendimento_ixc.localizar_anexo_no_zip")
+    @patch("scripts.integracoes.backoffice.resolver_os_atendimento_ixc.buscar_atendimento_ixc_por_id")
+    def test_executar_resolucao_nao_fecha_os_quando_anexo_falha(
+        self,
+        mock_buscar_atendimento,
+        mock_localizar_anexo,
+        mock_anexar,
+    ):
+        mock_buscar_atendimento.return_value = {"id": "5313", "su_status": "EP"}
+        mock_localizar_anexo.return_value = (b"conteudo", "contrato.pdf", None)
+        mock_anexar.return_value = {"ok": False, "message": "Falha ao enviar o anexo."}
+
+        with patch(
+            "scripts.integracoes.backoffice.resolver_os_atendimento_ixc.finalizar_os_existente"
+        ) as mock_finalizar_os:
+            status, mensagem, atendimento_id, os_fechadas = executar_resolucao_os_atendimento_ixc(
+                {
+                    "Atendimento_ID": 5313,
+                    "Confirmar_Resolucao": "SIM",
+                    "Tem_Anexo": "SIM",
+                    "Nome_Anexo": "contrato.pdf",
+                    "Fechar_Todas_OS": "SIM",
+                },
+                zip_arquivos=Mock(),
+            )
+
+            mock_finalizar_os.assert_not_called()
+
+        self.assertFalse(status)
+        self.assertEqual(atendimento_id, "5313")
+        self.assertEqual(os_fechadas, "")
+        self.assertIn("Nao foi possivel anexar", mensagem)
+        self.assertIn("Nenhuma O.S. foi fechada", mensagem)
+
+    @patch("scripts.integracoes.backoffice.resolver_os_atendimento_ixc.finalizar_os_existente")
+    @patch("scripts.integracoes.backoffice.resolver_os_atendimento_ixc.listar_os_para_desativacao")
+    @patch("scripts.integracoes.backoffice.resolver_os_atendimento_ixc.buscar_atendimento_ixc_por_id")
+    def test_executar_resolucao_fecha_todas_as_os_sem_finalizar_atendimento(
+        self,
+        mock_buscar_atendimento,
+        mock_listar_os,
+        mock_finalizar_os,
+    ):
+        mock_buscar_atendimento.side_effect = [
+            {"id": "5313", "su_status": "EP"},
+            {"id": "5313", "status": "A"},
+        ]
+        mock_listar_os.side_effect = [
+            [
+                {"id": "6394", "status": "A"},
+                {"id": "6401", "status": "A"},
+            ],
+            [],
+        ]
+        mock_finalizar_os.side_effect = [
+            {"ok": True, "os_atualizada": {"id": "6394", "status": "F"}},
+            {"ok": True, "os_atualizada": {"id": "6401", "status": "F"}},
+        ]
+
+        status, mensagem, atendimento_id, os_fechadas = executar_resolucao_os_atendimento_ixc(
+            {
+                "Atendimento_ID": 5313,
+                "Confirmar_Resolucao": "SIM",
+                "Tem_Anexo": "NAO",
+                "Fechar_Todas_OS": "SIM",
+            },
+            zip_arquivos=None,
+        )
+
+        self.assertTrue(status)
+        self.assertEqual(atendimento_id, "5313")
+        self.assertEqual(os_fechadas, "6394, 6401")
+        self.assertEqual(mock_finalizar_os.call_count, 2)
+        self.assertFalse(mock_finalizar_os.call_args_list[0].kwargs["finaliza_atendimento"])
+        self.assertFalse(mock_finalizar_os.call_args_list[1].kwargs["finaliza_atendimento"])
+        self.assertNotIn("Atencao", mensagem)
+
+    @patch("scripts.integracoes.backoffice.resolver_os_atendimento_ixc.finalizar_os_existente")
+    @patch("scripts.integracoes.backoffice.resolver_os_atendimento_ixc.listar_os_para_desativacao")
+    @patch("scripts.integracoes.backoffice.resolver_os_atendimento_ixc.buscar_atendimento_ixc_por_id")
+    def test_executar_resolucao_mantem_os_ja_fechadas_quando_uma_falha(
+        self,
+        mock_buscar_atendimento,
+        mock_listar_os,
+        mock_finalizar_os,
+    ):
+        mock_buscar_atendimento.return_value = {"id": "5313", "su_status": "EP"}
+        mock_listar_os.return_value = [
+            {"id": "6394", "status": "A"},
+            {"id": "6401", "status": "A"},
+        ]
+        mock_finalizar_os.side_effect = [
+            {"ok": True, "os_atualizada": {"id": "6394", "status": "F"}},
+            {"ok": False, "message": "IXC recusou o fechamento.", "body": {}},
+        ]
+
+        status, mensagem, atendimento_id, os_fechadas = executar_resolucao_os_atendimento_ixc(
+            {
+                "Atendimento_ID": 5313,
+                "Confirmar_Resolucao": "SIM",
+                "Tem_Anexo": "NAO",
+                "Fechar_Todas_OS": "SIM",
+            },
+            zip_arquivos=None,
+        )
+
+        self.assertFalse(status)
+        self.assertEqual(atendimento_id, "5313")
+        self.assertEqual(os_fechadas, "6394")
+        self.assertIn("6394", mensagem)
+        self.assertIn("6401", mensagem)
+        mock_buscar_atendimento.assert_called_once()
+
+    @patch("scripts.integracoes.backoffice.resolver_os_atendimento_ixc.listar_os_para_desativacao")
+    @patch("scripts.integracoes.backoffice.resolver_os_atendimento_ixc.buscar_atendimento_ixc_por_id")
+    def test_executar_resolucao_informa_quando_nao_ha_os_aberta(
+        self,
+        mock_buscar_atendimento,
+        mock_listar_os,
+    ):
+        mock_buscar_atendimento.return_value = {"id": "5313", "su_status": "EP"}
+        mock_listar_os.return_value = []
+
+        status, mensagem, atendimento_id, os_fechadas = executar_resolucao_os_atendimento_ixc(
+            {
+                "Atendimento_ID": 5313,
+                "Confirmar_Resolucao": "SIM",
+                "Tem_Anexo": "NAO",
+                "Fechar_Todas_OS": "SIM",
+            },
+            zip_arquivos=None,
+        )
+
+        self.assertTrue(status)
+        self.assertEqual(atendimento_id, "5313")
+        self.assertEqual(os_fechadas, "")
+        self.assertIn("nao possui O.S. aberta", mensagem)
+
+
 class CadastroClienteIXCTests(SimpleTestCase):
     def test_confirmacao_cadastro_aceita_sim(self):
         confirmado, erro = normalizar_confirmacao_cadastro("SIM")
@@ -268,19 +449,20 @@ class CadastroClienteIXCTests(SimpleTestCase):
             [{"id": "887", "cidade": "FORTALEZA", "uf": "CE"}],
         ]
 
-        cidade_id, erro = resolver_cidade_ixc("887")
+        cidade_id, uf_id, erro = resolver_cidade_ixc("887")
 
         self.assertEqual(cidade_id, "887")
+        self.assertEqual(uf_id, "CE")
         self.assertIsNone(erro)
 
     @patch("scripts.integracoes.backoffice.cadastrar_cliente_ixc.resolver_cidade_ixc")
     @patch("scripts.integracoes.backoffice.cadastrar_cliente_ixc.buscar_cliente_por_cnpj_cpf")
-    def test_executar_cadastro_retorna_sucesso_quando_cliente_ja_existe(
+    def test_executar_cadastro_bloqueia_quando_cliente_ja_existe(
         self,
         mock_buscar_cliente,
         mock_resolver_cidade,
     ):
-        mock_resolver_cidade.return_value = ("887", None)
+        mock_resolver_cidade.return_value = ("887", "CE", None)
         mock_buscar_cliente.return_value = {"id": "4455", "razao": "CLIENTE TESTE"}
 
         status, mensagem, cliente_ixc_id = executar_cadastro_cliente_ixc(
@@ -292,7 +474,7 @@ class CadastroClienteIXCTests(SimpleTestCase):
             }
         )
 
-        self.assertTrue(status)
+        self.assertFalse(status)
         self.assertEqual(cliente_ixc_id, "4455")
         self.assertIn("ja existente", mensagem)
 
@@ -307,7 +489,7 @@ class CadastroClienteIXCTests(SimpleTestCase):
         mock_buscar_cliente,
         mock_buscar_razao,
     ):
-        mock_resolver_cidade.return_value = ("887", None)
+        mock_resolver_cidade.return_value = ("887", "CE", None)
         mock_buscar_cliente.side_effect = [{}, {}]
         mock_buscar_razao.return_value = {}
         client = Mock()
@@ -326,6 +508,9 @@ class CadastroClienteIXCTests(SimpleTestCase):
                 "Cidade_ID_IXC": "887",
                 "Telefone": "(85) 99999-9999",
                 "Email": "teste@exemplo.com",
+                "Tipo_Cliente_ID": "8",
+                "Tipo_Assinante_ID": "3",
+                "Filial_ID": "1",
                 "Confirmar_Cadastro": "SIM",
             }
         )

@@ -130,6 +130,7 @@ class IntegrationAudit(models.Model):
         ("desativacao_atendimento_ixc", "Desativacao de Atendimento IXC"),
         ("buscar_fornecedores", "Buscar Fornecedores"),
         ("importador_leads", "Importador de Leads"),
+        ("cadastro_cliente_ixc", "Cadastro de Cliente IXC"),
     ]
 
     ACTION_CHOICES = [

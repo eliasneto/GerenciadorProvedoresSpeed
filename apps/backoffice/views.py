@@ -1,4 +1,5 @@
 from io import BytesIO
+import logging
 import re
 from urllib.parse import urlencode
 
@@ -14,6 +15,8 @@ from django.shortcuts import redirect, render
 
 from apps.core.integration_audit import dataframe_to_records, registrar_auditoria_integracao
 from core.models import IntegrationAudit
+from core_admin.automacoes_registry import automacoes_do_menu, permissao_automacao, redirect_kwargs_pagina_automacao
+from core_admin.models import AutomacaoMenu
 from scripts.integracoes.backoffice.cadastrar_cliente_ixc import executar_cadastro_cliente_ixc, validar_linha_pre_envio
 from scripts.integracoes.backoffice.cria_atendimento_ixc import (
     executar_abertura_atendimento,
@@ -24,6 +27,8 @@ from scripts.integracoes.backoffice.cria_login_atendimento import (
     executar_cadastro_ixc,
 )
 from scripts.integracoes.ixc_client import IXCClient
+
+logger = logging.getLogger(__name__)
 
 CADASTRO_CLIENTE_IXC_INTEGRATION = "cadastro_cliente_ixc"
 
@@ -106,6 +111,11 @@ def serializar_linha_para_auditoria(dataframe, index):
     return {str(k).strip(): dataframe.at[index, k] for k in dataframe.columns}
 
 
+def _redirect_pagina_automacao(slug):
+    url_name, kwargs = redirect_kwargs_pagina_automacao(slug)
+    return redirect(url_name, **kwargs)
+
+
 DASHBOARD_AUTOMACOES = [
     {"integration": "logins_ixc", "label": "Logins IXC", "icone": "database"},
     {"integration": "atendimento_ixc", "label": "Atendimento IXC", "icone": "headphones"},
@@ -186,7 +196,7 @@ def dashboard(request):
     })
 
 
-@user_passes_test(grupo_backoffice_required)
+@user_passes_test(permissao_automacao("cotacao_import"))
 @login_required
 def cotacao_import(request):
     if request.method == "POST" and request.FILES.get("arquivo_cotacao"):
@@ -274,17 +284,20 @@ def cotacao_import(request):
             return response
 
         except Exception as e:
+            logger.exception("Erro ao processar ficheiro de cotacao.")
             messages.error(request, f"Erro ao processar ficheiro: {str(e)}")
-            return redirect("backoffice:cotacao_import")
+            return _redirect_pagina_automacao("cotacao_import")
 
-    return render(request, "backoffice/cotacao_import.html")
+    return render(request, "backoffice/cotacao_import.html", {
+        "automacoes": automacoes_do_menu(AutomacaoMenu.MENU_BACKOFFICE),
+    })
 
 
-@user_passes_test(grupo_backoffice_required)
+@user_passes_test(permissao_automacao("cotacao_import"))
 @login_required
 def download_modelo_cotacao(request):
     if request.method != "POST":
-        return redirect("backoffice:cotacao_import")
+        return _redirect_pagina_automacao("cotacao_import")
     colunas = [
         "Cliente_ID",
         "Login_Contrato_ID",
@@ -382,11 +395,11 @@ def download_modelo_cotacao(request):
     return response
 
 
-@user_passes_test(grupo_backoffice_required)
+@user_passes_test(permissao_automacao("atendimento_import"))
 @login_required
 def download_modelo_atendimento(request):
     if request.method != "POST":
-        return redirect("backoffice:cotacao_import")
+        return _redirect_pagina_automacao("atendimento_import")
     campos_obrigatorios = set(ATENDIMENTO_COLUNAS) - {"Workflow_ID"}
 
     instrucoes_campos = [
@@ -630,7 +643,7 @@ def download_modelo_atendimento(request):
     return response
 
 
-@user_passes_test(grupo_backoffice_required)
+@user_passes_test(permissao_automacao("atendimento_import"))
 @login_required
 def atendimento_import(request):
     if request.method == "POST" and request.FILES.get("arquivo_atendimento"):
@@ -786,12 +799,10 @@ def atendimento_import(request):
             return response
 
         except Exception as e:
-            print("\n--- ERRO GRAVE NO VIEWS.PY (OS) ---")
-            print(f"Motivo: {str(e)}")
-            print("----------------------------------\n")
+            logger.exception("Falha ao gerar o relatorio de O.S. IXC.")
             return HttpResponse(status=400)
 
-    return redirect("backoffice:cotacao_import")
+    return _redirect_pagina_automacao("atendimento_import")
 
 
 def _ler_dataframe_upload(arquivo):
@@ -850,19 +861,20 @@ def _buscar_opcoes_ixc(endpoint, campo_nome="nome", limite=200):
             if str(r.get("id") or "").strip()
         ]
     except Exception:
+        logger.exception("Falha ao buscar opcoes de %s no IXC.", endpoint)
         return []
 
 
-@user_passes_test(grupo_backoffice_required)
+@user_passes_test(permissao_automacao("cadastrar_clientes_ixc"))
 @login_required
 def cadastrar_clientes_ixc(request):
     if request.method != "POST":
-        return redirect("backoffice:cotacao_import")
+        return _redirect_pagina_automacao("cadastrar_clientes_ixc")
 
     arquivo = request.FILES.get("arquivo_cadastro_cliente_ixc")
     if not arquivo:
         messages.error(request, "Selecione uma planilha para processar o cadastro de clientes no IXC.")
-        return redirect("backoffice:cotacao_import")
+        return _redirect_pagina_automacao("cadastrar_clientes_ixc")
 
     try:
         df = _ler_dataframe_upload(arquivo)
@@ -1017,15 +1029,14 @@ def cadastrar_clientes_ixc(request):
         response["Content-Disposition"] = "attachment; filename=Relatorio_Cadastro_Clientes_IXC.xlsx"
         return response
     except Exception as exc:
+        logger.exception("Falha ao processar o cadastro de clientes no IXC.")
         messages.error(request, f"Falha ao processar o cadastro de clientes no IXC: {exc}")
-        return redirect("backoffice:cotacao_import")
+        return _redirect_pagina_automacao("cadastrar_clientes_ixc")
 
 
-@user_passes_test(grupo_backoffice_required)
+@user_passes_test(permissao_automacao("cadastrar_clientes_ixc"))
 @login_required
 def download_template_cadastro_cliente_ixc(request):
-    if request.method != "POST":
-        return redirect("backoffice:cotacao_import")
     opcoes_tipo_cliente = _buscar_opcoes_ixc("cliente_tipo")
     opcoes_filial = _buscar_opcoes_ixc("filial")
 
@@ -1171,7 +1182,7 @@ def download_template_cadastro_cliente_ixc(request):
         secao_header_format = workbook.add_format({"bold": True, "bg_color": "#DCFCE7", "border": 1})
         secao_cell_format = workbook.add_format({"border": 1})
 
-        linha_ref = len(instrucoes_campos) + 2
+        linha_ref = len(instrucoes_campos) + 1
         for titulo, opcoes in [
             ("Opcoes disponiveis: Tipo_Cliente_ID", opcoes_tipo_cliente),
             ("Opcoes disponiveis: Filial_ID", opcoes_filial),

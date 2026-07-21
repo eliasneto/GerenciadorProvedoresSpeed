@@ -10,7 +10,7 @@ from django.utils import timezone
 
 from scripts.integracoes.ixc_client import IXCClient
 
-from .models import AcessoBancoDados, ConfiguracaoEmailEnvio, TabelaAcessoBanco, TesteConexaoIXC
+from .models import AcessoBancoDados, AutomacaoMenu, ConfiguracaoEmailEnvio, TabelaAcessoBanco, TesteConexaoIXC
 
 
 def sincronizar_tabelas_do_sistema():
@@ -102,7 +102,12 @@ class AcessoBancoDadosAdmin(admin.ModelAdmin):
         database = db_conf.get('NAME')
 
         admin_user = os.getenv('DB_ADMIN_USER', 'root')
-        admin_password = os.getenv('DB_ADMIN_PASSWORD', os.getenv('MYSQL_ROOT_PASSWORD', 'SpeedRoot!2026#Prod'))
+        admin_password = os.getenv('DB_ADMIN_PASSWORD') or os.getenv('MYSQL_ROOT_PASSWORD')
+        if not admin_password:
+            raise RuntimeError(
+                'Defina a variável de ambiente DB_ADMIN_PASSWORD ou MYSQL_ROOT_PASSWORD '
+                'para aplicar acesso ao banco de dados.'
+            )
 
         conn = MySQLdb.connect(
             host=host,
@@ -155,6 +160,15 @@ class ConfiguracaoEmailEnvioAdmin(admin.ModelAdmin):
         if ConfiguracaoEmailEnvio.objects.exists():
             return False
         return super().has_add_permission(request)
+
+
+@admin.register(AutomacaoMenu)
+class AutomacaoMenuAdmin(admin.ModelAdmin):
+    list_display = ('nome_exibicao', 'slug', 'menu', 'ativo', 'ordem')
+    list_editable = ('menu', 'ativo', 'ordem')
+    list_filter = ('menu', 'ativo')
+    search_fields = ('nome_exibicao', 'slug')
+    ordering = ('ordem', 'nome_exibicao')
 
 
 @admin.register(TesteConexaoIXC)

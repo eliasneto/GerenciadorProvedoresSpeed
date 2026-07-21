@@ -17,12 +17,13 @@ from django.contrib.auth.decorators import login_required, user_passes_test
 from django.core.mail import EmailMessage, get_connection
 from django.core.validators import validate_email
 from django.core.exceptions import (
+    PermissionDenied,
     RequestDataTooBig,
     SuspiciousOperation,
     TooManyFieldsSent,
     TooManyFilesSent,
 )
-from django.http import HttpResponse, JsonResponse, UnreadablePostError
+from django.http import Http404, HttpResponse, JsonResponse, UnreadablePostError
 from django.http.multipartparser import MultiPartParserError
 from django.shortcuts import redirect, render
 from django.utils.datastructures import MultiValueDictKeyError
@@ -30,7 +31,14 @@ from django.utils.datastructures import MultiValueDictKeyError
 from apps.core.integration_audit import dataframe_to_records, registrar_auditoria_integracao
 from core.models import IntegrationAudit
 from core.views import grupo_Administrador_required
-from core_admin.models import ConfiguracaoEmailEnvio
+from core_admin.automacoes_registry import (
+    GRUPO_POR_MENU,
+    automacoes_do_menu,
+    permissao_automacao,
+    redirect_kwargs_pagina_automacao,
+    usuario_pode_acessar_automacao,
+)
+from core_admin.models import AutomacaoMenu, ConfiguracaoEmailEnvio
 from auditoria.models import RestoreBackupAuditoria
 from scripts.integracoes.ixc_client import IXCClient
 from scripts.integracoes.backoffice.desativar_atendimento_ixc import executar_desativacao_atendimento
@@ -43,6 +51,12 @@ from scripts.integracoes.backoffice.editar_login_ixc import (
     COLUNAS_OBRIGATORIAS_EDICAO_LOGIN_IXC,
     INSTRUCOES_EDICAO_LOGIN_IXC,
     executar_edicao_login_ixc,
+)
+from scripts.integracoes.backoffice.resolver_os_atendimento_ixc import (
+    COLUNAS_OBRIGATORIAS_RESOLUCAO_OS_ATENDIMENTO_IXC,
+    COLUNAS_OPCIONAIS_RESOLUCAO_OS_ATENDIMENTO_IXC,
+    INSTRUCOES_RESOLUCAO_OS_ATENDIMENTO_IXC,
+    executar_resolucao_os_atendimento_ixc,
 )
 
 from .forms import BackupRestoreForm, ExcelUploadForm, SMTPTestForm
@@ -65,6 +79,8 @@ logger = logging.getLogger(__name__)
 DESATIVACAO_ATENDIMENTO_INTEGRATION = "desativacao_atendimento_ixc"
 EDICAO_LOGIN_IXC_INTEGRATION = "edicao_login_ixc"
 EDICAO_ATENDIMENTO_IXC_INTEGRATION = "edicao_atendimento_ixc"
+RESOLUCAO_OS_ATENDIMENTO_INTEGRATION = "resolucao_os_atendimento_ixc"
+CADASTRO_CLIENTE_IXC_INTEGRATION = "cadastro_cliente_ixc"
 
 
 def _split_email_values(raw_value):
@@ -164,6 +180,28 @@ def _buscar_ultima_edicao_atendimento_ixc():
     )
 
 
+def _buscar_ultima_resolucao_os_atendimento():
+    return (
+        IntegrationAudit.objects.filter(
+            integration=RESOLUCAO_OS_ATENDIMENTO_INTEGRATION,
+            action="execucao_integracao",
+        )
+        .order_by("-criado_em")
+        .first()
+    )
+
+
+def _buscar_ultimo_cadastro_cliente_ixc():
+    return (
+        IntegrationAudit.objects.filter(
+            integration=CADASTRO_CLIENTE_IXC_INTEGRATION,
+            action="execucao_integracao",
+        )
+        .order_by("-criado_em")
+        .first()
+    )
+
+
 def _ler_dataframe_upload(arquivo):
     def _normalizar_dataframe(dataframe):
         dataframe = dataframe.copy()
@@ -203,29 +241,42 @@ def _serializar_linha_para_auditoria(dataframe, index):
     return {str(k).strip(): dataframe.at[index, k] for k in dataframe.columns}
 
 
-def _render_importacao(request, form):
+def _redirect_pagina_automacao(slug):
+    url_name, kwargs = redirect_kwargs_pagina_automacao(slug)
+    return redirect(url_name, **kwargs)
+
+
+def _contexto_automacoes(request, form, menu):
     importacao_em_andamento = buscar_importacao_em_andamento()
     ultima_importacao = buscar_ultima_importacao()
 
+    return {
+        "form": form,
+        "menu_label": dict(AutomacaoMenu.MENU_CHOICES).get(menu, menu),
+        "automacoes": automacoes_do_menu(menu),
+        "importacao_em_andamento": _serializar_importacao(importacao_em_andamento),
+        "ultima_importacao": _serializar_importacao(ultima_importacao),
+        "ultima_desativacao": _serializar_auditoria_planilha(_buscar_ultima_desativacao()),
+        "ultima_edicao_login_ixc": _serializar_auditoria_planilha(_buscar_ultima_edicao_login_ixc()),
+        "ultima_edicao_atendimento_ixc": _serializar_auditoria_planilha(_buscar_ultima_edicao_atendimento_ixc()),
+        "ultima_resolucao_os_atendimento": _serializar_auditoria_planilha(_buscar_ultima_resolucao_os_atendimento()),
+        "ultima_cadastro_cliente_ixc": _serializar_auditoria_planilha(_buscar_ultimo_cadastro_cliente_ixc()),
+        "import_status_running": IMPORT_STATUS_RUNNING,
+        "import_status_success": IMPORT_STATUS_SUCCESS,
+        "import_status_error": IMPORT_STATUS_ERROR,
+        "import_status_stopped": IMPORT_STATUS_STOPPED,
+    }
+
+
+def _render_importacao(request, form):
     return render(
         request,
         "core_admin/automacoes.html",
-        {
-            "form": form,
-            "importacao_em_andamento": _serializar_importacao(importacao_em_andamento),
-            "ultima_importacao": _serializar_importacao(ultima_importacao),
-            "ultima_desativacao": _serializar_auditoria_planilha(_buscar_ultima_desativacao()),
-            "ultima_edicao_login_ixc": _serializar_auditoria_planilha(_buscar_ultima_edicao_login_ixc()),
-            "ultima_edicao_atendimento_ixc": _serializar_auditoria_planilha(_buscar_ultima_edicao_atendimento_ixc()),
-            "import_status_running": IMPORT_STATUS_RUNNING,
-            "import_status_success": IMPORT_STATUS_SUCCESS,
-            "import_status_error": IMPORT_STATUS_ERROR,
-            "import_status_stopped": IMPORT_STATUS_STOPPED,
-        },
+        _contexto_automacoes(request, form, AutomacaoMenu.MENU_ADMINISTRADOR),
     )
 
 
-@user_passes_test(grupo_Administrador_required)
+@user_passes_test(permissao_automacao("import_prospects"))
 @login_required
 def import_prospects(request):
     form = ExcelUploadForm(request.POST or None, request.FILES or None)
@@ -286,9 +337,31 @@ def import_prospects(request):
                     audit.detalhes_json = detalhes
                     audit.total_erros = 1
                     audit.save(update_fields=["detalhes_json", "total_erros"])
+                logger.exception("Falha ao iniciar a importacao de leads em segundo plano.")
                 messages.error(request, f"Nao foi possivel iniciar a importacao: {exc}")
 
     return _render_importacao(request, form)
+
+
+@login_required
+def automacoes_area(request, menu):
+    # Administrador e Backoffice ja tem pagina propria (import_prospects e
+    # backoffice:cotacao_import); esta rota generica atende apenas os menus
+    # que ainda nao tem uma pagina de automacoes dedicada.
+    menus_validos = {AutomacaoMenu.MENU_LASTMILE, AutomacaoMenu.MENU_PARCEIRO}
+    if menu not in menus_validos:
+        raise Http404("Menu de automacoes invalido.")
+
+    grupo_exigido = GRUPO_POR_MENU.get(menu)
+    if not request.user.is_superuser and not request.user.groups.filter(name=grupo_exigido).exists():
+        raise PermissionDenied
+
+    form = ExcelUploadForm()
+    return render(
+        request,
+        "core_admin/automacoes_area.html",
+        _contexto_automacoes(request, form, menu),
+    )
 
 
 def _is_within_directory(base_dir, target_path):
@@ -563,6 +636,7 @@ def restore_backup(request):
                 media_restaurada=False,
                 detalhes=str(exc),
             )
+            logger.exception("Falha ao restaurar backup.")
             messages.error(request, f"Falha ao restaurar backup: {exc}")
         finally:
             if temp_dir and os.path.isdir(temp_dir):
@@ -627,7 +701,7 @@ def download_template(request):
     return response
 
 
-@user_passes_test(grupo_Administrador_required)
+@user_passes_test(permissao_automacao("desativar_atendimentos_ixc"))
 @login_required
 def download_template_desativacao_atendimento(request):
     colunas = ["Atendimento_ID", "Mensagem", "Confirmar_Desativacao"]
@@ -720,7 +794,7 @@ def download_template_desativacao_atendimento(request):
     return response
 
 
-@user_passes_test(grupo_Administrador_required)
+@user_passes_test(permissao_automacao("editar_logins_ixc"))
 @login_required
 def download_template_edicao_login_ixc(request):
     colunas = list(COLUNAS_OBRIGATORIAS_EDICAO_LOGIN_IXC)
@@ -824,7 +898,7 @@ def download_template_edicao_login_ixc(request):
     return response
 
 
-@user_passes_test(grupo_Administrador_required)
+@user_passes_test(permissao_automacao("editar_atendimentos_ixc"))
 @login_required
 def download_template_edicao_atendimento_ixc(request):
     colunas = list(COLUNAS_OBRIGATORIAS_EDICAO_ATENDIMENTO_IXC)
@@ -933,16 +1007,142 @@ def download_template_edicao_atendimento_ixc(request):
     return response
 
 
-@user_passes_test(grupo_Administrador_required)
+@user_passes_test(permissao_automacao("resolver_os_atendimento_ixc"))
+@login_required
+def download_template_resolucao_os_atendimento(request):
+    colunas = list(COLUNAS_OBRIGATORIAS_RESOLUCAO_OS_ATENDIMENTO_IXC) + list(
+        COLUNAS_OPCIONAIS_RESOLUCAO_OS_ATENDIMENTO_IXC
+    )
+    campos_obrigatorios_planilha = set(COLUNAS_OBRIGATORIAS_RESOLUCAO_OS_ATENDIMENTO_IXC)
+    instrucoes = pd.DataFrame(INSTRUCOES_RESOLUCAO_OS_ATENDIMENTO_IXC)
+
+    output = BytesIO()
+    with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
+        df_modelo = pd.DataFrame(columns=colunas)
+        df_modelo.to_excel(writer, index=False, sheet_name="Modelo_Resolucao_OS_IXC")
+        instrucoes.to_excel(writer, index=False, sheet_name="Instrucoes_Ajuda")
+
+        workbook = writer.book
+        worksheet = writer.sheets["Modelo_Resolucao_OS_IXC"]
+        worksheet_ajuda = writer.sheets["Instrucoes_Ajuda"]
+        header_format = workbook.add_format({"bg_color": "#DBEAFE", "border": 1})
+        header_plain_format = workbook.add_format({"bold": True, "bg_color": "#DBEAFE", "border": 1})
+        header_text_format = workbook.add_format({"bold": True})
+        required_star_format = workbook.add_format({"bold": True, "font_color": "#DC2626"})
+        integer_format = workbook.add_format({"num_format": "0"})
+
+        for col_num, value in enumerate(colunas):
+            if value in campos_obrigatorios_planilha:
+                worksheet.write_rich_string(
+                    0,
+                    col_num,
+                    header_text_format,
+                    value,
+                    required_star_format,
+                    "*",
+                    header_format,
+                )
+            else:
+                worksheet.write(0, col_num, value, header_plain_format)
+            worksheet.set_column(
+                col_num,
+                col_num,
+                80 if value == "Mensagem" else 26,
+                integer_format if value == "Atendimento_ID" else None,
+            )
+
+        larguras_ajuda = [24, 44, 18, 18, 72]
+        for col_num, largura in enumerate(larguras_ajuda):
+            worksheet_ajuda.set_column(col_num, col_num, largura)
+
+        worksheet.data_validation(
+            1,
+            0,
+            5000,
+            0,
+            {
+                "validate": "integer",
+                "criteria": ">=",
+                "value": 1,
+                "ignore_blank": False,
+                "input_title": "Atendimento_ID",
+                "input_message": "Informe apenas o ID numerico do atendimento no IXC.",
+                "error_title": "Valor invalido",
+                "error_message": "Atendimento_ID aceita somente numeros inteiros.",
+            },
+        )
+        worksheet.data_validation(
+            1,
+            1,
+            5000,
+            1,
+            {
+                "validate": "list",
+                "source": ["SIM"],
+                "ignore_blank": False,
+                "input_title": "Confirmacao obrigatoria",
+                "input_message": "Digite SIM para autorizar o fechamento das O.S. do atendimento.",
+                "error_title": "Confirmacao obrigatoria",
+                "error_message": "Para fechar as O.S., o campo Confirmar_Resolucao deve conter SIM.",
+            },
+        )
+        worksheet.data_validation(
+            1,
+            2,
+            5000,
+            2,
+            {
+                "validate": "list",
+                "source": ["SIM", "NAO"],
+                "ignore_blank": False,
+                "input_title": "Tem_Anexo",
+                "input_message": "SIM se este atendimento tiver documento a anexar antes do fechamento das O.S.",
+                "error_title": "Valor invalido",
+                "error_message": "Tem_Anexo aceita somente SIM ou NAO.",
+            },
+        )
+        worksheet.data_validation(
+            1,
+            3,
+            5000,
+            3,
+            {
+                "validate": "list",
+                "source": ["SIM", "NAO"],
+                "ignore_blank": False,
+                "input_title": "Fechar_Todas_OS",
+                "input_message": "SIM fecha todas as O.S. abertas do atendimento. NAO fecha somente a O.S. atual.",
+                "error_title": "Valor invalido",
+                "error_message": "Fechar_Todas_OS aceita somente SIM ou NAO.",
+            },
+        )
+
+    registrar_auditoria_integracao(
+        integration=RESOLUCAO_OS_ATENDIMENTO_INTEGRATION,
+        action="download_modelo",
+        usuario=request.user,
+        arquivo_nome="Modelo_Resolucao_OS_Atendimentos_IXC.xlsx",
+        detalhes={"colunas_modelo": colunas},
+    )
+
+    response = HttpResponse(
+        output.getvalue(),
+        content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
+    response["Content-Disposition"] = "attachment; filename=Modelo_Resolucao_OS_Atendimentos_IXC.xlsx"
+    return response
+
+
+@user_passes_test(permissao_automacao("desativar_atendimentos_ixc"))
 @login_required
 def desativar_atendimentos_ixc(request):
     if request.method != "POST":
-        return redirect("import_prospects")
+        return _redirect_pagina_automacao("desativar_atendimentos_ixc")
 
     arquivo = request.FILES.get("arquivo_desativacao_atendimento")
     if not arquivo:
         messages.error(request, "Selecione uma planilha para processar a desativacao dos atendimentos.")
-        return redirect("import_prospects")
+        return _redirect_pagina_automacao("desativar_atendimentos_ixc")
 
     try:
         df = _ler_dataframe_upload(arquivo)
@@ -1016,20 +1216,21 @@ def desativar_atendimentos_ixc(request):
         response["Content-Disposition"] = "attachment; filename=Relatorio_Desativacao_Atendimentos_IXC.xlsx"
         return response
     except Exception as exc:
+        logger.exception("Falha ao processar a desativacao dos atendimentos.")
         messages.error(request, f"Falha ao processar a desativacao dos atendimentos: {exc}")
-        return redirect("import_prospects")
+        return _redirect_pagina_automacao("desativar_atendimentos_ixc")
 
 
-@user_passes_test(grupo_Administrador_required)
+@user_passes_test(permissao_automacao("editar_atendimentos_ixc"))
 @login_required
 def editar_atendimentos_ixc(request):
     if request.method != "POST":
-        return redirect("import_prospects")
+        return _redirect_pagina_automacao("editar_atendimentos_ixc")
 
     arquivo = request.FILES.get("arquivo_edicao_atendimento_ixc")
     if not arquivo:
         messages.error(request, "Selecione uma planilha para processar a edicao dos atendimentos no IXC.")
-        return redirect("import_prospects")
+        return _redirect_pagina_automacao("editar_atendimentos_ixc")
 
     try:
         df = _ler_dataframe_upload(arquivo)
@@ -1109,20 +1310,131 @@ def editar_atendimentos_ixc(request):
         response["Content-Disposition"] = "attachment; filename=Relatorio_Edicao_Atendimentos_IXC.xlsx"
         return response
     except Exception as exc:
+        logger.exception("Falha ao processar a edicao dos atendimentos.")
         messages.error(request, f"Falha ao processar a edicao dos atendimentos: {exc}")
-        return redirect("import_prospects")
+        return _redirect_pagina_automacao("editar_atendimentos_ixc")
 
 
-@user_passes_test(grupo_Administrador_required)
+@user_passes_test(permissao_automacao("resolver_os_atendimento_ixc"))
+@login_required
+def resolver_os_atendimento_ixc(request):
+    if request.method != "POST":
+        return _redirect_pagina_automacao("resolver_os_atendimento_ixc")
+
+    planilha = request.FILES.get("arquivo_planilha_resolucao_os")
+    zip_upload = request.FILES.get("arquivo_zip_resolucao_os")
+    if not planilha:
+        messages.error(
+            request,
+            "Selecione uma planilha com os atendimentos para processar a resolucao das O.S.",
+        )
+        return _redirect_pagina_automacao("resolver_os_atendimento_ixc")
+
+    zip_arquivos = None
+    if zip_upload:
+        try:
+            zip_arquivos = zipfile.ZipFile(zip_upload)
+        except zipfile.BadZipFile:
+            messages.error(
+                request,
+                "O arquivo enviado como ZIP de anexos nao e um arquivo ZIP valido.",
+            )
+            return _redirect_pagina_automacao("resolver_os_atendimento_ixc")
+
+    try:
+        df = _ler_dataframe_upload(planilha)
+        itens_importados = dataframe_to_records(df)
+        registrar_auditoria_integracao(
+            integration=RESOLUCAO_OS_ATENDIMENTO_INTEGRATION,
+            action="importacao_planilha",
+            usuario=request.user,
+            arquivo_nome=planilha.name,
+            total_registros=len(itens_importados),
+            detalhes={"colunas": list(df.columns), "zip_nome": zip_upload.name if zip_upload else ""},
+            itens=itens_importados,
+        )
+
+        df["Status_Importacao"] = ""
+        df["Mensagem_Importacao"] = ""
+        df["ID_IXC"] = ""
+        df["OS_Fechadas"] = ""
+
+        sucessos = 0
+        falhas = 0
+        itens_execucao = []
+
+        for index, linha in df.iterrows():
+            if pd.notna(linha.get("Atendimento_ID")):
+                status, mensagem, atendimento_id, os_fechadas = executar_resolucao_os_atendimento_ixc(
+                    linha,
+                    zip_arquivos,
+                    usuario_sistema=request.user,
+                )
+
+                if status:
+                    sucessos += 1
+                    df.at[index, "Status_Importacao"] = "SUCESSO" if os_fechadas else "SEM_OS_ABERTA"
+                else:
+                    falhas += 1
+                    df.at[index, "Status_Importacao"] = "ERRO"
+
+                df.at[index, "Mensagem_Importacao"] = mensagem
+                df.at[index, "ID_IXC"] = atendimento_id or ""
+                df.at[index, "OS_Fechadas"] = os_fechadas or ""
+                itens_execucao.append(
+                    {
+                        "linha_numero": index + 2,
+                        "status": "sucesso" if status else "erro",
+                        "mensagem": mensagem,
+                        "dados_json": _serializar_linha_para_auditoria(df, index),
+                    }
+                )
+
+        registrar_auditoria_integracao(
+            integration=RESOLUCAO_OS_ATENDIMENTO_INTEGRATION,
+            action="execucao_integracao",
+            usuario=request.user,
+            arquivo_nome=planilha.name,
+            total_registros=sucessos + falhas,
+            total_sucessos=sucessos,
+            total_erros=falhas,
+            detalhes={"colunas": list(df.columns), "zip_nome": zip_upload.name if zip_upload else ""},
+            itens=itens_execucao,
+        )
+
+        output = BytesIO()
+        with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
+            df.to_excel(writer, index=False, sheet_name="Resultado_Resolucao_OS_IXC")
+            worksheet = writer.sheets["Resultado_Resolucao_OS_IXC"]
+            for col_num, _ in enumerate(df.columns.values):
+                worksheet.set_column(
+                    col_num,
+                    col_num,
+                    26 if df.columns[col_num] not in {"Mensagem_Importacao"} else 92,
+                )
+
+        response = HttpResponse(
+            output.getvalue(),
+            content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+        response["Content-Disposition"] = "attachment; filename=Relatorio_Resolucao_OS_Atendimentos_IXC.xlsx"
+        return response
+    except Exception as exc:
+        logger.exception("Falha ao processar a resolucao das O.S. dos atendimentos.")
+        messages.error(request, f"Falha ao processar a resolucao das O.S. dos atendimentos: {exc}")
+        return _redirect_pagina_automacao("resolver_os_atendimento_ixc")
+
+
+@user_passes_test(permissao_automacao("editar_logins_ixc"))
 @login_required
 def editar_logins_ixc(request):
     if request.method != "POST":
-        return redirect("import_prospects")
+        return _redirect_pagina_automacao("editar_logins_ixc")
 
     arquivo = request.FILES.get("arquivo_edicao_login_ixc")
     if not arquivo:
         messages.error(request, "Selecione uma planilha para processar a edicao de logins no IXC.")
-        return redirect("import_prospects")
+        return _redirect_pagina_automacao("editar_logins_ixc")
 
     try:
         df = _ler_dataframe_upload(arquivo)
@@ -1199,8 +1511,9 @@ def editar_logins_ixc(request):
         response["Content-Disposition"] = "attachment; filename=Relatorio_Edicao_Logins_IXC.xlsx"
         return response
     except Exception as exc:
+        logger.exception("Falha ao processar a edicao dos logins.")
         messages.error(request, f"Falha ao processar a edicao dos logins: {exc}")
-        return redirect("import_prospects")
+        return _redirect_pagina_automacao("editar_logins_ixc")
 
 
 @user_passes_test(grupo_Administrador_required)
@@ -1263,6 +1576,7 @@ def smtp_test(request):
                 "to_email": form.cleaned_data.get("to_email") or "--",
                 "cc_email": form.cleaned_data.get("cc_email") or "--",
             }
+            logger.exception("Falha no teste de envio SMTP.")
             messages.error(request, resultado_envio["message"])
 
     contexto_config = {
@@ -1291,7 +1605,7 @@ def smtp_test(request):
 def testar_api_ixc(request):
     if not request.user.is_authenticated:
         return JsonResponse({"ok": False, "erro": "Sessao expirada. Recarregue a pagina."}, status=401)
-    if not grupo_Administrador_required(request.user):
+    if not usuario_pode_acessar_automacao(request.user, "testar_api_ixc"):
         return JsonResponse({"ok": False, "erro": "Permissao insuficiente."}, status=403)
     if request.method != "POST":
         return JsonResponse({"ok": False, "erro": "Metodo nao permitido."}, status=405)
@@ -1315,4 +1629,5 @@ def testar_api_ixc(request):
         )
 
     except Exception as exc:
+        logger.exception("Falha ao testar a API do IXC.")
         return JsonResponse({"ok": False, "erro": str(exc)})
