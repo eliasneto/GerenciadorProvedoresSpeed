@@ -1,0 +1,30 @@
+# Complemento LOCAL do docker-compose.yml, usado apenas para testar mudancas
+# de codigo (ex.: a nova automacao "Resolucao de O.S. do Atendimento") sem
+# precisar rebuildar a imagem a cada alteracao.
+#
+# Nao e carregado automaticamente pelo Docker Compose (o nome nao e
+# "docker-compose.override.yml") justamente para nao mudar o comportamento
+# de nenhum outro ambiente que use este mesmo docker-compose.yml. So tem
+# efeito quando chamado explicitamente com -f.
+#
+# Uso:
+#   docker compose -f docker-compose.yml -f docker-compose.local.yml up -d --build speed_web
+#
+# O que muda em relacao ao docker-compose.yml:
+# - monta o codigo do projeto dentro do container (./:/app), entao editar um
+#   arquivo .py ou um template no host reflete no container sem rebuild;
+# - adiciona --reload no gunicorn, para reiniciar os workers quando um
+#   arquivo .py muda.
+#
+# Para voltar ao comportamento padrao, rode o compose normal sem o -f
+# docker-compose.local.yml (ou sem a flag, apenas "docker compose up -d").
+
+services:
+  speed_web:
+    volumes:
+      - .:/app
+    command: >
+      sh -c "mkdir -p /app/media &&
+             chmod -R 777 /app/media &&
+             python setup_speed.py &&
+             gunicorn --bind 0.0.0.0:8000 --timeout 1200 --workers 3 --reload --log-level debug --access-logfile - config.wsgi:application"

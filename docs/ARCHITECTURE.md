@@ -210,3 +210,45 @@ Fase posterior possivel:
 - mapear cada integracao a parceiro/sistema;
 - incluir expiracao administrativa e rotacao de segredo;
 - auditar consumo por cliente tecnico.
+
+## Configuracao de menu de automacoes
+
+### Estado atual
+
+Cada automacao tem seu link de menu fixo no template (`core/templates/core/base.html`), apontando para a URL especifica do app que a implementa (ex.: `core_admin`, `backoffice`). Mover uma automacao de um menu para outro exige editar o template (e possivelmente `urls.py`) e fazer novo deploy.
+
+### Decisao
+
+Toda automacao passa a ter um registro de configuracao de menu, com **Administrador como padrao**, permitindo realocar a automacao para outro menu (Backoffice, LastMile, Parceiro) sem alterar template ou fazer deploy.
+
+### Modelo
+
+Novo model em `core_admin` (nome sugerido: `AutomacaoMenu`):
+
+- `slug`: identificador unico da automacao (ex.: `resolucao_os_atendimento`);
+- `nome_exibicao`: rotulo mostrado no menu;
+- `menu`: choices (`administrador`, `backoffice`, `lastmile`, `parceiro`), padrao `administrador`;
+- `url_name`: nome da rota Django da automacao;
+- `ativo`: booleano, permite ocultar sem remover o registro;
+- `ordem`: inteiro opcional, para ordenacao dentro do menu.
+
+### Renderizacao do menu
+
+`core/templates/core/base.html` deixa de ter `<a>` fixo por automacao. Cada bloco de menu (Administrador, Backoffice, LastMile, Parceiro) passa a iterar a lista de `AutomacaoMenu` ativos daquele menu, resolvida via `url_name`, respeitando a mesma verificacao de grupo/permissao ja existente no template.
+
+### Alteracao da configuracao
+
+Somente usuario com permissao de Administrador pode alterar o `menu` de uma automacao existente. Recomenda-se uma tela simples dentro do proprio `core_admin` (ou Django Admin, se suficiente para o volume atual) para essa alteracao, sem exigir nova decisao de arquitetura para o CRUD basico.
+
+### Impactos tecnicos esperados
+
+- nova migration para o model `AutomacaoMenu`;
+- migracao de dados (data migration ou seed) para registrar as automacoes ja existentes (import de prospects, automacoes de Backoffice IXC) com seus menus atuais;
+- refatoracao de `core/templates/core/base.html` para renderizar automacoes a partir do model em vez de links fixos;
+- possivel view/action de configuracao restrita a Administrador.
+
+### Fora desta fase
+
+- reordenacao visual arrastavel (drag-and-drop) do menu;
+- multiplos menus simultaneos para a mesma automacao;
+- historico/auditoria de mudanca de menu.
