@@ -9,8 +9,7 @@ import urllib3
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 
-DEFAULT_IXC_URL = "https://megainfraestrutura.com.br/webservice/v1"
-DEFAULT_IXC_TOKEN = "76:54f35af33ea35f3b8a9a8fa14868322662d0465ebbb63fc56c3fb499ac3e1b61"
+DEFAULT_IXC_URL = "https://ixc.megainfraestrutura.com.br/webservice/v1"
 
 
 def _parse_bool(value, default=False):
@@ -22,7 +21,12 @@ def _parse_bool(value, default=False):
 class IXCClient:
     def __init__(self, base_url=None, token=None, verify_ssl=None, timeout=None):
         self.base_url = (base_url or os.getenv("IXC_URL") or DEFAULT_IXC_URL).rstrip("/")
-        self.token = token or os.getenv("IXC_TOKEN") or DEFAULT_IXC_TOKEN
+        self.token = token or os.getenv("IXC_TOKEN")
+        if not self.token:
+            raise RuntimeError(
+                "IXC_TOKEN nao configurado. Defina a variavel de ambiente IXC_TOKEN "
+                "ou informe o parametro token."
+            )
         self.verify_ssl = (
             verify_ssl if verify_ssl is not None
             else _parse_bool(os.getenv("IXC_SSL_VERIFY"), default=False)

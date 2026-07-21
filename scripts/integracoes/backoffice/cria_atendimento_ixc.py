@@ -11,7 +11,9 @@ import urllib3
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 IXC_URL = os.getenv("IXC_URL", "https://megainfraestrutura.com.br/webservice/v1")
-IXC_TOKEN = os.getenv("IXC_TOKEN", "76:54f35af33ea35f3b8a9a8fa14868322662d0465ebbb63fc56c3fb499ac3e1b61")
+IXC_TOKEN = os.getenv("IXC_TOKEN")
+if not IXC_TOKEN:
+    raise RuntimeError("IXC_TOKEN nao configurado. Defina a variavel de ambiente IXC_TOKEN.")
 USUARIO_IXC_PADRAO = "76"
 MENSAGEM_CAMPO_ID_NUMERICO = (
     "deve conter apenas o ID numerico do IXC. Nao use endereco, nome ou outro texto."

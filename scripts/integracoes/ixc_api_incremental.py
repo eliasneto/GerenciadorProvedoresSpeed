@@ -35,7 +35,9 @@ from django.utils import timezone
 # CONFIGURACOES DA API DO IXC
 # ==========================================
 IXC_URL = os.getenv("IXC_URL", "https://megainfraestrutura.com.br/webservice/v1")
-IXC_TOKEN = os.getenv("IXC_TOKEN", "76:54f35af33ea35f3b8a9a8fa14868322662d0465ebbb63fc56c3fb499ac3e1b61")
+IXC_TOKEN = os.getenv("IXC_TOKEN")
+if not IXC_TOKEN:
+    raise RuntimeError("IXC_TOKEN nao configurado. Defina a variavel de ambiente IXC_TOKEN.")
 
 token_b64 = base64.b64encode(IXC_TOKEN.encode('utf-8')).decode('utf-8')
 
