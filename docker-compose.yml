@@ -44,6 +44,8 @@ services:
       - ADMIN_PASSWORD=${ADMIN_PASSWORD}
       - IXC_PANEL_EMAIL=${IXC_PANEL_EMAIL}
       - IXC_PANEL_PASSWORD=${IXC_PANEL_PASSWORD}
+      - IXC_URL=${IXC_URL}
+      - IXC_TOKEN=${IXC_TOKEN}
     extra_hosts:
       - "howbe.local:192.168.90.51"
     volumes:
@@ -71,6 +73,8 @@ services:
       - DB_HOST=${DB_HOST}
       - DB_PORT=${DB_PORT}
       - OS_LASTMILE_LOOKBACK_DAYS=${OS_LASTMILE_LOOKBACK_DAYS:-10}
+      - IXC_URL=${IXC_URL}
+      - IXC_TOKEN=${IXC_TOKEN}
     volumes:
       - ./media:/app/media
     depends_on:
