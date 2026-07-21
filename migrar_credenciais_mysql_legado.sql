@@ -2,35 +2,34 @@
 -- para o padrao novo do projeto, sem precisar alterar o .env atual.
 --
 -- Motivo deste arquivo:
--- As primeiras versoes do ambiente Docker criavam o banco com:
---   Banco: speed_banco
---   Usuario app: speed_user
---   Senha app: speed_password
---   Root: root_super_password
+-- As primeiras versoes do ambiente Docker criavam o banco com um usuario/senha
+-- de desenvolvimento proprios (ver .env/cofre de segredos do ambiente para os
+-- valores reais legados; nao ha senha real registrada neste arquivo).
 --
--- O projeto atual usa no .env:
---   Banco: speed_prod
---   Usuario app: speed_app
---   Senha app: SpeedApp!2026#Prod
---   Root: SpeedRoot!2026#Prod
+-- O projeto atual usa no .env um usuario/senha proprios do ambiente
+-- (nao registrados neste arquivo).
 --
 -- Quando um volume legado e reutilizado, mudar o .env nao altera os usuarios
 -- e bancos ja gravados dentro do MySQL. Nesses casos, o sistema pode falhar com:
---   Access denied for user 'speed_app'
+--   Access denied for user
 --
 -- Este script promove o ambiente legado para o padrao novo, preservando o banco
 -- antigo e permitindo que o .env atual continue sendo usado sem ajustes.
 --
 -- O que este script faz:
 -- 1. Garante a existencia do banco novo speed_prod
--- 2. Cria ou atualiza o usuario speed_app com a senha nova
--- 3. Concede acesso do speed_app aos bancos speed_prod e speed_banco
+-- 2. Cria ou atualiza o usuario atual com a senha nova
+-- 3. Concede acesso do usuario atual aos bancos speed_prod e speed_banco
 -- 4. Altera a senha do root local para o padrao novo
 --
 -- Uso esperado:
--- 1. Entrar no MySQL com o root legado:
---      docker compose exec speed_db mysql -uroot -proot_super_password
--- 2. Dentro do MySQL:
+-- 1. Substituir os placeholders <DB_USER_ATUAL>, <DB_PASSWORD_ATUAL> e
+--    <ROOT_PASSWORD_ATUAL> pelos valores reais do .env/cofre de segredos do
+--    ambiente antes de rodar este script. Nao versionar o arquivo com os
+--    valores reais preenchidos.
+-- 2. Entrar no MySQL com o root legado:
+--      docker compose exec speed_db mysql -uroot -p
+-- 3. Dentro do MySQL:
 --      SOURCE /tmp/migrar_credenciais_mysql_legado.sql;
 --    ou copiar e colar o conteudo manualmente.
 --
@@ -42,13 +41,13 @@
 CREATE DATABASE IF NOT EXISTS speed_banco;
 CREATE DATABASE IF NOT EXISTS speed_prod;
 
-CREATE USER IF NOT EXISTS 'speed_app'@'%' IDENTIFIED BY 'SpeedApp!2026#Prod';
-ALTER USER 'speed_app'@'%' IDENTIFIED BY 'SpeedApp!2026#Prod';
+CREATE USER IF NOT EXISTS '<DB_USER_ATUAL>'@'%' IDENTIFIED BY '<DB_PASSWORD_ATUAL>';
+ALTER USER '<DB_USER_ATUAL>'@'%' IDENTIFIED BY '<DB_PASSWORD_ATUAL>';
 
-GRANT ALL PRIVILEGES ON speed_banco.* TO 'speed_app'@'%';
-GRANT ALL PRIVILEGES ON speed_prod.* TO 'speed_app'@'%';
+GRANT ALL PRIVILEGES ON speed_banco.* TO '<DB_USER_ATUAL>'@'%';
+GRANT ALL PRIVILEGES ON speed_prod.* TO '<DB_USER_ATUAL>'@'%';
 
-ALTER USER 'root'@'localhost' IDENTIFIED BY 'SpeedRoot!2026#Prod';
+ALTER USER 'root'@'localhost' IDENTIFIED BY '<ROOT_PASSWORD_ATUAL>';
 
 FLUSH PRIVILEGES;
 

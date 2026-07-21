@@ -24,7 +24,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # Adiciona a pasta 'apps' ao PATH
 sys.path.insert(0, os.path.join(BASE_DIR, 'apps'))
 
-SECRET_KEY = 'django-insecure-g*+p+x_hnds@(5j#v-=n6#5^+4-te5s*hn$0qw6ef2l5m$jo17'
+SECRET_KEY = config('SECRET_KEY')
 
 # SEGURANÇA: Mude para False em produção para o WhiteNoise funcionar 100%
 DEBUG = False
@@ -82,6 +82,7 @@ TEMPLATES = [
                 'django.template.context_processors.request',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
+                'core_admin.context_processors.automacoes_realocadas',
             ],
         },
     },
@@ -97,7 +98,7 @@ DATABASES = {
         'ENGINE': 'django.db.backends.mysql',
         'NAME': config('DB_NAME', default='speed_prod'),
         'USER': config('DB_USER', default='speed_app'),
-        'PASSWORD': config('DB_PASSWORD', default='SpeedApp!2026#Prod'),
+        'PASSWORD': config('DB_PASSWORD'),
         'HOST': config('DB_HOST', default='speed_db'),
         'PORT': config('DB_PORT', default='3306'),
         'OPTIONS': {
@@ -160,8 +161,14 @@ if USE_AD_AUTH:
 
     AUTH_LDAP_USER_DOMAIN = os.getenv("AD_DEFAULT_DOMAIN")
 
+    # Sistema roda apenas em intranet; certificado do AD e emitido por CA
+    # interna nao presente na cadeia de confianca do container, entao a
+    # verificacao de certificado da conexao LDAPS e desativada (decisao do
+    # usuario/dono do produto em 2026-07-21).
     AUTH_LDAP_CONNECTION_OPTIONS = {
         ldap.OPT_REFERRALS: 0,
+        ldap.OPT_X_TLS_REQUIRE_CERT: ldap.OPT_X_TLS_NEVER,
+        ldap.OPT_X_TLS_NEWCTX: 0,
     }
 else:
     AUTHENTICATION_BACKENDS = [
@@ -252,6 +259,16 @@ LOGGING = {
         "apps.core.middleware": {
             "handlers": ["console"],
             "level": "WARNING",
+            "propagate": False,
+        },
+        "core_admin": {
+            "handlers": ["console"],
+            "level": "ERROR",
+            "propagate": False,
+        },
+        "backoffice": {
+            "handlers": ["console"],
+            "level": "ERROR",
             "propagate": False,
         },
     },

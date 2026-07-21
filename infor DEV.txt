@@ -81,26 +81,28 @@ git checkout -b homolog
 .\.venv\Scripts\python.exe scripts\verificar_repositorio.py
 
 # COMPATIBILIDADE COM VOLUME MYSQL LEGADO
-# Se um ambiente antigo subir com erro "Access denied for user 'speed_app'",
-# testar primeiro as credenciais antigas do volume:
+# Se um ambiente antigo subir com erro "Access denied for user" para o usuario
+# configurado no .env, testar primeiro as credenciais antigas do volume
+# (ver .env/cofre de segredos do ambiente; nao ha senha real neste arquivo):
 #   Banco: speed_banco
-#   Usuario app legado: speed_user
-#   Senha app legada: speed_password
-#   Root legado: root_super_password
+#   Usuario app legado: (ver cofre de segredos)
+#   Senha app legada: (ver cofre de segredos)
+#   Root legado: (ver cofre de segredos)
 #
-# Teste do root legado:
-docker compose exec speed_db mysql -uroot -proot_super_password
+# Teste do root legado (senha solicitada interativamente):
+docker compose exec speed_db mysql -uroot -p
 #
-# Promocao do volume legado para o usuario novo sem apagar dados:
-#   CREATE USER IF NOT EXISTS 'speed_app'@'%' IDENTIFIED BY 'SpeedApp!2026#Prod';
-#   ALTER USER 'speed_app'@'%' IDENTIFIED BY 'SpeedApp!2026#Prod';
-#   GRANT ALL PRIVILEGES ON speed_banco.* TO 'speed_app'@'%';
+# Promocao do volume legado para o usuario novo sem apagar dados (substituir
+# os placeholders pelos valores reais do .env/cofre de segredos antes de rodar):
+#   CREATE USER IF NOT EXISTS '<DB_USER_ATUAL>'@'%' IDENTIFIED BY '<DB_PASSWORD_ATUAL>';
+#   ALTER USER '<DB_USER_ATUAL>'@'%' IDENTIFIED BY '<DB_PASSWORD_ATUAL>';
+#   GRANT ALL PRIVILEGES ON speed_banco.* TO '<DB_USER_ATUAL>'@'%';
 #   FLUSH PRIVILEGES;
 #
 # Depois ajustar o .env para:
 #   DB_NAME=speed_banco
-#   DB_USER=speed_app
-#   DB_PASSWORD=SpeedApp!2026#Prod
+#   DB_USER=<DB_USER_ATUAL>
+#   DB_PASSWORD=<DB_PASSWORD_ATUAL>
 
 O pacote do Linux: Mesmo o Docker fazendo o trabalho pesado, o "motor" do Linux hospedeiro precisa saber como falar com o Windows. No terminal do seu servidor Linux, vocÃª sÃ³ precisa rodar este comando uma Ãºnica vez na vida para dar essa habilidade ao servidor:
 Bash
@@ -112,7 +114,7 @@ Porque isso?. Eu quero ter um botÃ£o dentro do prospecto onde tenha a opÃ§Ã
 cada proposta vai ter o status de "Em negociaÃ§Ã£o". "InviÃ¡vel", "Proposta Aceita".
 
 # COmando para rodar o backup:
-docker exec -it speed_backup_diario sh -c 'DATA=$(date +%Y-%m-%d_TESTE); mysqldump -h speed_db -u speed_user -pspeed_password speed_banco > /tmp/banco_$DATA.sql; zip -r /mnt/windows/backup_speed_$DATA.zip /app/media /tmp/banco_$DATA.sql > /dev/null; rm /tmp/banco_$DATA.sql; echo "Backup manual enviado para o Windows!"'
+docker exec -it speed_backup_diario sh -c 'DATA=$(date +%Y-%m-%d_TESTE); mysqldump -h speed_db -u "$DB_USER" -p"$DB_PASSWORD" speed_banco > /tmp/banco_$DATA.sql; zip -r /mnt/windows/backup_speed_$DATA.zip /app/media /tmp/banco_$DATA.sql > /dev/null; rm /tmp/banco_$DATA.sql; echo "Backup manual enviado para o Windows!"'
 
 # PASSO A PASSO HOLLBACK
 Elias, essa Ã© a pergunta de ouro de todo engenheiro de software! Fazer o backup Ã© sÃ³ 50% do trabalho; os outros 50% sÃ£o saber fazer o Restore (o rollback) no momento do desespero, quando o banco corrompe ou alguÃ©m apaga o que nÃ£o devia.
@@ -141,7 +143,7 @@ Agora vamos pegar aquele arquivo .sql que estÃ¡ dentro da pasta tmp/ e "injeta
 Rode este comando (substituindo o nome do arquivo .sql pelo nome exato que foi extraÃ­do):
 
 Bash
-docker exec -i speed_mysql mysql -u root -proot_super_password speed_banco < tmp/banco_2026-03-27_02-00.sql
+docker exec -i speed_mysql mysql -u root -p speed_banco < tmp/banco_2026-03-27_02-00.sql
 â ï¸ Detalhe Ninja: Note que usamos a setinha < apontando para a esquerda. Ela diz para o Linux: "Pegue todo o texto desse arquivo SQL e jogue para dentro do comando mysql lÃ¡ no container".
 
 Passo 4: Restaurando os Anexos (Opcional)
