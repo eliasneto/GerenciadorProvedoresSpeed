@@ -150,7 +150,7 @@ def inicializar_sistema():
 
     admin_username = os.getenv("ADMIN_USERNAME", "admin")
     admin_email = os.getenv("ADMIN_EMAIL", "admin@speed.com.br")
-    admin_pass = os.getenv("ADMIN_PASSWORD", "SpeedAdmin!2026#Prod")
+    admin_pass = os.getenv("ADMIN_PASSWORD")
 
     admin_user, criado = User.objects.get_or_create(
         username=admin_username,
@@ -161,6 +161,13 @@ def inicializar_sistema():
             "is_active": True,
         },
     )
+
+    if criado and not admin_pass:
+        print(
+            "Falha critica: defina a variavel de ambiente ADMIN_PASSWORD antes de "
+            "criar o superusuario. Nao ha senha padrao no codigo."
+        )
+        sys.exit(1)
 
     alteracoes = []
 
@@ -193,7 +200,6 @@ def inicializar_sistema():
         admin_user.save()
         print("Administrador sincronizado com sucesso!")
         print(f"Login: {admin_username}")
-        print(f"Senha: {admin_pass}")
     else:
         print(f"O administrador '{admin_username}' ja estava alinhado com o .env.")
 
