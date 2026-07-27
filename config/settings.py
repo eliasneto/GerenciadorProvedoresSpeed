@@ -15,6 +15,15 @@ if USE_AD_AUTH:
     try:
         import ldap
         from django_auth_ldap.config import LDAPSearch
+
+        # Certificado do AD e emitido por CA interna, ausente na cadeia de
+        # confianca do container (decisao do dono do produto em 2026-07-21).
+        # Para URIs ldaps://, o handshake TLS ocorre dentro de ldap.initialize(),
+        # antes de AUTH_LDAP_CONNECTION_OPTIONS ser aplicado na conexao — por
+        # isso a verificacao de certificado precisa ser desativada aqui, como
+        # opcao global do modulo ldap, e nao apenas via AUTH_LDAP_CONNECTION_OPTIONS.
+        ldap.set_option(ldap.OPT_X_TLS_REQUIRE_CERT, ldap.OPT_X_TLS_NEVER)
+        ldap.set_option(ldap.OPT_X_TLS_NEWCTX, 0)
     except ImportError:
         USE_AD_AUTH = False
 
