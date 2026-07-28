@@ -1,0 +1,46 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "Arquitetura-alvo — GerenciadorProvedoresSpeed",
+    "subtitle": "Monólito modular em camadas (ADR-005): entrada · serviços · domínio · integração",
+    "output": "gerenciador-provedores.architecture.html",
+    "quality_profile": "standard"
+  },
+  "components": [
+    { "id": "views", "type": "frontend", "label": "Views Django", "sublabel": "backoffice, leads, partners", "pos": [40, 110], "size": [150, 60] },
+    { "id": "api", "type": "backend", "label": "API REST", "sublabel": "integracoes_api /api/v1", "pos": [40, 220], "size": [150, 60] },
+    { "id": "servicos", "type": "backend", "label": "Camada de Serviços", "sublabel": "regra de negócio por app", "tag": "views e API ficam finas", "pos": [280, 150], "size": [160, 90] },
+    { "id": "dominio", "type": "database", "label": "Domínio · MySQL", "sublabel": "Partner · Proposal · Lead", "tag": "speed_prod (hub do sistema)", "pos": [285, 330], "size": [150, 84] },
+    { "id": "audit", "type": "database", "label": "IntegrationAudit", "sublabel": "auditoria transversal", "pos": [40, 340], "size": [150, 64] },
+    { "id": "g_ixc", "type": "security", "label": "IXCGateway", "sublabel": "IXCClient (HTTP único)", "tag": "PO-022: unificar", "pos": [560, 60], "size": [160, 60] },
+    { "id": "g_ad", "type": "security", "label": "ADGateway", "sublabel": "Active Directory / LDAP", "pos": [560, 150], "size": [160, 60] },
+    { "id": "g_email", "type": "messagebus", "label": "EmailGateway", "sublabel": "cotação (IMAP/SMTP)", "pos": [560, 240], "size": [160, 60] },
+    { "id": "g_google", "type": "backend", "label": "GoogleGateway", "sublabel": "lastmile / busca parceiro", "pos": [560, 330], "size": [160, 60] },
+    { "id": "e_ixc", "type": "external", "label": "IXC", "sublabel": "ERP do provedor", "pos": [820, 60], "size": [150, 60] },
+    { "id": "e_ad", "type": "external", "label": "Active Directory", "sublabel": "diretório corporativo", "pos": [820, 150], "size": [150, 60] },
+    { "id": "e_email", "type": "external", "label": "Servidor de E-mail", "sublabel": "caixa de cotação", "pos": [820, 240], "size": [150, 60] },
+    { "id": "e_google", "type": "external", "label": "Google API", "sublabel": "fornecedores lastmile", "pos": [820, 330], "size": [150, 60] }
+  ],
+  "boundaries": [
+    { "kind": "region", "label": "Entrada (fina)", "wraps": ["views", "api"] },
+    { "kind": "region", "label": "Serviços / Domínio", "wraps": ["servicos", "dominio"] },
+    { "kind": "security-group", "label": "Camada de Integração (1 gateway por sistema)", "wraps": ["g_ixc", "g_ad", "g_email", "g_google"] },
+    { "kind": "region", "label": "Sistemas externos", "wraps": ["e_ixc", "e_ad", "e_email", "e_google"] }
+  ],
+  "connections": [
+    { "id": "views-servicos", "from": "views", "to": "servicos", "label": "chama serviço", "variant": "emphasis" },
+    { "id": "api-servicos", "from": "api", "to": "servicos", "variant": "emphasis" },
+    { "id": "servicos-dominio", "from": "servicos", "to": "dominio", "label": "ORM", "variant": "emphasis", "labelDy": 24 },
+    { "id": "servicos-audit", "from": "servicos", "to": "audit", "label": "registra execução", "variant": "dashed" },
+    { "id": "servicos-gixc", "from": "servicos", "to": "g_ixc", "variant": "default" },
+    { "id": "servicos-gad", "from": "servicos", "to": "g_ad", "variant": "default" },
+    { "id": "servicos-gemail", "from": "servicos", "to": "g_email", "variant": "default" },
+    { "id": "servicos-ggoogle", "from": "servicos", "to": "g_google", "variant": "default" },
+    { "id": "gixc-eixc", "from": "g_ixc", "to": "e_ixc", "label": "HTTP", "variant": "emphasis" },
+    { "id": "gad-ead", "from": "g_ad", "to": "e_ad", "label": "LDAP", "variant": "security" },
+    { "id": "gemail-eemail", "from": "g_email", "to": "e_email", "label": "IMAP/SMTP", "variant": "default" },
+    { "id": "ggoogle-egoogle", "from": "g_google", "to": "e_google", "label": "API", "variant": "default" }
+  ],
+  "cards": []
+}
