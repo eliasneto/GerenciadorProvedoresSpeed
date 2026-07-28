@@ -528,6 +528,77 @@ funcional percebida).
 Agente recomendado para executar:
 - `dev` / `devops` (decisao de destino do log)
 
+## Epic 11 - Portal de documentacao interna
+
+### PO-028 - Criar rota com pagina de links para os documentos tecnicos (diagramas/ADRs)
+
+Status: `Concluida`
+
+Validacao do QA (2026-07-28):
+- Rota `/docs/` testada sem login: retornou 200 e listou os 3 documentos hoje
+  existentes em `docs/diagrams/` (incluindo o ADR-006).
+- Rota `/docs/adr-006-expansao-modular.html/` testada: retornou o documento
+  completo (200, `text/html`).
+- Tentativa de acessar arquivo `.json` (fora da whitelist) e tentativa de
+  path traversal (`../config/settings.py`) testadas: ambas bloqueadas com 404.
+- Suite de testes da feature (4 testes) e suite completa de `apps.core`
+  (9 testes) executadas em MySQL local: todas passaram, sem regressao.
+- Nenhuma regra de negocio nova associada; decisao de rota sem autenticacao
+  ja registrada em `ARCHITECTURE.md`.
+- **Resultado:** aprovado.
+
+Entrega do Dev (2026-07-28):
+- Criada a rota publica `/docs/` (sem necessidade de login), que lista os
+  documentos HTML existentes em `docs/diagrams/` (hoje: ADR-006, diagrama de
+  arquitetura geral e diagrama do gerenciador).
+- Criada a rota `/docs/<nome_arquivo>/` que serve o conteudo de cada documento
+  individualmente, validando que o arquivo pertence a `docs/diagrams/` e tem
+  extensao `.html`.
+- Lista de documentos e gerada automaticamente a partir da pasta
+  `docs/diagrams/` — novos diagramas aparecem sem alteracao de codigo.
+- Pagina nova, com identidade visual propria, sem depender do menu interno
+  (rota publica, sem sidebar/login).
+- Criados testes cobrindo acesso sem login, listagem, bloqueio de extensao
+  invalida e documento inexistente (404).
+- **Pendencia:** suite de testes nao pode ser executada neste ambiente (Python
+  local sem `mysqlclient` e stack Docker do projeto nao estava de pe); validado
+  apenas por compilacao estatica dos arquivos alterados. Recomenda-se ao QA
+  rodar a suite completa no container `speed_sistema` antes de aprovar.
+  Validacao visual em navegador tambem nao foi executada pelo mesmo motivo.
+
+Objetivo:
+Permitir que outras pessoas do time acessem os documentos tecnicos (diagramas
+de arquitetura, ADRs em HTML) pelo navegador, sem depender de abrir o arquivo
+localmente via `file://`.
+
+Contexto:
+Hoje os diagramas gerados (ex.: `docs/diagrams/adr-006-expansao-modular.html`)
+so podem ser abertos localmente por quem tem o repositorio na propria maquina.
+Decisao registrada em `ARCHITECTURE.md` (secao "Portal de documentacao
+interna"): criar uma rota simples, sem autenticacao, com uma pagina que lista
+links para os documentos.
+
+Criterios de aceite:
+- rota HTML acessivel sem login (ex.: `/docs/`);
+- pagina lista ao menos o link para
+  `docs/diagrams/adr-006-expansao-modular.html`;
+- estrutura permite adicionar novos documentos no futuro sem redesenho da
+  pagina;
+- nenhum dado de negocio, credencial ou informacao de cliente exposta na
+  rota — apenas documentacao tecnica.
+
+Fora desta feature:
+- autenticacao/controle de acesso;
+- geracao automatica da lista a partir do diretorio (Dev decide se a lista e
+  mantida manualmente ou lida do sistema de arquivos).
+
+Regras relacionadas: nenhuma.
+
+Tipo de feature: `frontend-functional` (QA obrigatorio).
+
+Agente recomendado para executar:
+- `dev`
+
 ## Ordem de prioridade sugerida
 
 1. PO-016 (seguranca - credencial ja exposta no historico do Git)
@@ -546,3 +617,4 @@ Agente recomendado para executar:
 14. PO-015
 15. PO-018 (mapeamento de auditoria incompleto)
 16. PO-019 (lacuna de logging de erros)
+17. PO-028 (portal de documentacao interna - rota com links para diagramas/ADRs) — `Concluida`

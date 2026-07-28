@@ -1,6 +1,11 @@
+import tempfile
+from pathlib import Path
+from unittest import mock
+
 from django.contrib.admin.sites import AdminSite
 from django.contrib.auth import get_user_model
 from django.test import RequestFactory, TestCase
+from django.urls import reverse
 
 from core.admin import IntegrationAuditAdmin
 from core.admin_integration_exports import build_integration_audit_export
@@ -75,3 +80,47 @@ class IntegrationAuditExportTests(TestCase):
             response["Content-Type"],
         )
         self.assertTrue(response.content.startswith(b"PK"))
+
+
+class DocsPortalTests(TestCase):
+    def setUp(self):
+        self.tmp_dir = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp_dir.cleanup)
+        diagrams_dir = Path(self.tmp_dir.name)
+        (diagrams_dir / "exemplo-diagrama.html").write_text(
+            "<html><body>Exemplo</body></html>", encoding="utf-8"
+        )
+        (diagrams_dir / "nao-e-diagrama.json").write_text("{}", encoding="utf-8")
+
+        patcher = mock.patch("core.views.DOCS_DIAGRAMS_DIR", diagrams_dir)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def test_docs_index_acessivel_sem_login_e_lista_documento(self):
+        response = self.client.get(reverse("docs_index"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "exemplo-diagrama.html")
+        self.assertNotContains(response, "nao-e-diagrama.json")
+
+    def test_docs_documento_existente_e_servido_sem_login(self):
+        response = self.client.get(
+            reverse("docs_documento", kwargs={"nome_arquivo": "exemplo-diagrama.html"})
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("Exemplo", response.content.decode("utf-8"))
+
+    def test_docs_documento_inexistente_retorna_404(self):
+        response = self.client.get(
+            reverse("docs_documento", kwargs={"nome_arquivo": "nao-existe.html"})
+        )
+
+        self.assertEqual(response.status_code, 404)
+
+    def test_docs_documento_bloqueia_extensao_diferente_de_html(self):
+        response = self.client.get(
+            reverse("docs_documento", kwargs={"nome_arquivo": "nao-e-diagrama.json"})
+        )
+
+        self.assertEqual(response.status_code, 404)

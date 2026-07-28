@@ -252,3 +252,27 @@ Somente usuario com permissao de Administrador pode alterar o `menu` de uma auto
 - reordenacao visual arrastavel (drag-and-drop) do menu;
 - multiplos menus simultaneos para a mesma automacao;
 - historico/auditoria de mudanca de menu.
+
+## Portal de documentacao interna (rota publica de documentos)
+
+### Decisao
+
+Criar uma rota HTML dentro do sistema (ex.: `/docs/`) que lista links para os
+documentos tecnicos do projeto (diagramas de arquitetura, ADRs em HTML etc.),
+comecando pelo diagrama `docs/diagrams/adr-006-expansao-modular.html`.
+
+- rota sem autenticacao/permissao — decisao explicita do usuario em
+  2026-07-28, por se tratar apenas de documentacao tecnica interna, sem dado
+  de negocio, credencial ou informacao de cliente;
+- pagina unica com lista de links, estruturada para receber novos documentos
+  no futuro sem redesenho da pagina;
+- primeiro documento listado: diagrama da ADR-006.
+
+### Fora desta fase
+
+- controle de acesso/autenticacao;
+- geracao automatica da lista a partir do sistema de arquivos (definir na
+  implementacao se a lista sera mantida manualmente pelo Dev ou lida do
+  diretorio `docs/diagrams/`);
+- versionamento/historico de documentos.
+

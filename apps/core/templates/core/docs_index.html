@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Documentação Técnica — Gerenciador Parceiros</title>
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest"></script>
+
+    <style>
+        body { font-family: 'Plus Jakarta Sans', sans-serif; }
+        .bg-ageis-black { background-color: #0F0F0F; }
+        .text-ageis-yellow { color: #FFC107; }
+        .bg-ageis-yellow { background-color: #FFC107; }
+    </style>
+</head>
+<body class="bg-[#F8F9FA] text-gray-900 antialiased min-h-screen flex flex-col">
+
+    <header class="bg-ageis-black text-white px-6 py-8 md:px-10">
+        <div class="max-w-5xl mx-auto">
+            <p class="text-[10px] font-black uppercase tracking-[0.2em] text-ageis-yellow mb-2">Speed / HowBe</p>
+            <h1 class="text-2xl md:text-3xl font-black tracking-tight">Documentação Técnica</h1>
+            <p class="text-sm text-gray-400 mt-2 max-w-2xl">
+                Diagramas de arquitetura e decisões técnicas (ADRs) do Gerenciador de Parceiros, disponíveis para consulta.
+            </p>
+        </div>
+    </header>
+
+    <main class="flex-grow px-6 py-10 md:px-10">
+        <div class="max-w-5xl mx-auto w-full">
+            {% if documentos %}
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {% for doc in documentos %}
+                <a href="{% url 'docs_documento' nome_arquivo=doc.nome_arquivo %}" target="_blank" rel="noopener"
+                   class="group flex items-start gap-4 bg-white border border-gray-200 rounded-2xl p-5 shadow-sm hover:shadow-md hover:border-ageis-yellow/60 transition-all">
+                    <div class="w-11 h-11 shrink-0 rounded-xl bg-ageis-black flex items-center justify-center">
+                        <i data-lucide="file-text" class="w-5 h-5 text-ageis-yellow"></i>
+                    </div>
+                    <div class="min-w-0">
+                        <h2 class="text-sm font-bold text-gray-900 group-hover:text-gray-700 truncate">{{ doc.titulo }}</h2>
+                        <p class="text-xs text-gray-400 font-mono truncate mt-1">{{ doc.nome_arquivo }}</p>
+                        <span class="inline-flex items-center gap-1 text-[11px] font-bold uppercase tracking-wide text-ageis-yellow mt-3">
+                            Abrir documento
+                            <i data-lucide="arrow-up-right" class="w-3.5 h-3.5"></i>
+                        </span>
+                    </div>
+                </a>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="text-center bg-white border border-gray-200 rounded-2xl p-12">
+                <i data-lucide="folder-open" class="w-10 h-10 text-gray-300 mx-auto mb-4"></i>
+                <p class="text-sm font-semibold text-gray-500">Nenhum documento disponível no momento.</p>
+            </div>
+            {% endif %}
+        </div>
+    </main>
+
+    <footer class="p-6 text-center border-t border-gray-200 bg-white/50">
+        <p class="text-[10px] text-gray-400 font-bold uppercase tracking-widest">&copy; 2026 Speed Systems - Engine Ageis</p>
+    </footer>
+
+    <script>
+        lucide.createIcons();
+    </script>
+</body>
+</html>

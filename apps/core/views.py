@@ -1,8 +1,10 @@
 import csv
 import logging
+import os
 import time as time_module
 from datetime import datetime, time
 from email.utils import parseaddr
+from pathlib import Path
 
 from django.contrib import messages
 from django.contrib.auth import get_user_model
@@ -16,7 +18,7 @@ from django.core.paginator import Paginator
 from django.core.validators import validate_email
 from django.db import connection
 from django.db.models import OuterRef, Q, Subquery
-from django.http import HttpResponse, JsonResponse
+from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
@@ -39,6 +41,8 @@ _HEALTHCHECK_CACHE = {
     'db_ok': True,
     'error': '',
 }
+
+DOCS_DIAGRAMS_DIR = Path(settings.BASE_DIR) / 'docs' / 'diagrams'
 
 
 def _resolve_sort(request, allowed_fields, default_field):
@@ -392,6 +396,35 @@ def system_health(request):
     if error_message:
         payload['error'] = error_message
     return JsonResponse(payload, status=200 if db_ok else 503)
+
+
+def _documentos_disponiveis():
+    if not DOCS_DIAGRAMS_DIR.is_dir():
+        return []
+
+    documentos = []
+    for caminho in sorted(DOCS_DIAGRAMS_DIR.glob('*.html')):
+        titulo = caminho.stem.replace('-', ' ').replace('_', ' ').replace('.', ' ').strip().title()
+        documentos.append({'nome_arquivo': caminho.name, 'titulo': titulo})
+    return documentos
+
+
+def docs_index(request):
+    return render(request, 'core/docs_index.html', {
+        'documentos': _documentos_disponiveis(),
+    })
+
+
+def docs_documento(request, nome_arquivo):
+    nome_seguro = os.path.basename(nome_arquivo)
+    if nome_seguro != nome_arquivo or not nome_seguro.endswith('.html'):
+        raise Http404("Documento nao encontrado.")
+
+    caminho = (DOCS_DIAGRAMS_DIR / nome_seguro).resolve()
+    if DOCS_DIAGRAMS_DIR.resolve() not in caminho.parents or not caminho.is_file():
+        raise Http404("Documento nao encontrado.")
+
+    return HttpResponse(caminho.read_text(encoding='utf-8'), content_type='text/html; charset=utf-8')
 
 
 @login_required
