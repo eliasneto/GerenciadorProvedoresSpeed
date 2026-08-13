@@ -1,0 +1,4 @@
+<option value="">Selecione um status</option>
+{% for status in status_opcoes %}
+<option value="{{ status.pk }}">{{ status.nome }}</option>
+{% endfor %}

@@ -1,0 +1,84 @@
+<div class="flex items-center justify-between px-8 pt-8 pb-6 border-b border-gray-100 shrink-0">
+    <div>
+        <span class="text-[9px] font-black uppercase bg-ageis-black text-ageis-yellow px-2 py-0.5 rounded">{{ tipo|upper }}</span>
+        <h2 class="text-xl font-black text-gray-900 uppercase italic tracking-tight mt-2">Cotação</h2>
+        <p class="text-xs font-bold text-gray-500 uppercase tracking-wide">{{ escola.nome|default:escola.inep }}</p>
+    </div>
+    <button type="button" onclick="window.fecharCotacaoModal()" class="p-2 text-gray-400 hover:text-black hover:bg-gray-100 rounded-xl transition-all">
+        <i data-lucide="x" class="w-5 h-5"></i>
+    </button>
+</div>
+
+{# RN-044: sincroniza o botao/hidden de Parceiro da linha (fora deste modal) apos "Selecionado" preencher rede.parceiro direto no servidor. #}
+<span id="cotacao-parceiro-sync" class="hidden" data-parceiro-id="{{ rede.parceiro_id|default:'' }}" data-parceiro-nome="{{ rede.parceiro|default:''|escapejs }}"></span>
+
+{% if erro %}
+<div class="p-8">
+    <p class="text-[11px] font-black text-red-600 uppercase">{{ erro }}</p>
+</div>
+{% else %}
+<div class="flex-1 overflow-y-auto">
+    <div class="px-8 py-6 border-b border-gray-100">
+        <h3 class="text-[10px] font-black uppercase text-gray-400 mb-3">Candidatos</h3>
+        <div class="space-y-2">
+            {% for candidato in candidatos %}
+            <div class="flex items-center justify-between gap-3 p-3 bg-gray-50 border border-gray-100 rounded-2xl">
+                <div class="min-w-0">
+                    <p class="text-[12px] font-black text-gray-900 truncate">{{ candidato.parceiro }}</p>
+                    <span class="inline-block mt-1 text-[9px] font-black uppercase px-2 py-0.5 rounded-lg
+                        {% if candidato.situacao == 'selecionado' %}bg-emerald-100 text-emerald-700
+                        {% elif candidato.situacao == 'recusado' %}bg-gray-200 text-gray-500
+                        {% else %}bg-amber-100 text-amber-700{% endif %}">
+                        {{ candidato.get_situacao_display }}
+                    </span>
+                </div>
+                {% if candidato.situacao == 'em_cotacao' %}
+                <div class="flex items-center gap-1.5 shrink-0">
+                    <button type="button" onclick="window.selecionarCandidatoCotacao('{{ tipo }}', {{ escola.pk }}, {{ candidato.pk }})"
+                            class="px-3 py-1.5 bg-ageis-black text-ageis-yellow font-black uppercase text-[9px] rounded-lg hover:bg-gray-800 transition">
+                        Selecionar
+                    </button>
+                    <button type="button" onclick="window.removerCandidatoCotacao('{{ tipo }}', {{ escola.pk }}, {{ candidato.pk }})"
+                            class="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition" title="Remover candidato">
+                        <i data-lucide="x" class="w-4 h-4"></i>
+                    </button>
+                </div>
+                {% endif %}
+            </div>
+            {% empty %}
+            <p class="text-[11px] font-bold text-gray-400 italic">Nenhum candidato adicionado ainda.</p>
+            {% endfor %}
+        </div>
+    </div>
+
+    <div class="px-8 py-6 bg-gray-50/30">
+        <h3 class="text-[10px] font-black uppercase text-gray-400 mb-3">Adicionar candidato</h3>
+        <form onsubmit="return window.buscarCotacaoModal(this, '{{ tipo }}', {{ escola.pk }});" class="grid grid-cols-1 sm:grid-cols-4 gap-3 mb-4">
+            <input type="text" name="q" value="{{ q }}" placeholder="Nome, razão social ou CNPJ" class="sm:col-span-4 px-4 py-2.5 bg-white border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-ageis-yellow text-xs font-bold">
+            <input type="text" name="cidade" value="{{ cidade }}" placeholder="Cidade" class="px-4 py-2.5 bg-white border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-ageis-yellow text-xs font-bold">
+            <input type="text" name="bairro" value="{{ bairro }}" placeholder="Bairro" class="px-4 py-2.5 bg-white border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-ageis-yellow text-xs font-bold">
+            <input type="text" name="estado" value="{{ estado }}" placeholder="UF" maxlength="2" class="px-4 py-2.5 bg-white border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-ageis-yellow text-xs font-bold uppercase">
+            <button type="submit" class="px-4 py-2.5 bg-ageis-black text-ageis-yellow rounded-xl text-[10px] font-black uppercase italic hover:bg-gray-800 transition">Buscar</button>
+        </form>
+
+        <div class="space-y-2">
+            {% for parceiro in parceiros %}
+            <div class="flex items-center justify-between gap-3 p-3 bg-white hover:bg-ageis-yellow/10 border border-gray-100 rounded-2xl transition">
+                <div class="min-w-0">
+                    <p class="text-[12px] font-black text-gray-900 truncate">{{ parceiro }}</p>
+                    <p class="text-[10px] font-bold text-gray-400 uppercase truncate">{{ parceiro.cnpj_cpf|default:"CNPJ não informado" }}</p>
+                </div>
+                <button type="button" onclick="window.adicionarCandidatoCotacao('{{ tipo }}', {{ escola.pk }}, {{ parceiro.pk }})"
+                        class="px-3 py-1.5 bg-white border border-gray-200 text-gray-700 font-black uppercase text-[9px] rounded-lg hover:border-ageis-yellow hover:bg-ageis-yellow/10 transition shrink-0">
+                    Adicionar
+                </button>
+            </div>
+            {% empty %}
+            {% if q or cidade or estado or bairro %}
+            <p class="text-[11px] font-bold text-gray-400 italic">Nenhum parceiro encontrado.</p>
+            {% endif %}
+            {% endfor %}
+        </div>
+    </div>
+</div>
+{% endif %}

@@ -1,25 +1,33 @@
-﻿{% extends "core/base.html" %}
+{% extends "core/base.html" %}
 
-{% block title %}Speed | Endereços LastMile{% endblock %}
+{% block title %}Speed | {% if setor_atual %}Setor {{ setor_atual }}{% else %}Endereços LastMile{% endif %}{% endblock %}
 
 {% block content %}
+{% csrf_token %}
 <div class="max-w-7xl mx-auto p-6 md:p-10">
     <div class="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-10">
         <div>
             <nav class="flex mb-2" aria-label="Breadcrumb">
                 <ol class="flex items-center space-x-2 text-xs font-black uppercase tracking-widest text-gray-400">
-                    <li class="text-gray-900">Endereços</li>
+                    <li class="text-gray-900">{% if setor_atual %}Setores{% else %}Endereços{% endif %}</li>
                 </ol>
             </nav>
+            {% if setor_atual %}
+            <h1 class="text-4xl font-black text-gray-900 italic uppercase tracking-tighter leading-none">
+                Setor <span class="text-ageis-yellow">/</span> {{ setor_atual }}
+            </h1>
+            <p class="text-sm text-gray-500 mt-3 font-bold uppercase tracking-wider">Escolas com RE, RI ou Mapa Calor neste Setor</p>
+            {% else %}
             <h1 class="text-4xl font-black text-gray-900 italic uppercase tracking-tighter leading-none">
                 Endereços <span class="text-ageis-yellow">/</span> Lastmile
             </h1>
-            <p class="text-sm text-gray-500 mt-3 font-bold uppercase tracking-wider">Carteira global com O.S. aberta em Comercial | Lastmile</p>
+            <p class="text-sm text-gray-500 mt-3 font-bold uppercase tracking-wider">Escolas sincronizadas do DashboardEACE</p>
+            {% endif %}
         </div>
 
         <div class="flex gap-4">
             <div class="bg-ageis-black px-6 py-3 rounded-2xl shadow-lg text-white">
-                <p class="text-[10px] font-black text-gray-500 uppercase leading-none mb-1">Endereços Elegíveis</p>
+                <p class="text-[10px] font-black text-gray-500 uppercase leading-none mb-1">Total de Escolas</p>
                 <p class="text-xl font-black italic text-ageis-yellow">{{ total_enderecos }}</p>
             </div>
         </div>
@@ -28,34 +36,34 @@
     <form method="GET" class="bg-white p-4 rounded-[2rem] border border-gray-100 shadow-sm mb-8 flex flex-col lg:flex-row gap-4 items-center">
         <div class="relative flex-grow w-full">
             <i data-lucide="search" class="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-300"></i>
-            <input type="text" name="q" value="{{ q }}" placeholder="Buscar cliente, login, endereço, cidade ou ticket..."
-                   class="w-full pl-12 pr-4 py-4 bg-gray-50 border-none rounded-2xl outline-none focus:ring-2 focus:ring-ageis-yellow transition-all font-bold text-gray-800 uppercase">
+            <input type="text" name="q" value="{{ q }}" placeholder="Buscar por nome, INEP, município, UF ou chave..."
+                   class="w-full pl-12 pr-4 py-4 bg-gray-50 border-none rounded-2xl outline-none focus:ring-2 focus:ring-ageis-yellow transition-all font-bold text-xs text-gray-800 uppercase">
         </div>
 
-        <input type="text" name="cidade" value="{{ cidade }}" placeholder="Cidade"
-               class="w-full lg:w-56 px-4 py-4 bg-gray-50 border-none rounded-2xl outline-none focus:ring-2 focus:ring-ageis-yellow transition-all font-bold text-gray-800 uppercase">
+        <input type="text" name="cidade" value="{{ cidade }}" placeholder="Município"
+               class="w-full lg:w-56 px-4 py-4 bg-gray-50 border-none rounded-2xl outline-none focus:ring-2 focus:ring-ageis-yellow transition-all font-bold text-xs text-gray-800 uppercase">
 
         <input type="text" name="estado" value="{{ estado }}" placeholder="UF"
-               class="w-full lg:w-28 px-4 py-4 bg-gray-50 border-none rounded-2xl outline-none focus:ring-2 focus:ring-ageis-yellow transition-all font-bold text-gray-800 uppercase">
+               class="w-full lg:w-28 px-4 py-4 bg-gray-50 border-none rounded-2xl outline-none focus:ring-2 focus:ring-ageis-yellow transition-all font-bold text-xs text-gray-800 uppercase">
 
         <div class="relative w-full lg:w-56">
             <i data-lucide="arrow-up-down" class="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400"></i>
-            <select name="sort" class="w-full pl-10 pr-8 py-4 bg-gray-50 border-none rounded-2xl outline-none focus:ring-2 focus:ring-ageis-yellow transition-all cursor-pointer font-black text-[11px] uppercase tracking-widest text-gray-600 appearance-none">
-                <option value="logradouro" {% if sort == 'logradouro' %}selected{% endif %}>Endereço</option>
-                <option value="cidade" {% if sort == 'cidade' %}selected{% endif %}>Cidade</option>
-                <option value="cliente" {% if sort == 'cliente' %}selected{% endif %}>Cliente</option>
-                <option value="ticket" {% if sort == 'ticket' %}selected{% endif %}>Ticket / O.S.</option>
+            <select name="sort" class="w-full pl-10 pr-8 py-4 bg-gray-50 border-none rounded-2xl outline-none focus:ring-2 focus:ring-ageis-yellow transition-all cursor-pointer font-black text-xs uppercase tracking-widest text-gray-600 appearance-none">
+                <option value="nome" {% if sort == 'nome' %}selected{% endif %}>Nome da Escola</option>
+                <option value="cidade" {% if sort == 'cidade' %}selected{% endif %}>Município</option>
+                <option value="uf" {% if sort == 'uf' %}selected{% endif %}>UF</option>
+                <option value="inep" {% if sort == 'inep' %}selected{% endif %}>INEP</option>
             </select>
             <i data-lucide="chevron-down" class="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none"></i>
         </div>
 
         <div class="flex gap-2 w-full lg:w-auto">
-            <button type="submit" class="px-6 py-4 bg-ageis-black text-ageis-yellow font-black uppercase italic rounded-2xl hover:bg-gray-800 transition shadow-lg flex items-center gap-2 w-full lg:w-auto justify-center">
+            <button type="submit" class="px-6 py-4 bg-ageis-black text-ageis-yellow font-black uppercase italic text-xs rounded-2xl hover:bg-gray-800 transition shadow-lg flex items-center gap-2 w-full lg:w-auto justify-center">
                 Filtrar
             </button>
 
-            {% if q or cidade or estado or sort != 'logradouro' %}
-            <a href="{% url 'enderecos_lastmile' %}" class="px-4 py-4 bg-gray-100 text-gray-400 rounded-2xl hover:bg-red-50 hover:text-red-500 transition flex items-center justify-center" title="Limpar filtros">
+            {% if q or cidade or estado or sort != 'nome' %}
+            <a href="{% if setor_atual %}{% url 'setor_detail' nome=setor_atual %}{% else %}{% url 'enderecos_lastmile' %}{% endif %}" class="px-4 py-4 bg-gray-100 text-gray-400 rounded-2xl hover:bg-red-50 hover:text-red-500 transition flex items-center justify-center" title="Limpar filtros">
                 <i data-lucide="x" class="w-5 h-5"></i>
             </a>
             {% endif %}
@@ -64,93 +72,68 @@
 
     <div class="bg-white rounded-[2.5rem] border border-gray-100 shadow-sm overflow-hidden flex flex-col">
         <div class="overflow-x-auto">
-            <table class="w-full text-left border-collapse">
+            <table class="min-w-full text-left border-collapse">
                 <thead>
-                    <tr class="text-[10px] font-black uppercase text-gray-400 border-b border-gray-50 bg-gray-50/30">
-                        <th class="px-8 py-5">Serviço / Login</th>
-                        <th class="px-4 py-5">Cliente</th>
-                        <th class="px-4 py-5">Endereço</th>
-                        <th class="px-4 py-5">Cidade</th>
-                        <th class="px-4 py-5">Setor Atual</th>
-                        <th class="px-8 py-5 text-right">Ações</th>
+                    <tr class="text-[10px] font-black uppercase text-gray-500 bg-gray-100 border-b border-gray-300 divide-x divide-gray-300">
+                        <th class="px-4 py-1">INEP</th>
+                        <th class="px-4 py-1">Nome da Escola</th>
+                        <th class="px-4 py-1">Estado</th>
+                        <th class="px-4 py-1">Município</th>
+                        <th class="px-4 py-1">Endereço</th>
+                        <th class="px-4 py-1">Status</th>
                     </tr>
                 </thead>
-                <tbody class="divide-y divide-gray-50">
-                    {% for endereco in page_obj %}
-                    <tr class="hover:bg-gray-50/50 transition-all group">
-                        <td class="px-8 py-6">
-                            <div class="flex flex-col">
-                                <span class="block font-black text-gray-900 italic uppercase text-base leading-none mb-1">
-                                    {{ endereco.login_ixc|default:"MANUAL / SEM LOGIN" }}
-                                </span>
-                                <div class="flex items-center gap-2">
-                                    <span class="text-[10px] font-bold text-gray-400 uppercase bg-gray-100 px-2 py-0.5 rounded">
-                                        Login IXC: {{ endereco.login_id_ixc|default:"--" }}
-                                    </span>
-                                    <span class="text-[10px] font-bold text-gray-400 uppercase bg-gray-100 px-2 py-0.5 rounded">
-                                        O.S.: {{ endereco.ticket_os_atual_ixc|default:"--" }}
-                                    </span>
-                                    {% if endereco.principal %}
-                                    <span class="text-[9px] font-black text-yellow-600 uppercase bg-yellow-50 px-2 py-0.5 rounded border border-yellow-100">
-                                        Principal
-                                    </span>
-                                    {% endif %}
-                                </div>
-                            </div>
-                        </td>
-
-                        <td class="px-4 py-6">
-                            <div class="flex flex-col">
-                                <span class="font-black text-gray-900 uppercase text-[11px]">{{ endereco.cliente.nome_fantasia|default:endereco.cliente.razao_social }}</span>
-                                <span class="text-[10px] text-gray-400 font-bold uppercase">ID IXC: {{ endereco.cliente.id_ixc|default:"--" }}</span>
-                            </div>
-                        </td>
-
-                        <td class="px-4 py-6">
-                            <div class="flex flex-col">
-                                <span class="font-black text-gray-800 text-[11px] uppercase">
-                                    {{ endereco.logradouro|default:"SEM ENDEREÇO" }}, {{ endereco.numero|default:"S/N" }}
-                                </span>
-                                <span class="text-[10px] text-gray-400 font-bold uppercase">
-                                    {{ endereco.bairro|default:"SEM BAIRRO" }} {% if endereco.cep %}• {{ endereco.cep }}{% endif %}
+                <tbody class="divide-y divide-gray-300">
+                    {% for escola in page_obj %}
+                    <tr class="hover:bg-gray-50 transition-all group cursor-pointer divide-x divide-gray-300" data-escola-toggle title="Clique para ver Rede Externa, Rede Interna e Mapa Calor">
+                        <td class="px-4 py-1">
+                            <div class="flex items-center gap-2">
+                                <i data-lucide="chevron-right" class="w-3.5 h-3.5 text-gray-300 shrink-0 transition-transform" data-escola-chevron></i>
+                                <span class="font-black text-gray-900 italic uppercase text-[12px] leading-none">
+                                    {{ escola.inep|default:"SEM INEP" }}
                                 </span>
                             </div>
                         </td>
 
-                        <td class="px-4 py-6">
-                            <div class="flex flex-col">
-                                <span class="font-black text-gray-800 text-[11px] uppercase">{{ endereco.cidade|default:"NÃO INFORMADA" }}</span>
-                                <span class="text-[10px] text-gray-400 font-bold uppercase">{{ endereco.estado|default:"--" }}</span>
-                            </div>
+                        <td class="px-4 py-1">
+                            <span class="font-black text-gray-900 uppercase text-[11px]">{{ escola.nome|default:"SEM NOME" }}</span>
                         </td>
 
-                        <td class="px-4 py-6">
-                            <span class="inline-flex items-center gap-2 px-3 py-1 bg-green-50 rounded-lg border border-green-100 text-xs font-black text-green-700">
-                                {{ endereco.setor_os_atual_nome|default:"SEM SETOR" }}
-                            </span>
+                        <td class="px-4 py-1">
+                            <span class="font-black text-gray-800 text-[11px] uppercase">{{ escola.uf|default:"--" }}</span>
                         </td>
 
-                        <td class="px-8 py-6 text-right">
-                            <div class="flex justify-end gap-2">
-                                <a href="#"
-                                   data-endereco-id="{{ endereco.id }}"
-                                   data-login="{{ endereco.login_ixc|default:'MANUAL / SEM LOGIN'|escape }}"
-                                   data-cidade="{{ endereco.cidade|default:''|escape }}"
-                                   data-estado="{{ endereco.estado|default:''|escape }}"
-                                   data-cliente="{{ endereco.cliente.nome_fantasia|default:endereco.cliente.razao_social|escape }}"
-                                   onclick="event.preventDefault(); openPartnerProposalModal(this)"
-                                   class="w-10 h-10 inline-flex items-center justify-center rounded-xl text-slate-400 hover:bg-gray-100 hover:text-ageis-black transition-all"
-                                   title="Abrir cotação por endereço">
-                                    <i data-lucide="file-pen-line" class="w-5 h-5"></i>
-                                </a>
-                                <a href="{% url 'endereco_tecnico_detail' endereco.pk %}"
-                                   class="w-10 h-10 inline-flex items-center justify-center rounded-xl text-slate-400 hover:bg-gray-100 hover:text-ageis-black transition-all"
-                                   title="Visualizar dados técnicos">
-                                    <i data-lucide="file-search" class="w-5 h-5"></i>
-                                </a>
+                        <td class="px-4 py-1">
+                            <span class="font-black text-gray-800 text-[11px] uppercase">{{ escola.municipio|default:"NÃO INFORMADO" }}</span>
+                        </td>
+
+                        <td class="px-4 py-1">
+                            <span class="text-[11px] text-gray-600 font-bold">{{ escola.endereco_descricao|default:"SEM ENDEREÇO" }}</span>
+                        </td>
+
+                        <td class="px-4 py-1">
+                            <div class="flex items-center justify-between gap-2">
+                                <span class="font-black text-gray-800 text-[11px] uppercase">{{ escola.status_escola|default:"--" }}</span>
+                                <button type="button" onclick="event.stopPropagation(); window.abrirCamposEscola({{ escola.pk }});"
+                                        class="p-1.5 text-gray-400 hover:text-gray-800 hover:bg-gray-100 rounded-lg transition shrink-0" title="Campos da Escola">
+                                    <i data-lucide="list-plus" class="w-4 h-4"></i>
+                                </button>
+                                <button type="button" onclick="event.stopPropagation(); window.abrirHistoricoEscola({{ escola.pk }});"
+                                        class="p-1.5 text-gray-400 hover:text-gray-800 hover:bg-gray-100 rounded-lg transition shrink-0" title="Histórico da Escola (RE + RI + MC)">
+                                    <i data-lucide="history" class="w-4 h-4"></i>
+                                </button>
                             </div>
                         </td>
                     </tr>
+                    {% if not setor_atual or escola.rede_externa.setor.nome == setor_atual %}
+                    {% include "leads/partials/escola_rede_row.html" with tipo="re" rede=escola.rede_externa processo_padrao=processo_re_padrao referencia=escola.referencia_rede_externa %}
+                    {% endif %}
+                    {% if not setor_atual or escola.rede_interna.setor.nome == setor_atual %}
+                    {% include "leads/partials/escola_rede_row.html" with tipo="ri" rede=escola.rede_interna processo_padrao=processo_ri_padrao referencia=escola.referencia_rede_interna %}
+                    {% endif %}
+                    {% if not setor_atual or escola.mapa_calor.setor.nome == setor_atual %}
+                    {% include "leads/partials/escola_rede_row.html" with tipo="mc" rede=escola.mapa_calor processo_padrao=processo_mc_padrao referencia=escola.referencia_mapa_calor %}
+                    {% endif %}
                     {% empty %}
                     <tr>
                         <td colspan="6" class="px-8 py-20 text-center">
@@ -159,8 +142,8 @@
                                     <i data-lucide="map-pin-off" class="w-8 h-8"></i>
                                 </div>
                                 <div>
-                                    <p class="font-black italic uppercase text-gray-600">Nenhum endereço encontrado</p>
-                                    <p class="text-xs font-bold text-gray-400 mt-1">Só aparecem endereços com O.S. aberta e ativa em Comercial | Lastmile.</p>
+                                    <p class="font-black italic uppercase text-gray-600">Nenhuma escola encontrada</p>
+                                    <p class="text-xs font-bold text-gray-400 mt-1">Ajuste os filtros de busca, município ou UF.</p>
                                 </div>
                             </div>
                         </td>
@@ -192,482 +175,475 @@
     </div>
 </div>
 
-<div id="partnerProposalModal" class="fixed inset-0 bg-black/60 z-[80] hidden flex items-center justify-center backdrop-blur-sm p-4">
-    <div class="bg-white rounded-[2rem] p-5 md:p-6 max-w-5xl w-full shadow-2xl border border-gray-100 max-h-[90vh] overflow-hidden flex flex-col">
-        <div class="flex items-start justify-between gap-4 mb-6">
-            <div>
-                <div class="flex items-center gap-3 mb-3">
-                    <div class="w-11 h-11 bg-ageis-yellow rounded-2xl flex items-center justify-center">
-                        <i data-lucide="file-pen-line" class="w-5 h-5 text-black"></i>
-                    </div>
-                    <div>
-                        <h3 class="text-xl font-black text-gray-900 leading-none">Abrir Cotação por Endereço</h3>
-                        <p class="text-xs text-gray-500 font-bold mt-1">O endereço operacional já está definido. Selecione a prospecção, os endereços da prospecção e os parceiros.</p>
-                    </div>
-                </div>
-                <div class="flex flex-wrap items-center gap-2 text-[11px] font-black uppercase">
-                    <span id="partnerProposalLoginBadge" class="px-3 py-1 rounded-lg bg-gray-100 text-gray-700">--</span>
-                    <span id="partnerProposalCidadeBadge" class="px-3 py-1 rounded-lg bg-gray-100 text-gray-500">--</span>
-                    <span id="partnerProposalClienteBadge" class="px-3 py-1 rounded-lg bg-ageis-yellow/15 text-ageis-black">Cliente --</span>
-                </div>
-            </div>
-            <button type="button" onclick="closePartnerProposalModal()" class="w-10 h-10 rounded-xl border border-gray-200 text-gray-400 hover:bg-gray-50 hover:text-gray-700 transition inline-flex items-center justify-center">
-                <i data-lucide="x" class="w-5 h-5"></i>
-            </button>
-        </div>
+<div id="historicoModal" class="fixed inset-0 bg-black/55 z-50 hidden items-center justify-center p-4">
+    <div class="absolute inset-0 bg-black/70 backdrop-blur-md" onclick="window.fecharHistoricoModal()"></div>
+    <div class="relative bg-white w-full max-w-[710px] max-h-[85vh] rounded-[2rem] shadow-2xl flex flex-col overflow-hidden">
+        <div id="historicoModalBody" class="flex-1 flex flex-col overflow-hidden"></div>
+    </div>
+</div>
 
-        <div class="flex-1 min-h-0 overflow-y-auto pr-1 -mr-1">
-        <div class="space-y-4 mb-4">
-            <section class="border border-gray-100 rounded-[1.5rem] p-4 bg-gray-50/40 transition-all duration-200">
-                <div class="grid grid-cols-1 md:grid-cols-[minmax(0,1.8fr)_minmax(0,0.8fr)_110px_auto] gap-3 mb-3">
-                    <input type="text" id="leadAddressGridQuery" placeholder="Buscar prospecção, endereço, bairro, cidade ou CEP..."
-                           class="w-full px-4 py-3 bg-white border border-gray-100 rounded-2xl outline-none focus:ring-2 focus:ring-ageis-yellow transition-all font-bold text-gray-800">
-                    <input type="text" id="leadAddressGridCidade" placeholder="Cidade"
-                           class="w-full px-4 py-3 bg-white border border-gray-100 rounded-2xl outline-none focus:ring-2 focus:ring-ageis-yellow transition-all font-bold uppercase text-gray-800">
-                    <input type="text" id="leadAddressGridUf" placeholder="UF" maxlength="2"
-                           class="w-full px-4 py-3 bg-white border border-gray-100 rounded-2xl outline-none focus:ring-2 focus:ring-ageis-yellow transition-all font-bold uppercase text-gray-800">
-                    <button type="button" id="leadAddressGridFilterBtn"
-                            class="px-5 py-3 bg-ageis-black text-ageis-yellow rounded-2xl font-black uppercase italic hover:bg-gray-800 transition shadow">
-                        Filtrar
-                    </button>
-                </div>
+<div id="parceiroModal" class="fixed inset-0 bg-black/55 z-50 hidden items-center justify-center p-4">
+    <div class="absolute inset-0 bg-black/70 backdrop-blur-md" onclick="window.fecharParceiroModal()"></div>
+    <div class="relative bg-white w-full max-w-[560px] max-h-[85vh] rounded-[2rem] shadow-2xl flex flex-col overflow-hidden">
+        <div id="parceiroModalBody" class="flex-1 flex flex-col overflow-hidden"></div>
+    </div>
+</div>
 
-                <div class="flex items-center justify-between gap-3 mb-3">
-                    <p id="leadAddressGridSummary" class="text-[11px] font-bold text-gray-500">Carregando endereços...</p>
-                    <div class="flex items-center gap-2">
-                        <button type="button" onclick="selectAllVisibleLeadAddresses()" class="px-3 py-2 rounded-xl border border-gray-200 text-[10px] font-black uppercase tracking-[0.12em] text-gray-500 hover:bg-gray-50 transition">
-                            Selecionar visíveis
-                        </button>
-                        <button type="button" onclick="clearLeadAddressSelection()" class="px-3 py-2 rounded-xl border border-gray-200 text-[10px] font-black uppercase tracking-[0.12em] text-gray-500 hover:bg-gray-50 transition">
-                            Limpar
-                        </button>
-                    </div>
-                </div>
+<div id="camposModal" class="fixed inset-0 bg-black/55 z-50 hidden items-center justify-center p-4">
+    <div class="absolute inset-0 bg-black/70 backdrop-blur-md" onclick="window.fecharCamposModal()"></div>
+    <div class="relative bg-white w-full max-w-[680px] max-h-[85vh] rounded-[2rem] shadow-2xl flex flex-col overflow-hidden">
+        <div id="camposModalBody" class="flex-1 flex flex-col overflow-hidden"></div>
+    </div>
+</div>
 
-                <div class="grid grid-cols-[minmax(0,1.2fr)_100px_minmax(0,1fr)_minmax(0,1fr)_120px_minmax(0,1.8fr)_80px] gap-4 px-4 py-3 text-[10px] font-black uppercase tracking-[0.18em] text-gray-400 border border-b-0 border-gray-100 rounded-t-[1.5rem] bg-white">
-                    <span>Prospecção</span>
-                    <span>UF</span>
-                    <span>Cidade</span>
-                    <span>Bairro</span>
-                    <span>CEP</span>
-                    <span>Endereço</span>
-                    <span class="text-right">Sel.</span>
-                </div>
-                <div id="leadAddressGridList" class="max-h-[52vh] overflow-y-auto border border-gray-100 border-t-0 rounded-b-[1.5rem] bg-white divide-y divide-gray-100">
-                    <div class="px-4 py-8 text-center text-sm font-bold text-gray-400 uppercase">Carregando...</div>
-                </div>
-            </section>
-        </div>
-        </div>
-
-        <form id="partnerProposalCreateForm" method="POST" class="flex flex-col min-h-0 border-t border-gray-100 pt-4 mt-1 bg-white">
-            {% csrf_token %}
-            <input type="hidden" name="next" value="{{ request.get_full_path }}">
-            <div id="selectedLeadAddressInputs"></div>
-            <div id="selectedPartnerInputs"></div>
-            <input type="hidden" name="force_lead_partner_fallback" id="partnerProposalLeadFallbackMode" value="0">
-            <input type="hidden" name="lead_endereco_id" id="selectedLeadAddressId">
-            <div class="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-4">
-                <div class="min-w-0 flex-1">
-                    <label class="inline-flex items-center gap-3 px-4 py-3 bg-white border border-gray-100 rounded-2xl cursor-pointer mb-2 w-fit">
-                        <input type="checkbox" id="partnerExpandSearchToggle" class="w-4 h-4 rounded border-gray-300 text-ageis-yellow focus:ring-ageis-yellow">
-                        <span class="text-[11px] font-black uppercase tracking-[0.14em] text-gray-600">Buscar fora da regiao</span>
-                    </label>
-                    <p id="partnerFilterHelpText" class="text-[11px] font-bold text-gray-500 mb-1">Quando marcada, a busca usa os filtros de prospeccao, cidade e UF acima sem prender os parceiros a cobertura regional padrao.</p>
-                    <div id="partnerCoverageSummary" class="text-[11px] font-bold text-gray-500 mb-1">Analisando cobertura regional dos parceiros...</div>
-                    <div id="partnerProposalSummary" class="text-[11px] font-bold text-gray-500">Selecione pelo menos um endereço da prospecção para calcular os parceiros elegíveis.</div>
-                </div>
-                <div class="flex items-center justify-end gap-3 shrink-0">
-                    <button type="button" onclick="closePartnerProposalModal()" class="px-5 py-3 rounded-2xl font-bold text-gray-500 hover:bg-gray-50 transition">
-                        Cancelar
-                    </button>
-                    <button type="submit" id="partnerProposalSubmitButton" class="px-6 py-3 bg-ageis-black text-ageis-yellow font-black uppercase italic rounded-2xl hover:bg-gray-800 transition shadow-lg disabled:opacity-50 disabled:cursor-not-allowed">
-                        Criar Cotações
-                    </button>
-                </div>
-            </div>
-            <div id="partnerProposalList" class="hidden max-h-[24vh] overflow-y-auto border border-gray-100 rounded-[1.5rem] bg-gray-50/40 p-3 mt-4 space-y-3">
-                <div class="px-4 py-10 text-center text-sm font-bold text-gray-400 uppercase">Selecione filtros para visualizar os provedores elegíveis</div>
-            </div>
-            <p class="text-[10px] font-bold text-gray-400 mt-3">Regra de bloqueio: o sistema só impede nova cotação quando o mesmo provedor já possui uma cotação em Em negociação para este mesmo endereço operacional.</p>
-        </form>
+<div id="cotacaoModal" class="fixed inset-0 bg-black/55 z-50 hidden items-center justify-center p-4">
+    <div class="absolute inset-0 bg-black/70 backdrop-blur-md" onclick="window.fecharCotacaoModal()"></div>
+    <div class="relative bg-white w-full max-w-[620px] max-h-[85vh] rounded-[2rem] shadow-2xl flex flex-col overflow-hidden">
+        <div id="cotacaoModalBody" class="flex-1 flex flex-col overflow-hidden"></div>
     </div>
 </div>
 {% endblock %}
 
 {% block extra_js %}
 <script>
-let partnerProposalAddressId = null;
-let selectedLeadAddressIds = new Set();
-let leadAddressGridCache = [];
-let partnerProposalOptionsLoading = false;
-let partnerProposalOptionsRequestId = 0;
+document.querySelectorAll('[data-escola-toggle]').forEach(function (linha) {
+    linha.addEventListener('click', function () {
+        var linhasRede = [];
+        var atual = linha.nextElementSibling;
+        while (atual && atual.hasAttribute('data-escola-rede-linha')) {
+            linhasRede.push(atual);
+            atual = atual.nextElementSibling;
+        }
+        if (!linhasRede.length) return;
 
-function leadAddressGridUrl(addressId) {
-    return `/provedores/enderecos/${addressId}/leads-enderecos-grid/`;
-}
+        var expandido = !linhasRede[0].classList.contains('hidden');
+        linhasRede.forEach(function (linhaRede) {
+            linhaRede.classList.toggle('hidden', expandido);
+        });
 
-function partnerSearchUrl(addressId) {
-    return `/provedores/enderecos/${addressId}/parceiros/`;
-}
-
-function partnerCreateUrl(addressId) {
-    return `/provedores/enderecos/${addressId}/cotacoes/criar/`;
-}
-
-function setPartnerExpandedSearchMode(enabled) {
-    const toggle = document.getElementById('partnerExpandSearchToggle');
-    const helpText = document.getElementById('partnerFilterHelpText');
-
-    if (toggle) {
-        toggle.checked = enabled;
-    }
-    if (helpText) {
-        helpText.innerText = enabled
-            ? 'Busca ampla ativa. Os filtros de busca, cidade e UF acima passam a procurar parceiros fora da cobertura regional padrao.'
-            : 'Quando marcada, a busca usa os filtros de prospeccao, cidade e UF acima sem prender os parceiros a cobertura regional padrao.';
-    }
-}
-
-function setPartnerProposalSubmitState(disabled) {
-    const button = document.getElementById('partnerProposalSubmitButton');
-    if (!button) return;
-    button.disabled = disabled;
-}
-
-function syncLeadAddressInputs() {
-    const ids = Array.from(selectedLeadAddressIds);
-    const container = document.getElementById('selectedLeadAddressInputs');
-    const legacyInput = document.getElementById('selectedLeadAddressId');
-
-    container.innerHTML = ids.map((id) => `<input type="hidden" name="lead_endereco_ids" value="${id}">`).join('');
-    legacyInput.value = ids[0] || '';
-}
-
-function openPartnerProposalModal(button) {
-    partnerProposalAddressId = button.dataset.enderecoId;
-    const login = button.dataset.login || '--';
-    const cidade = button.dataset.cidade || '';
-    const estado = button.dataset.estado || '';
-    const cliente = button.dataset.cliente || '--';
-
-    document.getElementById('partnerProposalLoginBadge').innerText = login;
-    document.getElementById('partnerProposalCidadeBadge').innerText = `${cidade || 'Cidade não informada'}${estado ? ' - ' + estado : ''}`;
-    document.getElementById('partnerProposalClienteBadge').innerText = `Cliente ${cliente}`;
-    selectedLeadAddressIds = new Set();
-    leadAddressGridCache = [];
-    document.getElementById('selectedLeadAddressId').value = '';
-    document.getElementById('leadAddressGridQuery').value = '';
-    document.getElementById('leadAddressGridCidade').value = cidade || '';
-    document.getElementById('leadAddressGridUf').value = (estado || '').toUpperCase();
-    setPartnerExpandedSearchMode(false);
-    document.getElementById('partnerProposalLeadFallbackMode').value = '0';
-    document.getElementById('leadAddressGridList').innerHTML = '<div class="px-4 py-8 text-center text-sm font-bold text-gray-400 uppercase">Carregando...</div>';
-    document.getElementById('leadAddressGridSummary').innerText = 'Carregando endereços...';
-    syncLeadAddressInputs();
-    document.getElementById('partnerProposalCreateForm').action = partnerCreateUrl(partnerProposalAddressId);
-    document.getElementById('partnerProposalModal').classList.remove('hidden');
-    setPartnerProposalSubmitState(true);
-    loadLeadAddressGrid();
-    loadPartnerProposalOptions();
-}
-
-function closePartnerProposalModal() {
-    document.getElementById('partnerProposalModal').classList.add('hidden');
-    document.getElementById('partnerCoverageSummary').innerText = '';
-    document.getElementById('partnerProposalSummary').innerText = '';
-    document.getElementById('partnerProposalList').innerHTML = '';
-    document.getElementById('leadAddressGridList').innerHTML = '';
-    document.getElementById('leadAddressGridSummary').innerText = '';
-    document.getElementById('selectedLeadAddressId').value = '';
-    document.getElementById('selectedLeadAddressInputs').innerHTML = '';
-    document.getElementById('selectedPartnerInputs').innerHTML = '';
-    setPartnerExpandedSearchMode(false);
-    document.getElementById('partnerProposalLeadFallbackMode').value = '0';
-    document.getElementById('partnerProposalClienteBadge').innerText = 'Cliente --';
-    partnerProposalAddressId = null;
-    leadAddressGridCache = [];
-    selectedLeadAddressIds = new Set();
-    partnerProposalOptionsLoading = false;
-    partnerProposalOptionsRequestId = 0;
-    setPartnerProposalSubmitState(false);
-}
-
-async function loadLeadAddressGrid() {
-    if (!partnerProposalAddressId) return;
-
-    const q = document.getElementById('leadAddressGridQuery').value.trim();
-    const cidade = document.getElementById('leadAddressGridCidade').value.trim();
-    const estado = document.getElementById('leadAddressGridUf').value.trim().toUpperCase();
-    const summary = document.getElementById('leadAddressGridSummary');
-    const list = document.getElementById('leadAddressGridList');
-
-    summary.innerText = 'Carregando endereços...';
-    list.innerHTML = '<div class="px-4 py-8 text-center text-sm font-bold text-gray-400 uppercase">Carregando...</div>';
-
-    const url = new URL(leadAddressGridUrl(partnerProposalAddressId), window.location.origin);
-    if (q) url.searchParams.set('q', q);
-    url.searchParams.set('cidade', cidade);
-    url.searchParams.set('estado', estado);
-
-    const response = await fetch(url.toString(), {
-        headers: { 'X-Requested-With': 'XMLHttpRequest' }
+        var chevron = linha.querySelector('[data-escola-chevron]');
+        if (chevron) chevron.classList.toggle('rotate-90', !expandido);
     });
-    const data = await response.json();
-    leadAddressGridCache = data.results || [];
+});
 
-    summary.innerText = `${leadAddressGridCache.length} endereço(s) encontrado(s).`;
+function csrfTokenLastmile() {
+    var campo = document.querySelector('input[name=csrfmiddlewaretoken]');
+    return campo ? campo.value : '';
+}
 
-    if (!leadAddressGridCache.length) {
-        list.innerHTML = '<div class="px-4 py-8 text-center text-sm font-bold text-gray-400 uppercase">Nenhum endereço encontrado</div>';
+var URL_ESCOLA_REDE_EDITAR = "{% url 'escola_rede_editar' escola_pk=0 tipo='TIPO' %}";
+var URL_STATUS_OPCOES = "{% url 'setor_status_opcoes' %}";
+var SETOR_ATUAL = "{{ setor_atual|default:''|escapejs }}";
+
+function removerLinhaQueSaiuDoSetor(linhaRede) {
+    var linhaEscola = linhaRede.previousElementSibling;
+    while (linhaEscola && linhaEscola.hasAttribute('data-escola-rede-linha')) {
+        linhaEscola = linhaEscola.previousElementSibling;
+    }
+
+    var irmasRestantes = [];
+    var atual = linhaEscola ? linhaEscola.nextElementSibling : null;
+    while (atual && atual.hasAttribute('data-escola-rede-linha')) {
+        if (atual !== linhaRede) irmasRestantes.push(atual);
+        atual = atual.nextElementSibling;
+    }
+
+    linhaRede.remove();
+
+    if (linhaEscola && irmasRestantes.length === 0) {
+        linhaEscola.remove();
+    }
+}
+
+window.carregarStatusRede = function (selectSetor, tipo, escolaId) {
+    var selectStatus = document.getElementById('status-select-' + tipo + '-' + escolaId);
+    var selectResponsavel = document.getElementById('responsavel-select-' + tipo + '-' + escolaId);
+    if (!selectStatus) return; // RN-035: grid global nao tem select de Status
+
+    var setorId = selectSetor.value;
+    var opcaoSelecionada = selectSetor.options[selectSetor.selectedIndex];
+    var setorNome = opcaoSelecionada ? (opcaoSelecionada.dataset.nome || '') : '';
+
+    if (!setorId) {
+        selectStatus.disabled = false;
+        selectStatus.innerHTML = '<option value="">Selecione um setor</option>';
         return;
     }
 
-    list.innerHTML = leadAddressGridCache.map((item) => `
-        <label class="grid grid-cols-[minmax(0,1.2fr)_100px_minmax(0,1fr)_minmax(0,1fr)_120px_minmax(0,1.8fr)_80px] gap-4 px-4 py-4 hover:bg-ageis-yellow/5 transition cursor-pointer">
-            <div class="min-w-0">
-                <div class="text-sm font-black text-gray-900 uppercase italic leading-tight">${item.lead_nome || '--'}</div>
-                <div class="text-[10px] font-bold uppercase text-gray-400 mt-1">${item.lead_documento || 'Sem CNPJ/CPF'}</div>
-            </div>
-            <div class="min-w-0 text-[11px] font-black text-gray-700 self-center uppercase">${item.estado || '--'}</div>
-            <div class="min-w-0 text-[11px] font-bold text-gray-700 self-center uppercase">${item.cidade || 'Não informada'}</div>
-            <div class="min-w-0 text-[11px] font-bold text-gray-700 self-center uppercase">${item.bairro || 'Sem bairro'}</div>
-            <div class="min-w-0 text-[11px] font-bold text-gray-700 self-center uppercase">${item.cep || 'Não informado'}</div>
-            <div class="min-w-0">
-                <div class="text-[11px] font-black text-gray-800 uppercase">${item.logradouro_label || '--'}</div>
-            </div>
-            <div class="text-right self-center">
-                <input type="checkbox" value="${item.id}" class="w-4 h-4 rounded border-gray-300 text-ageis-yellow focus:ring-ageis-yellow"
-                       onchange="toggleLeadAddress(${item.id}, this.checked)" ${selectedLeadAddressIds.has(item.id) ? 'checked' : ''}>
-            </div>
-        </label>
-    `).join('');
-}
-
-function toggleLeadAddress(leadEnderecoId, checked) {
-    if (checked) {
-        selectedLeadAddressIds.add(leadEnderecoId);
-    } else {
-        selectedLeadAddressIds.delete(leadEnderecoId);
+    // RN-033/RN-052: enviando a subatividade para outro Setor (diferente do
+    // Setor atual da tela), o Status trava e vira "Aguardando" ao salvar, e
+    // o Responsavel e zerado no mesmo momento — decidido pelo Setor de
+    // destino, nao por quem esta enviando.
+    if (SETOR_ATUAL && setorNome !== SETOR_ATUAL) {
+        selectStatus.disabled = true;
+        selectStatus.innerHTML = '<option value="">Aguardando (automático ao enviar)</option>';
+        if (selectResponsavel) {
+            selectResponsavel.disabled = true;
+            selectResponsavel.value = '';
+        }
+        return;
     }
-    syncLeadAddressInputs();
-    loadPartnerProposalOptions();
-}
 
-function selectLeadAddress(leadEnderecoId) {
-    selectedLeadAddressIds = new Set([leadEnderecoId]);
-    syncLeadAddressInputs();
-}
+    selectStatus.disabled = false;
+    if (selectResponsavel) selectResponsavel.disabled = false;
+    fetch(URL_STATUS_OPCOES + '?setor=' + setorId)
+        .then(function (resp) { return resp.text(); })
+        .then(function (html) { selectStatus.innerHTML = html; });
+};
 
-function selectAllVisibleLeadAddresses() {
-    document.querySelectorAll('#leadAddressGridList input[type=\"checkbox\"]').forEach((checkbox) => {
-        checkbox.checked = true;
-        selectedLeadAddressIds.add(Number(checkbox.value));
-    });
-    syncLeadAddressInputs();
-    loadPartnerProposalOptions();
-}
+window.salvarRede = function (botao, tipo, escolaId) {
+    var linhaAtual = botao.closest('tr');
+    var estavaVisivel = !linhaAtual.classList.contains('hidden');
+    var setor = linhaAtual.querySelector('[name="setor"]').value;
+    var statusInput = linhaAtual.querySelector('[name="status"]'); // RN-035: pode nao existir no grid global
+    var parceiroInput = linhaAtual.querySelector('[name="parceiro"]');
+    var responsavelInput = linhaAtual.querySelector('[name="responsavel"]');
 
-function clearLeadAddressSelection() {
-    selectedLeadAddressIds = new Set();
-    document.querySelectorAll('#leadAddressGridList input[type=\"checkbox\"]').forEach((checkbox) => {
-        checkbox.checked = false;
-    });
-    syncLeadAddressInputs();
-    loadPartnerProposalOptions();
-}
+    var formData = new FormData();
+    formData.append('setor', setor);
+    if (statusInput) formData.append('status', statusInput.value);
+    formData.append('setor_atual', SETOR_ATUAL);
+    if (parceiroInput) formData.append('parceiro', parceiroInput.value);
+    if (responsavelInput) formData.append('responsavel', responsavelInput.value);
 
-async function loadPartnerProposalOptions() {
-    if (!partnerProposalAddressId) return;
+    var url = URL_ESCOLA_REDE_EDITAR.replace('0', escolaId).replace('TIPO', tipo);
 
-    const requestId = ++partnerProposalOptionsRequestId;
-    const buscaAmpla = document.getElementById('partnerExpandSearchToggle')?.checked;
-    const q = document.getElementById('leadAddressGridQuery').value.trim();
-    const estado = document.getElementById('leadAddressGridUf').value.trim().toUpperCase();
-    const cidade = document.getElementById('leadAddressGridCidade').value.trim();
-    const leadEnderecoIds = Array.from(selectedLeadAddressIds);
-    const coverage = document.getElementById('partnerCoverageSummary');
-    const summary = document.getElementById('partnerProposalSummary');
-    const list = document.getElementById('partnerProposalList');
-    const selectedPartnerInputs = document.getElementById('selectedPartnerInputs');
+    fetch(url, {
+        method: 'POST',
+        headers: { 'X-CSRFToken': csrfTokenLastmile() },
+        body: formData,
+    })
+        .then(function (resp) { return resp.text(); })
+        .then(function (html) {
+            var wrapper = document.createElement('tbody');
+            wrapper.innerHTML = html.trim();
+            var novaLinha = wrapper.firstElementChild;
 
-    partnerProposalOptionsLoading = true;
-    setPartnerProposalSubmitState(true);
-    list.innerHTML = '<div class="px-4 py-10 text-center text-sm font-bold text-gray-400 uppercase">Carregando provedores...</div>';
-    coverage.innerText = buscaAmpla
-        ? 'Busca ampla ativa para encontrar parceiros fora da cobertura regional padrao...'
-        : 'Analisando cobertura regional dos parceiros...';
-    summary.innerText = !leadEnderecoIds.length && !buscaAmpla
-        ? 'Buscando provedores da cobertura conhecida. Se quiser ampliar, marque "Buscar fora da regiao".'
-        : 'Buscando parceiros...';
-    selectedPartnerInputs.innerHTML = '';
-
-    const url = new URL(partnerSearchUrl(partnerProposalAddressId), window.location.origin);
-    if (buscaAmpla) {
-        url.searchParams.set('busca_ampla', '1');
-        url.searchParams.set('estado', estado);
-        url.searchParams.set('cidade', cidade);
-    } else {
-        url.searchParams.set('estado', estado);
-        url.searchParams.set('cidade', cidade);
-    }
-    if (q) {
-        url.searchParams.set('q', q);
-    }
-    try {
-        const response = await fetch(url.toString(), {
-            headers: { 'X-Requested-With': 'XMLHttpRequest' }
-        });
-        const data = await response.json();
-        if (requestId !== partnerProposalOptionsRequestId) return;
-
-        const resultados = data.resultados || [];
-        const buscaAmplaAtiva = Boolean(data.busca_ampla_ativa);
-        const parceirosDisponiveis = resultados.filter((partner) => !partner.ja_possui_cotacao_aberta);
-        const parceirosBloqueados = resultados.filter((partner) => partner.ja_possui_cotacao_aberta);
-        const nomesBloqueados = parceirosBloqueados.map((partner) => partner.nome).join(', ');
-        const cobertura = data.cobertura || {};
-        const bairro = cobertura.bairro || {};
-        const cidadeCobertura = cobertura.cidade || {};
-        const estadoCobertura = cobertura.estado || {};
-
-        const bairroTexto = bairro.count === null || bairro.count === undefined
-            ? 'Bairro nao informado'
-            : `${bairro.nome || 'Bairro'}: ${bairro.count} parceiro(s)`;
-        const cidadeTexto = cidadeCobertura.count === null || cidadeCobertura.count === undefined
-            ? 'Cidade nao informada'
-            : `${cidadeCobertura.nome || 'Cidade'}: ${cidadeCobertura.count} parceiro(s)`;
-        const estadoTexto = estadoCobertura.count === null || estadoCobertura.count === undefined
-            ? 'Estado nao informado'
-            : `${estadoCobertura.nome || 'Estado'}: ${estadoCobertura.count} parceiro(s)`;
-
-        coverage.innerText = buscaAmplaAtiva
-            ? 'Busca ampla ativa. A lista abaixo pode trazer parceiros fora da cobertura conhecida deste endereco.'
-            : `Cobertura conhecida para este endereco - ${bairroTexto} | ${cidadeTexto} | ${estadoTexto}.`;
-        document.getElementById('partnerProposalLeadFallbackMode').value = '0';
-
-        summary.innerText = buscaAmplaAtiva
-            ? `${parceirosDisponiveis.length} provedor(es) foram encontrados na busca ampla com os filtros informados. Ao criar, o sistema abrira cotacoes para esses provedores.`
-            : `${parceirosDisponiveis.length} provedor(es) foram encontrados pela cobertura conhecida para esta regiao. Ao criar, o sistema abrira cotacoes para esses provedores.`;
-
-        if (!parceirosDisponiveis.length) {
-            list.innerHTML = `
-                <div class="px-4 py-10 text-center">
-                    <p class="text-sm font-black uppercase italic text-gray-500">Nenhum provedor elegivel encontrado</p>
-                    <p class="text-xs font-bold text-gray-400 mt-2">${
-                        buscaAmplaAtiva
-                            ? 'Ajuste a busca, cidade ou UF para procurar em outra regiao.'
-                            : 'Marque "Buscar fora da regiao" para pesquisar provedores fora da cobertura conhecida.'
-                    }</p>
-                </div>
-            `;
-            if (leadEnderecoIds.length) {
-                summary.innerText = buscaAmplaAtiva
-                    ? 'Nenhum provedor elegivel foi encontrado na busca ampla com os filtros informados. Ajuste a busca, cidade ou UF, ou siga com Criar Cotacoes para usar apenas os provedores ja ligados a esta prospeccao.'
-                    : 'Nenhum provedor elegivel foi encontrado pela cobertura conhecida para os enderecos da prospeccao selecionados. Se quiser prosseguir mesmo assim, clique em Criar Cotacoes para abrir usando apenas os provedores desta prospeccao.';
-                document.getElementById('partnerProposalLeadFallbackMode').value = '1';
-                selectedPartnerInputs.innerHTML = '';
+            if (novaLinha.dataset.pertenceAoSetor === 'nao') {
+                removerLinhaQueSaiuDoSetor(linhaAtual);
                 return;
             }
 
-            summary.innerText = nomesBloqueados
-                ? `Nenhuma cotacao foi criada porque estes provedores ja possuem cotacao em Em negociacao neste mesmo endereco operacional: ${nomesBloqueados}.`
-                : buscaAmplaAtiva
-                    ? 'Nenhum provedor elegivel foi encontrado nessa busca ampla.'
-                    : 'Nenhum provedor elegivel foi encontrado para os enderecos da prospeccao selecionados, e nao ha provedores disponiveis para prosseguir fora da cobertura conhecida.';
-            return;
-        }
+            if (estavaVisivel) novaLinha.classList.remove('hidden');
+            linhaAtual.replaceWith(novaLinha);
+        });
+};
 
-        selectedPartnerInputs.innerHTML = parceirosDisponiveis
-            .map((partner) => `<input type="hidden" name="partner_ids" value="${partner.id}">`)
-            .join('');
-        list.innerHTML = resultados.map((partner) => {
-            const blocked = partner.ja_possui_cotacao_aberta;
-            const statusBadge = blocked
-                ? '<span class="px-3 py-1 rounded-lg bg-yellow-50 text-yellow-700 border border-yellow-100 text-[10px] font-black uppercase">Cotacao ja aberta</span>'
-                : '<span class="px-3 py-1 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-100 text-[10px] font-black uppercase">Elegivel</span>';
+var URL_ESCOLA_REDE_HISTORICO = "{% url 'escola_rede_historico' escola_pk=0 tipo='TIPO' %}";
+var URL_ESCOLA_HISTORICO = "{% url 'escola_historico' escola_pk=0 %}";
 
-            return `
-                <div class="flex items-center justify-between gap-4 rounded-2xl border border-gray-100 bg-white px-4 py-4 ${blocked ? 'opacity-60' : ''}">
-                    <div class="min-w-0">
-                        <div class="text-sm font-black text-gray-900 uppercase italic leading-tight">${partner.nome}</div>
-                        <div class="text-[10px] font-bold uppercase text-gray-400 mt-1">${partner.cnpj_cpf || 'Sem CNPJ/CPF'}${partner.status ? ' • ' + partner.status : ''}</div>
-                        ${partner.razao_social && partner.razao_social !== partner.nome ? `<div class="text-[11px] text-gray-500 font-bold mt-2">${partner.razao_social}</div>` : ''}
-                    </div>
-                    <div class="shrink-0">${statusBadge}</div>
-                </div>
-            `;
-        }).join('');
-    } catch (error) {
-        if (requestId !== partnerProposalOptionsRequestId) return;
-        console.error(error);
-        summary.innerText = 'Nao foi possivel carregar os parceiros elegiveis agora. Tente novamente.';
-        selectedPartnerInputs.innerHTML = '';
-        list.innerHTML = '<div class="px-4 py-10 text-center text-sm font-bold text-gray-400 uppercase">Falha ao carregar provedores</div>';
-    } finally {
-        if (requestId === partnerProposalOptionsRequestId) {
-            partnerProposalOptionsLoading = false;
-            setPartnerProposalSubmitState(false);
-        }
-    }
+// PO-066: substitui o HTML do modal de historico e reaplica os comportamentos
+// que dependem do DOM recem-inserido (icones e exclusao mutua dos anexos).
+// Usado em toda troca de conteudo do modal (abrir, comentar, enviar e-mail),
+// para nao depender de atributo inline (`ontoggle`) que se perde a cada
+// re-render.
+function preencherHistoricoModal(html) {
+    document.getElementById('historicoModalBody').innerHTML = html;
+    if (window.lucide) lucide.createIcons();
+    inicializarAnexoEmailExclusivo();
 }
 
-document.getElementById('leadAddressGridFilterBtn').addEventListener('click', function () {
-    loadLeadAddressGrid();
-    loadPartnerProposalOptions();
-});
+// PO-066: no historico de RE/RI, o anexo do comentario e o anexo do e-mail
+// nunca ficam ativos ao mesmo tempo. Abrir o bloco "Enviar e-mail" desativa
+// o anexo do comentario (input real, nao so visual); ao fechar, ele volta a
+// ficar ativo. O modal da Escola nao tem anexo de comentario, entao a busca
+// abaixo simplesmente nao encontra nada e nao faz nada.
+function inicializarAnexoEmailExclusivo() {
+    var detalhesEmail = document.querySelector('#historicoModalBody details');
+    var wrap = document.getElementById('anexo-comentario-wrap');
+    var input = document.getElementById('anexo-comentario-input');
+    if (!detalhesEmail || !wrap || !input) return;
 
-document.getElementById('leadAddressGridQuery').addEventListener('keydown', function (event) {
-    if (event.key === 'Enter') {
-        event.preventDefault();
-        loadLeadAddressGrid();
-        loadPartnerProposalOptions();
-    }
-});
+    detalhesEmail.addEventListener('toggle', function () {
+        input.disabled = detalhesEmail.open;
+        wrap.classList.toggle('opacity-40', detalhesEmail.open);
+        wrap.classList.toggle('pointer-events-none', detalhesEmail.open);
+    });
+}
 
-document.getElementById('leadAddressGridCidade').addEventListener('keydown', function (event) {
-    if (event.key === 'Enter') {
-        event.preventDefault();
-        loadLeadAddressGrid();
-        loadPartnerProposalOptions();
-    }
-});
+function carregarHistoricoModal(url) {
+    fetch(url)
+        .then(function (resp) { return resp.text(); })
+        .then(function (html) {
+            preencherHistoricoModal(html);
+            var modal = document.getElementById('historicoModal');
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+        });
+}
 
-document.getElementById('leadAddressGridUf').addEventListener('keydown', function (event) {
-    if (event.key === 'Enter') {
-        event.preventDefault();
-        loadLeadAddressGrid();
-        loadPartnerProposalOptions();
-    }
-});
+window.fecharHistoricoModal = function () {
+    var modal = document.getElementById('historicoModal');
+    modal.classList.add('hidden');
+    modal.classList.remove('flex');
+    document.getElementById('historicoModalBody').innerHTML = '';
+};
 
-document.getElementById('partnerExpandSearchToggle').addEventListener('change', function () {
-    setPartnerExpandedSearchMode(this.checked);
-    loadPartnerProposalOptions();
-});
+window.abrirHistoricoRede = function (tipo, escolaId) {
+    carregarHistoricoModal(URL_ESCOLA_REDE_HISTORICO.replace('0', escolaId).replace('TIPO', tipo));
+};
 
-document.getElementById('partnerProposalCreateForm').addEventListener('submit', function (event) {
-    const possuiPartners = Boolean(document.querySelector('#selectedPartnerInputs input[name="partner_ids"]'));
-    if (!selectedLeadAddressIds.size && !possuiPartners) {
-        event.preventDefault();
-        alert('Selecione pelo menos um endereço da prospecção ou carregue provedores elegíveis antes de criar as cotações.');
-        return;
-    }
-    if (partnerProposalOptionsLoading) {
-        event.preventDefault();
-        alert('Aguarde a busca dos parceiros terminar antes de criar as cotações.');
-        return;
-    }
-    if (!document.querySelector('#selectedPartnerInputs input[name="partner_ids"]')) {
-        if (document.getElementById('partnerProposalLeadFallbackMode')?.value === '1') {
-            return;
-        }
-        event.preventDefault();
-        const summary = document.getElementById('partnerProposalSummary');
-        const detalheRegra = summary?.innerText?.trim()
-            || 'O sistema bloqueia apenas o mesmo provedor quando ele ja possui cotacao em Em negociacao para este mesmo endereco operacional.';
-        alert(`Nenhuma cotação foi criada.\n\n${detalheRegra}`);
-    }
-});
+window.abrirHistoricoEscola = function (escolaId) {
+    carregarHistoricoModal(URL_ESCOLA_HISTORICO.replace('0', escolaId));
+};
+
+var URL_ESCOLA_REDE_PARCEIRO_MODAL = "{% url 'escola_rede_parceiro_modal' escola_pk=0 tipo='TIPO' %}";
+
+function carregarParceiroModal(url) {
+    fetch(url)
+        .then(function (resp) { return resp.text(); })
+        .then(function (html) {
+            document.getElementById('parceiroModalBody').innerHTML = html;
+            var modal = document.getElementById('parceiroModal');
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+            if (window.lucide) lucide.createIcons();
+        });
+}
+
+window.fecharParceiroModal = function () {
+    var modal = document.getElementById('parceiroModal');
+    modal.classList.add('hidden');
+    modal.classList.remove('flex');
+    document.getElementById('parceiroModalBody').innerHTML = '';
+};
+
+window.abrirParceiroModal = function (tipo, escolaId) {
+    var url = URL_ESCOLA_REDE_PARCEIRO_MODAL.replace('0', escolaId).replace('TIPO', tipo) +
+        '?setor_atual=' + encodeURIComponent(SETOR_ATUAL);
+    carregarParceiroModal(url);
+};
+
+window.buscarParceiroModal = function (form, tipo, escolaId) {
+    var params = new URLSearchParams(new FormData(form));
+    params.set('setor_atual', SETOR_ATUAL);
+    var url = URL_ESCOLA_REDE_PARCEIRO_MODAL.replace('0', escolaId).replace('TIPO', tipo) + '?' + params.toString();
+    carregarParceiroModal(url);
+    return false;
+};
+
+window.selecionarParceiroRede = function (tipo, escolaId, parceiroId, parceiroNome) {
+    var input = document.getElementById('parceiro-input-' + tipo + '-' + escolaId);
+    var botao = document.getElementById('parceiro-btn-' + tipo + '-' + escolaId);
+    if (input) input.value = parceiroId;
+    if (botao) botao.textContent = parceiroNome;
+    window.fecharParceiroModal();
+};
+
+var URL_ESCOLA_REDE_CAMPOS = "{% url 'escola_rede_campos' escola_pk=0 tipo='TIPO' %}";
+
+function carregarCamposModal(url, opcoes) {
+    var fetchOpcoes = opcoes || {};
+    return fetch(url, fetchOpcoes)
+        .then(function (resp) { return resp.text(); })
+        .then(function (html) {
+            document.getElementById('camposModalBody').innerHTML = html;
+            var modal = document.getElementById('camposModal');
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+            if (window.lucide) lucide.createIcons();
+        });
+}
+
+window.fecharCamposModal = function () {
+    var modal = document.getElementById('camposModal');
+    modal.classList.add('hidden');
+    modal.classList.remove('flex');
+    document.getElementById('camposModalBody').innerHTML = '';
+};
+
+window.abrirCamposRede = function (tipo, escolaId) {
+    var url = URL_ESCOLA_REDE_CAMPOS.replace('0', escolaId).replace('TIPO', tipo) +
+        '?setor_atual=' + encodeURIComponent(SETOR_ATUAL);
+    carregarCamposModal(url);
+};
+
+window.toggleCampoGrupo = function (botao) {
+    var corpo = botao.nextElementSibling;
+    var seta = botao.querySelector('[data-lucide="chevron-down"]');
+    corpo.classList.toggle('hidden');
+    if (seta) seta.classList.toggle('rotate-180');
+};
+
+window.salvarCamposRede = function (form, tipo, escolaId) {
+    var formData = new FormData(form);
+    var url = URL_ESCOLA_REDE_CAMPOS.replace('0', escolaId).replace('TIPO', tipo);
+
+    carregarCamposModal(url, {
+        method: 'POST',
+        headers: { 'X-CSRFToken': csrfTokenLastmile() },
+        body: formData,
+    });
+
+    return false;
+};
+
+var URL_ESCOLA_CAMPOS = "{% url 'escola_campos' escola_pk=0 %}";
+
+window.abrirCamposEscola = function (escolaId) {
+    carregarCamposModal(URL_ESCOLA_CAMPOS.replace('0', escolaId));
+};
+
+window.salvarCamposEscola = function (form, escolaId) {
+    var formData = new FormData(form);
+    var url = URL_ESCOLA_CAMPOS.replace('0', escolaId);
+
+    carregarCamposModal(url, {
+        method: 'POST',
+        headers: { 'X-CSRFToken': csrfTokenLastmile() },
+        body: formData,
+    });
+
+    return false;
+};
+
+var URL_ESCOLA_REDE_COTACAO = "{% url 'escola_rede_cotacao_modal' escola_pk=0 tipo='TIPO' %}";
+var URL_ESCOLA_REDE_COTACAO_ADICIONAR = "{% url 'escola_rede_cotacao_adicionar' escola_pk=0 tipo='TIPO' %}";
+
+// As rotas de selecionar/remover tem dois parametros inteiros
+// (escola_pk e candidato_pk) — em vez de reverter os dois com o mesmo
+// placeholder "0" e arriscar troca-los na hora de substituir (ex.:
+// escolaId=1 colidindo com o placeholder de candidato_pk), a URL e
+// montada a partir da mesma base de URL_ESCOLA_REDE_COTACAO (que termina
+// em "/cotacao/"), so com um "0" para substituir.
+function baseUrlCotacao(tipo, escolaId) {
+    return URL_ESCOLA_REDE_COTACAO.replace('0', escolaId).replace('TIPO', tipo);
+}
+
+// RN-044: apos abrir/buscar/adicionar/selecionar/remover no modal de
+// cotacao, sincroniza o botao e o hidden de Parceiro da linha (fora do
+// modal) com o valor atual de rede.parceiro — "Selecionado" grava o
+// Parceiro direto no servidor (RN-030), sem depender do botao "Salvar".
+function sincronizarParceiroDaCotacao(tipo, escolaId) {
+    var sync = document.getElementById('cotacao-parceiro-sync');
+    if (!sync) return;
+    var input = document.getElementById('parceiro-input-' + tipo + '-' + escolaId);
+    var botao = document.getElementById('parceiro-btn-' + tipo + '-' + escolaId);
+    var parceiroNome = sync.dataset.parceiroNome || '';
+    if (input) input.value = sync.dataset.parceiroId || '';
+    if (botao) botao.textContent = parceiroNome || 'Vincular parceiro';
+}
+
+function carregarCotacaoModal(url, opcoes, tipo, escolaId) {
+    var fetchOpcoes = opcoes || {};
+    return fetch(url, fetchOpcoes)
+        .then(function (resp) { return resp.text(); })
+        .then(function (html) {
+            document.getElementById('cotacaoModalBody').innerHTML = html;
+            var modal = document.getElementById('cotacaoModal');
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+            if (window.lucide) lucide.createIcons();
+            sincronizarParceiroDaCotacao(tipo, escolaId);
+        });
+}
+
+window.fecharCotacaoModal = function () {
+    var modal = document.getElementById('cotacaoModal');
+    modal.classList.add('hidden');
+    modal.classList.remove('flex');
+    document.getElementById('cotacaoModalBody').innerHTML = '';
+};
+
+window.abrirCotacaoRede = function (tipo, escolaId) {
+    var url = baseUrlCotacao(tipo, escolaId) + '?setor_atual=' + encodeURIComponent(SETOR_ATUAL);
+    carregarCotacaoModal(url, null, tipo, escolaId);
+};
+
+window.buscarCotacaoModal = function (form, tipo, escolaId) {
+    var params = new URLSearchParams(new FormData(form));
+    params.set('setor_atual', SETOR_ATUAL);
+    var url = baseUrlCotacao(tipo, escolaId) + '?' + params.toString();
+    carregarCotacaoModal(url, null, tipo, escolaId);
+    return false;
+};
+
+window.adicionarCandidatoCotacao = function (tipo, escolaId, parceiroId) {
+    var formData = new FormData();
+    formData.append('parceiro', parceiroId);
+    formData.append('setor_atual', SETOR_ATUAL);
+    var url = URL_ESCOLA_REDE_COTACAO_ADICIONAR.replace('0', escolaId).replace('TIPO', tipo);
+
+    carregarCotacaoModal(url, {
+        method: 'POST',
+        headers: { 'X-CSRFToken': csrfTokenLastmile() },
+        body: formData,
+    }, tipo, escolaId);
+};
+
+window.selecionarCandidatoCotacao = function (tipo, escolaId, candidatoId) {
+    var formData = new FormData();
+    formData.append('setor_atual', SETOR_ATUAL);
+    var url = baseUrlCotacao(tipo, escolaId) + candidatoId + '/selecionar/';
+
+    carregarCotacaoModal(url, {
+        method: 'POST',
+        headers: { 'X-CSRFToken': csrfTokenLastmile() },
+        body: formData,
+    }, tipo, escolaId);
+};
+
+window.removerCandidatoCotacao = function (tipo, escolaId, candidatoId) {
+    var formData = new FormData();
+    formData.append('setor_atual', SETOR_ATUAL);
+    var url = baseUrlCotacao(tipo, escolaId) + candidatoId + '/remover/';
+
+    carregarCotacaoModal(url, {
+        method: 'POST',
+        headers: { 'X-CSRFToken': csrfTokenLastmile() },
+        body: formData,
+    }, tipo, escolaId);
+};
+
+window.enviarHistoricoRede = function (form, tipo, escolaId) {
+    var formData = new FormData(form);
+    var url = URL_ESCOLA_REDE_HISTORICO.replace('0', escolaId).replace('TIPO', tipo);
+
+    fetch(url, {
+        method: 'POST',
+        headers: { 'X-CSRFToken': csrfTokenLastmile() },
+        body: formData,
+    })
+        .then(function (resp) { return resp.text(); })
+        .then(preencherHistoricoModal);
+
+    return false;
+};
+
+// PO-066/RN-042: envio de e-mail a partir do RE/RI ou da Escola, reaproveitando
+// o mesmo modal de historico (RN-029). As rotas vivem em apps.core_admin
+// (ConfiguracaoEmailEnvio, PO-032) — o nome da URL e global (sem namespace).
+var URL_ESCOLA_REDE_EMAIL = "{% url 'escola_rede_enviar_email' escola_pk=0 tipo='TIPO' %}";
+var URL_ESCOLA_EMAIL = "{% url 'escola_enviar_email' escola_pk=0 %}";
+
+window.enviarEmailRede = function (form, tipo, escolaId) {
+    var formData = new FormData(form);
+    var url = URL_ESCOLA_REDE_EMAIL.replace('0', escolaId).replace('TIPO', tipo);
+
+    fetch(url, {
+        method: 'POST',
+        headers: { 'X-CSRFToken': csrfTokenLastmile() },
+        body: formData,
+    })
+        .then(function (resp) { return resp.text(); })
+        .then(preencherHistoricoModal);
+
+    return false;
+};
+
+window.enviarEmailEscola = function (form, escolaId) {
+    var formData = new FormData(form);
+    var url = URL_ESCOLA_EMAIL.replace('0', escolaId);
+
+    fetch(url, {
+        method: 'POST',
+        headers: { 'X-CSRFToken': csrfTokenLastmile() },
+        body: formData,
+    })
+        .then(function (resp) { return resp.text(); })
+        .then(preencherHistoricoModal);
+
+    return false;
+};
 </script>
 {% endblock %}

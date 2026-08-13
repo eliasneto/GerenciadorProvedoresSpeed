@@ -8,7 +8,7 @@ from django.http import HttpResponseRedirect
 from django.template.response import TemplateResponse
 from django.urls import path, reverse
 
-from .models import Lead, LeadEmpresa, LeadEndereco
+from .models import AcessoSetor, Lead, LeadEmpresa, LeadEndereco
 
 logger = logging.getLogger(__name__)
 
@@ -291,6 +291,17 @@ class LeadEnderecoAdmin(admin.ModelAdmin):
     list_display = ('empresa', 'endereco', 'numero', 'bairro', 'cidade', 'estado')
     list_filter = ('estado', 'cidade')
     search_fields = ('empresa__nome_fantasia', 'empresa__razao_social', 'empresa__cnpj_cpf', 'endereco', 'bairro', 'cidade', 'cep')
+
+
+@admin.register(AcessoSetor)
+class AcessoSetorAdmin(admin.ModelAdmin):
+    """RN-055/ADR-028: tela de administracao para um gestor conceder/
+    revogar, por usuario, quais nomes de Setor (RN-025) ele pode ver e
+    acessar no modulo "Setores" (RN-054)."""
+    list_display = ('usuario', 'setor_nome', 'criado_em')
+    list_filter = ('setor_nome',)
+    search_fields = ('usuario__username', 'usuario__first_name', 'usuario__last_name', 'setor_nome')
+    autocomplete_fields = ('usuario',)
 
 
 @admin.register(Lead)

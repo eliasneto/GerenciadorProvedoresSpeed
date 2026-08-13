@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.db import models
 
 
@@ -121,3 +122,36 @@ class Lead(models.Model):
 
     def __str__(self):
         return self.nome_fantasia or self.razao_social or "Lead sem nome"
+
+
+class AcessoSetor(models.Model):
+    """RN-055/ADR-028: concessao individual, por usuario, de quais nomes de
+    Setor (RN-025, `apps.escolas.models.Setor`) ele pode ver e acessar
+    dentro do modulo "Setores" (RN-027/RN-054). Um usuario do grupo Django
+    `Setor` (visibilidade do modulo, RN-054) sem nenhuma linha aqui nao
+    ve/acessa nenhum Setor.
+
+    A concessao e por **nome** (mesmo criterio ja usado pela RN-027/ADR-016
+    e por `SetorEscopo.setor_nome`), nao pelo `id` de uma linha de Setor
+    especifica de um Processo — o mesmo nome existe espelhado em mais de um
+    Processo (RN-025)."""
+
+    usuario = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='acessos_setor',
+        verbose_name='Usuario',
+    )
+    setor_nome = models.CharField('Setor', max_length=120)
+    criado_em = models.DateTimeField('Concedido em', auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'Acesso a Setor'
+        verbose_name_plural = 'Acessos a Setores'
+        ordering = ['usuario__username', 'setor_nome']
+        constraints = [
+            models.UniqueConstraint(fields=['usuario', 'setor_nome'], name='acesso_setor_unico_por_usuario'),
+        ]
+
+    def __str__(self):
+        return f"{self.usuario} - {self.setor_nome}"

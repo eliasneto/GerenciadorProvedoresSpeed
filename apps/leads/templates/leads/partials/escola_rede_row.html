@@ -1,0 +1,127 @@
+<tr id="rede-{{ tipo }}-{{ escola.pk }}" class="hidden bg-amber-50/80 divide-x divide-amber-100" data-escola-rede-linha data-pertence-ao-setor="{% if pertence_ao_setor_atual == False %}nao{% else %}sim{% endif %}">
+    <td class="px-4 py-1.5 align-top">
+        <span class="text-[9px] font-black uppercase bg-ageis-black text-ageis-yellow px-2 py-0.5 rounded w-fit">{{ tipo|upper }}</span>
+        {% if erro %}<p class="text-[9px] font-bold text-red-600 mt-1">{{ erro }}</p>{% endif %}
+        {% if sucesso %}<p class="text-[9px] font-bold text-emerald-600 mt-1">{{ sucesso }}</p>{% endif %}
+    </td>
+    {% if setor_atual or not rede.setor_id %}
+    <td class="px-4 py-1.5 align-top">
+        <p class="text-[9px] font-black uppercase text-gray-400 leading-none mb-1">Setor</p>
+        <select name="setor" id="setor-select-{{ tipo }}-{{ escola.pk }}" class="min-w-[150px] text-[11px] font-bold text-gray-900 bg-white border border-gray-300 rounded-lg px-2 py-1.5 w-full"
+                onchange="window.carregarStatusRede(this, '{{ tipo }}', {{ escola.pk }})">
+            {% if not rede.setor_id %}<option value="">Selecione</option>{% endif %}
+            {% for setor_opcao in processo_padrao.setores.all %}
+            <option value="{{ setor_opcao.pk }}" data-nome="{{ setor_opcao.nome }}" {% if rede.setor_id == setor_opcao.pk %}selected{% endif %}>{{ setor_opcao.nome }}</option>
+            {% endfor %}
+        </select>
+    </td>
+    <td class="px-4 py-1.5 align-top">
+        <p class="text-[9px] font-black uppercase text-gray-400 leading-none mb-0.5">Parceiro</p>
+        <p class="text-[11px] font-bold text-gray-900">{{ referencia.parceiro|default:"Não informado" }}</p>
+        {% if editavel_parceiro %}
+        <input type="hidden" name="parceiro" id="parceiro-input-{{ tipo }}-{{ escola.pk }}" value="{{ rede.parceiro_id|default:'' }}">
+        <button type="button" id="parceiro-btn-{{ tipo }}-{{ escola.pk }}"
+                onclick="window.abrirParceiroModal('{{ tipo }}', {{ escola.pk }})"
+                class="mt-0.5 block w-full text-left text-[11px] font-bold truncate transition hover:underline {% if rede.parceiro %}text-gray-900 hover:text-ageis-black{% else %}text-gray-400 italic hover:text-gray-600{% endif %}">
+            {{ rede.parceiro|default:"Vincular parceiro" }}
+        </button>
+        {% elif rede.parceiro %}
+        <p class="text-[10px] font-bold text-gray-500 mt-0.5">Vinculado: {{ rede.parceiro }}</p>
+        {% endif %}
+    </td>
+    <td class="px-4 py-1.5 align-top">
+        <p class="text-[9px] font-black uppercase text-gray-400 leading-none mb-1">Status</p>
+        {% if setor_atual %}
+        <select name="status" id="status-select-{{ tipo }}-{{ escola.pk }}" class="min-w-[150px] text-[11px] font-bold text-gray-900 bg-white border border-gray-300 rounded-lg px-2 py-1.5 w-full">
+            {% if not rede.setor_id %}<option value="">Selecione um setor</option>{% endif %}
+            {% if rede.setor %}
+                {% for status_opcao in rede.setor.status_opcoes.all %}
+                <option value="{{ status_opcao.pk }}" {% if rede.status_id == status_opcao.pk %}selected{% endif %}>{{ status_opcao.nome }}</option>
+                {% endfor %}
+            {% endif %}
+        </select>
+        {% else %}
+        {# RN-035: grid global — Status nao e escolhido manualmente, so Setor. #}
+        <p class="text-[11px] font-bold text-gray-900">{{ rede.status.nome|default:"Novo" }}</p>
+        {% endif %}
+    </td>
+    <td class="px-4 py-1.5 align-top">
+        <p class="text-[9px] font-black uppercase text-gray-400 leading-none mb-1">Responsável</p>
+        <select name="responsavel" id="responsavel-select-{{ tipo }}-{{ escola.pk }}" class="min-w-[150px] text-[11px] font-bold text-gray-900 bg-white border border-gray-300 rounded-lg px-2 py-1.5 w-full">
+            <option value="">Selecione</option>
+            {% for usuario in responsavel_opcoes %}
+            <option value="{{ usuario.pk }}" {% if rede.responsavel_id == usuario.pk %}selected{% endif %}>{{ usuario.get_full_name|default:usuario.username }}</option>
+            {% endfor %}
+        </select>
+    </td>
+    <td class="px-4 py-1.5 align-top min-w-[190px]">
+        <div class="flex items-center gap-2">
+            <button type="button"
+                    class="px-3 py-1.5 bg-ageis-black text-ageis-yellow font-black uppercase text-[10px] rounded-lg hover:bg-gray-800 transition shrink-0"
+                    onclick="window.salvarRede(this, '{{ tipo }}', {{ escola.pk }})">
+                Salvar
+            </button>
+            {% if rede.pk %}
+            <button type="button" onclick="window.abrirCamposRede('{{ tipo }}', {{ escola.pk }});"
+                    class="p-1.5 text-gray-400 hover:text-gray-800 hover:bg-gray-100 rounded-lg transition" title="Campos">
+                <i data-lucide="list-plus" class="w-4 h-4"></i>
+            </button>
+            <button type="button" onclick="window.abrirHistoricoRede('{{ tipo }}', {{ escola.pk }});"
+                    class="p-1.5 text-gray-400 hover:text-gray-800 hover:bg-gray-100 rounded-lg transition" title="Histórico">
+                <i data-lucide="history" class="w-4 h-4"></i>
+            </button>
+            {% if editavel_parceiro and tipo != "mc" and rede.status.nome == "Cotacao" %}
+            <button type="button" onclick="window.abrirCotacaoRede('{{ tipo }}', {{ escola.pk }});"
+                    class="p-1.5 text-gray-400 hover:text-gray-800 hover:bg-gray-100 rounded-lg transition" title="Cotação">
+                <i data-lucide="gavel" class="w-4 h-4"></i>
+            </button>
+            {% endif %}
+            {% endif %}
+        </div>
+    </td>
+    {% else %}
+    <td class="px-4 py-1.5 align-top">
+        <p class="text-[9px] font-black uppercase text-gray-400 leading-none mb-0.5">Setor</p>
+        <p class="text-[11px] font-bold text-gray-900">{{ rede.setor.nome }}</p>
+    </td>
+    <td class="px-4 py-1.5 align-top">
+        <p class="text-[9px] font-black uppercase text-gray-400 leading-none mb-0.5">Parceiro</p>
+        <p class="text-[11px] font-bold text-gray-900">{{ referencia.parceiro|default:"Não informado" }}</p>
+        {% if editavel_parceiro %}
+        <input type="hidden" name="parceiro" id="parceiro-input-{{ tipo }}-{{ escola.pk }}" value="{{ rede.parceiro_id|default:'' }}">
+        <button type="button" id="parceiro-btn-{{ tipo }}-{{ escola.pk }}"
+                onclick="window.abrirParceiroModal('{{ tipo }}', {{ escola.pk }})"
+                class="mt-0.5 block w-full text-left text-[11px] font-bold truncate transition hover:underline {% if rede.parceiro %}text-gray-900 hover:text-ageis-black{% else %}text-gray-400 italic hover:text-gray-600{% endif %}">
+            {{ rede.parceiro|default:"Vincular parceiro" }}
+        </button>
+        {% elif rede.parceiro %}
+        <p class="text-[10px] font-bold text-gray-500 mt-0.5">Vinculado: {{ rede.parceiro }}</p>
+        {% endif %}
+    </td>
+    <td class="px-4 py-1.5 align-top">
+        <p class="text-[9px] font-black uppercase text-gray-400 leading-none mb-0.5">Status</p>
+        <p class="text-[11px] font-bold text-gray-900">{{ rede.status.nome|default:"Não informado" }}</p>
+    </td>
+    <td class="px-4 py-1.5 align-top">
+        <p class="text-[9px] font-black uppercase text-gray-400 leading-none mb-0.5">Responsável</p>
+        <p class="text-[11px] font-bold text-gray-900">{% if rede.responsavel %}{{ rede.responsavel.get_full_name|default:rede.responsavel.username }}{% else %}Não atribuído{% endif %}</p>
+    </td>
+    <td class="px-4 py-1.5 align-top min-w-[190px]">
+        <div class="flex items-center justify-between gap-2">
+            <a href="{% url 'setor_detail' nome=rede.setor.nome %}" class="text-[10px] font-bold text-gray-500 hover:text-gray-800 underline">
+                Está no Setor {{ rede.setor.nome }}
+            </a>
+            <div class="flex items-center gap-1 shrink-0">
+                <button type="button" onclick="window.abrirCamposRede('{{ tipo }}', {{ escola.pk }});"
+                        class="p-1.5 text-gray-400 hover:text-gray-800 hover:bg-gray-100 rounded-lg transition" title="Campos">
+                    <i data-lucide="list-plus" class="w-4 h-4"></i>
+                </button>
+                <button type="button" onclick="window.abrirHistoricoRede('{{ tipo }}', {{ escola.pk }});"
+                        class="p-1.5 text-gray-400 hover:text-gray-800 hover:bg-gray-100 rounded-lg transition" title="Histórico">
+                    <i data-lucide="history" class="w-4 h-4"></i>
+                </button>
+            </div>
+        </div>
+    </td>
+    {% endif %}
+</tr>

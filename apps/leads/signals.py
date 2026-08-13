@@ -1,8 +1,8 @@
 # apps/leads/signals.py
 from django.db.models.signals import post_save
 from django.dispatch import receiver
-from leads.models import Lead 
-from partners.models import Partner
+from apps.leads.models import Lead
+from apps.partners.models import Partner
 
 @receiver(post_save, sender=Lead)
 def move_lead_to_partner(sender, instance, created, **kwargs):

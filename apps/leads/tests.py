@@ -1,10 +1,16 @@
 from django.contrib.auth import get_user_model
-from django.test import TestCase
+from django.contrib.auth.models import AnonymousUser, Group
+from django.contrib.contenttypes.models import ContentType
+from django.core.files.uploadedfile import SimpleUploadedFile
+from django.test import RequestFactory, TestCase
 from django.urls import reverse
 
-from clientes.models import Cliente, Endereco
-from leads.models import LeadEmpresa, LeadEndereco
-from partners.models import Partner, Proposal
+from apps.clientes.models import Cliente, Endereco
+from apps.core.models import RegistroHistorico
+from apps.escolas.models import Campo, CampoValor, CotacaoParceiro, Escola, MapaCalor, Processo, RedeExterna, RedeInterna, Setor, SetorEscopo, SetorStatus, TargetRedeExterna
+from apps.leads import context_processors, services
+from apps.leads.models import AcessoSetor, Lead, LeadEmpresa, LeadEndereco
+from apps.partners.models import Partner, Proposal
 
 
 class EnderecoLastmilePartnerSearchTests(TestCase):
@@ -196,3 +202,2671 @@ class EnderecoLastmilePartnerSearchTests(TestCase):
                 status="analise",
             ).exists()
         )
+
+
+class LeadViewsTests(TestCase):
+    """Cobertura HTTP (PO-011, fatia leads) dos fluxos de apps/leads/views.py
+    que ainda nao tinham teste no nivel de view."""
+
+    def setUp(self):
+        self.user = get_user_model().objects.create_user(
+            username="dev-tester",
+            password="senha-segura",
+            is_superuser=True,
+            is_staff=True,
+        )
+        self.client.force_login(self.user)
+
+        self.cliente = Cliente.objects.create(
+            id_ixc="800",
+            razao_social="Cliente Convert",
+            nome_fantasia="Cliente Convert",
+            cnpj_cpf="00000000000200",
+        )
+        self.endereco = Endereco.objects.create(
+            cliente=self.cliente,
+            logradouro="Rua Teste",
+            numero="10",
+            bairro="Centro",
+            cidade="Fortaleza",
+            estado="CE",
+        )
+        self.lead = Lead.objects.create(
+            razao_social="Provedor Teste LTDA",
+            nome_fantasia="Provedor Teste",
+            cnpj_cpf="11122233000144",
+            telefone="85999990000",
+            email="contato@provedorteste.com.br",
+            cidade="Fortaleza",
+            estado="CE",
+        )
+
+    def _proposal_payload(self, **overrides):
+        data = {
+            'status': 'analise',
+            'velocidade': '100 Mbps',
+            'tecnologia': 'Fibra',
+            'disponibilidade': '99,50%',
+            'mttr': '4',
+            'perda_pacote': '<1%',
+            'latencia': '50',
+            'interfaces': 'Gigabit Ethernet',
+            'ipv4_bloco': 'IPv4 bloco/30',
+            'trunk': 'Não',
+            'dhcp': 'Sim',
+            'tempo_contrato': '24',
+        }
+        data.update(overrides)
+        return data
+
+    def test_lead_list_legado_exige_grupo_lastmile(self):
+        outro_user = get_user_model().objects.create_user(username="sem-grupo", password="outra-senha")
+        self.client.force_login(outro_user)
+        response = self.client.get(reverse('lead_list_legacy'))
+        self.assertEqual(response.status_code, 403)
+
+    def test_lead_list_legado_aplica_filtro_de_cidade(self):
+        response = self.client.get(reverse('lead_list_legacy'), {'cidade': 'Fortaleza'})
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Provedor Teste")
+
+    def test_lead_create_sincroniza_empresa_estruturada_e_redireciona(self):
+        response = self.client.post(reverse('lead_create'), {
+            'razao_social': 'Nova Prospeccao LTDA',
+            'nome_fantasia': 'Nova Prospeccao',
+            'cnpj_cpf': '22233344000155',
+        })
+
+        lead_criado = Lead.objects.get(cnpj_cpf='22233344000155')
+        self.assertIsNotNone(lead_criado.empresa_estruturada)
+        self.assertRedirects(
+            response,
+            reverse('lead_empresa_endereco_create', args=[lead_criado.empresa_estruturada_id]),
+        )
+
+    def test_lead_update_atualiza_dados_e_sincroniza_espelho(self):
+        response = self.client.post(reverse('lead_update', args=[self.lead.pk]), {
+            'razao_social': 'Provedor Teste Atualizado',
+            'nome_fantasia': 'Provedor Teste',
+            'cnpj_cpf': self.lead.cnpj_cpf,
+        })
+
+        self.assertRedirects(response, reverse('lead_list'))
+        self.lead.refresh_from_db()
+        self.assertEqual(self.lead.razao_social, 'Provedor Teste Atualizado')
+        self.assertIsNotNone(self.lead.empresa_estruturada)
+
+    def test_lead_add_historico_com_descricao_cria_registro(self):
+        response = self.client.post(reverse('lead_add_historico', args=[self.lead.pk]), {
+            'descricao': 'Cliente pediu retorno amanha.',
+        })
+
+        self.assertRedirects(response, reverse('lead_update', args=[self.lead.pk]))
+        lead_type = ContentType.objects.get_for_model(Lead)
+        self.assertTrue(
+            RegistroHistorico.objects.filter(content_type=lead_type, object_id=self.lead.id).exists()
+        )
+
+    def test_lead_add_historico_sem_dados_nao_cria_registro(self):
+        self.client.post(reverse('lead_add_historico', args=[self.lead.pk]), {})
+
+        lead_type = ContentType.objects.get_for_model(Lead)
+        self.assertFalse(
+            RegistroHistorico.objects.filter(content_type=lead_type, object_id=self.lead.id).exists()
+        )
+
+    def test_lead_delete_remove_lead_da_base(self):
+        response = self.client.post(reverse('lead_delete', args=[self.lead.pk]))
+
+        self.assertRedirects(response, reverse('lead_list'))
+        self.assertFalse(Lead.objects.filter(pk=self.lead.pk).exists())
+
+    def test_update_status_andamento_bloqueia_quando_cnpj_ja_e_parceiro(self):
+        Partner.objects.create(
+            nome_fantasia="Parceiro Duplicado",
+            razao_social="Parceiro Duplicado LTDA",
+            cnpj_cpf=self.lead.cnpj_cpf,
+            status='ativo',
+        )
+
+        response = self.client.post(reverse('update_lead_status', args=[self.lead.pk]), {'status': 'andamento'})
+
+        self.assertRedirects(response, reverse('lead_list'))
+        self.lead.refresh_from_db()
+        self.assertEqual(self.lead.status, 'novo')
+
+    def test_update_status_andamento_sem_conflito_redireciona_para_conversao(self):
+        response = self.client.post(reverse('update_lead_status', args=[self.lead.pk]), {'status': 'andamento'})
+
+        self.assertRedirects(response, reverse('lead_convert', args=[self.lead.pk]))
+
+    def test_update_status_inviavel_registra_historico_e_altera_status(self):
+        response = self.client.post(reverse('update_lead_status', args=[self.lead.pk]), {
+            'status': 'inviavel',
+            'observacao': 'Regiao sem viabilidade tecnica.',
+        })
+
+        self.assertRedirects(response, reverse('lead_list'))
+        self.lead.refresh_from_db()
+        self.assertEqual(self.lead.status, 'inviavel')
+        lead_type = ContentType.objects.get_for_model(Lead)
+        self.assertTrue(
+            RegistroHistorico.objects.filter(content_type=lead_type, object_id=self.lead.id).exists()
+        )
+
+    def test_update_status_negociacao_quando_ja_em_negociacao_nao_gera_erro(self):
+        self.lead.status = 'negociacao'
+        self.lead.save(update_fields=['status'])
+
+        response = self.client.post(reverse('update_lead_status', args=[self.lead.pk]), {'status': 'negociacao'})
+
+        self.assertRedirects(response, reverse('lead_list'))
+
+    def test_update_status_negociacao_a_partir_de_outro_status_registra_historico(self):
+        """PO-037: `mover_lead_para_negociacao` referenciava `Lead.STATUS_CHOICES`
+        (inexistente; o certo e o `LEAD_STATUS_CHOICES` de apps/leads/models.py)
+        e quebrava com AttributeError sempre que o lead mudava de fato de status
+        para "negociacao", sem registrar o historico da transicao."""
+        response = self.client.post(reverse('update_lead_status', args=[self.lead.pk]), {'status': 'negociacao'})
+
+        self.assertRedirects(response, reverse('lead_list'))
+        self.lead.refresh_from_db()
+        self.assertEqual(self.lead.status, 'negociacao')
+        lead_type = ContentType.objects.get_for_model(Lead)
+        self.assertTrue(
+            RegistroHistorico.objects.filter(content_type=lead_type, object_id=self.lead.id).exists()
+        )
+
+    def test_lead_quick_proposal_cria_proposta_sem_remover_lead(self):
+        response = self.client.post(reverse('lead_quick_proposal', args=[self.lead.pk]), {
+            'cliente_id': str(self.cliente.pk),
+            'enderecos_selecionados': [str(self.endereco.pk)],
+        })
+
+        self.assertEqual(response.status_code, 302)
+        self.assertTrue(Lead.objects.filter(pk=self.lead.pk).exists())
+        self.assertTrue(
+            Proposal.objects.filter(lead=self.lead, client_address=self.endereco).exists()
+        )
+
+    def test_lead_quick_proposal_sem_cliente_exibe_erro_e_nao_cria_proposta(self):
+        response = self.client.post(reverse('lead_quick_proposal', args=[self.lead.pk]), {
+            'enderecos_selecionados': [str(self.endereco.pk)],
+        })
+
+        self.assertRedirects(response, reverse('lead_list'))
+        self.assertFalse(Proposal.objects.filter(lead=self.lead).exists())
+
+    def test_lead_convert_get_exibe_formulario_com_rascunho_do_parceiro(self):
+        response = self.client.get(reverse('lead_convert', args=[self.lead.pk]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, self.lead.nome_fantasia)
+
+    def test_lead_convert_post_converte_lead_em_parceiro_e_remove_lead(self):
+        response = self.client.post(
+            reverse('lead_convert', args=[self.lead.pk]),
+            self._proposal_payload(enderecos_selecionados=[str(self.endereco.pk)]),
+        )
+
+        self.assertFalse(Lead.objects.filter(pk=self.lead.pk).exists())
+        partner = Partner.objects.get(cnpj_cpf='11122233000144')
+        self.assertRedirects(response, reverse('partner_detail', args=[partner.pk]))
+        self.assertTrue(
+            Proposal.objects.filter(partner=partner, client_address=self.endereco).exists()
+        )
+
+    def test_integracoes_view_sem_arquivo_retorna_erro_400(self):
+        response = self.client.post(reverse('integracoes_lastmile'), {})
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('erro', response.json())
+
+    def test_enderecos_lastmile_view_lista_escolas_do_dashboard_eace(self):
+        Escola.objects.create(
+            jira_key='EACE-1',
+            uf='SP',
+            status_escola='Conectado',
+            inep='12345678',
+            nome='ESCOLA MUNICIPAL TESTE',
+            municipio='Sao Paulo',
+            endereco_descricao='Rua Teste, 100',
+        )
+
+        response = self.client.get(reverse('enderecos_lastmile'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'ESCOLA MUNICIPAL TESTE')
+        self.assertContains(response, '12345678')
+        self.assertContains(response, 'Sao Paulo')
+
+    def test_enderecos_lastmile_view_busca_por_inep(self):
+        Escola.objects.create(jira_key='EACE-1', uf='SP', nome='ESCOLA A', inep='11111111')
+        Escola.objects.create(jira_key='EACE-2', uf='SP', nome='ESCOLA B', inep='22222222')
+
+        response = self.client.get(reverse('enderecos_lastmile'), {'q': '11111111'})
+
+        self.assertContains(response, 'ESCOLA A')
+        self.assertNotContains(response, 'ESCOLA B')
+
+    def test_enderecos_lastmile_view_exibe_referencia_re_ri_da_api(self):
+        Escola.objects.create(
+            jira_key='EACE-1',
+            nome='ESCOLA COM RE RI',
+            dados_api={
+                'parceiro_re': 'Parceiro RE Ltda',
+                'parceiro_ri': 'Parceiro RI Ltda',
+                'velocidade_dl_ofertada': 100,
+            },
+        )
+
+        response = self.client.get(reverse('enderecos_lastmile'))
+
+        self.assertContains(response, 'Parceiro RE Ltda')
+        self.assertContains(response, 'Parceiro RI Ltda')
+        # RN-053: "Velocidade ofertada" nao e mais exibida na linha expandida.
+
+    def test_enderecos_lastmile_view_sem_dados_re_ri_mostra_nao_informado(self):
+        Escola.objects.create(jira_key='EACE-2', nome='ESCOLA SEM RE RI')
+
+        response = self.client.get(reverse('enderecos_lastmile'))
+
+        self.assertContains(response, 'Não informado')
+
+    def test_enderecos_lastmile_view_nao_depende_mais_de_endereco(self):
+        # Endereco vazio/nao elegivel (cenario da ADR-008); tela deve mesmo
+        # assim renderizar normalmente pois nao depende mais de Endereco.
+        response = self.client.get(reverse('enderecos_lastmile'))
+
+        self.assertEqual(response.status_code, 200)
+
+    def test_enderecos_lastmile_view_mostra_coluna_status_da_escola(self):
+        Escola.objects.create(jira_key='EACE-STATUS', nome='ESCOLA STATUS', status_escola='Conectado')
+
+        response = self.client.get(reverse('enderecos_lastmile'))
+
+        self.assertContains(response, 'Conectado')
+
+
+    def test_enderecos_lastmile_cliente_view_lista_status_200(self):
+        response = self.client.get(reverse('enderecos_lastmile_cliente', args=[self.cliente.pk]))
+
+        self.assertEqual(response.status_code, 200)
+
+    def test_lead_empresa_list_status_200(self):
+        response = self.client.get(reverse('lead_list'))
+
+        self.assertEqual(response.status_code, 200)
+
+    def test_lead_empresa_endereco_create_sincroniza_lead_espelho(self):
+        empresa = LeadEmpresa.objects.create(razao_social='Empresa X', nome_fantasia='Empresa X')
+
+        response = self.client.post(reverse('lead_empresa_endereco_create', args=[empresa.pk]), {
+            'cidade': 'Fortaleza',
+            'estado': 'CE',
+            'bairro': 'Aldeota',
+        })
+
+        self.assertRedirects(response, reverse('lead_empresa_detail', args=[empresa.pk]))
+        self.assertTrue(empresa.enderecos.exists())
+        self.assertTrue(empresa.enderecos.first().leads_legados.exists())
+
+    def test_api_lead_empresa_search_retorna_json(self):
+        LeadEmpresa.objects.create(razao_social='API Search LTDA', nome_fantasia='API Search')
+
+        response = self.client.get(reverse('api_lead_empresa_search'), {'q': 'API Search'})
+
+        self.assertEqual(response.status_code, 200)
+        nomes = {item['nome'] for item in response.json()['results']}
+        self.assertIn('API Search', nomes)
+
+    def test_download_modelo_google_view_retorna_planilha(self):
+        response = self.client.get(reverse('download_modelo_google'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response['Content-Type'],
+            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        )
+
+
+class EscolaRedeEditarViewTests(TestCase):
+    """PO-051/ADR-015: Setor e Status do processo interno (RedeExterna/
+    RedeInterna) editaveis no grid. Processo e fixo por tipo
+    (NOME_PROCESSO_PADRAO) — nao e escolhido na tela."""
+
+    def setUp(self):
+        self.user = get_user_model().objects.create_user(
+            username="dev-tester-rede", password="senha-segura", is_superuser=True,
+        )
+        self.client.force_login(self.user)
+
+        self.escola = Escola.objects.create(jira_key="EACE-REDE", nome="Escola Rede")
+        self.processo_re, _ = Processo.objects.get_or_create(nome=RedeExterna.NOME_PROCESSO_PADRAO)
+        self.processo_ri, _ = Processo.objects.get_or_create(nome=RedeInterna.NOME_PROCESSO_PADRAO)
+        self.setor = Setor.objects.create(processo=self.processo_re, nome="Lastmile QA")
+        self.status = SetorStatus.objects.create(setor=self.setor, nome="Em andamento")
+
+    def test_post_cria_rede_externa_com_processo_fixo(self):
+        response = self.client.post(
+            reverse('escola_rede_editar', args=[self.escola.pk, 're']),
+            {'setor': self.setor.pk, 'status': self.status.pk, 'responsavel': self.user.pk},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        re = RedeExterna.objects.get(escola=self.escola)
+        self.assertEqual(re.processo, self.processo_re)
+        self.assertEqual(re.setor, self.setor)
+        # RN-035: grid global ignora o Status enviado no POST — fica "Novo".
+        self.assertEqual(re.status.nome, "Novo")
+        self.assertContains(response, "atualizada")
+
+    def test_grid_global_ignora_status_do_post_e_usa_novo_automaticamente(self):
+        """RN-035: no grid global (sem setor_atual), o Status enviado no
+        POST nao decide nada — o RE/RI e salvo com o Status "Novo" do
+        Setor escolhido, criado automaticamente se ainda nao existir."""
+        outro_status = SetorStatus.objects.create(setor=self.setor, nome="Concluido QA")
+
+        self.client.post(
+            reverse('escola_rede_editar', args=[self.escola.pk, 're']),
+            {'setor': self.setor.pk, 'status': outro_status.pk, 'responsavel': self.user.pk},
+        )
+
+        re = RedeExterna.objects.get(escola=self.escola)
+        self.assertEqual(re.status.nome, "Novo")
+        self.assertEqual(re.status.setor, self.setor)
+
+    def test_grid_global_reaproveita_status_novo_existente(self):
+        """RN-035: se o Setor escolhido ja tiver um Status "Novo", ele e
+        reaproveitado em vez de duplicado (mesmo padrao da RN-033)."""
+        novo_existente = SetorStatus.objects.create(setor=self.setor, nome="Novo")
+
+        self.client.post(
+            reverse('escola_rede_editar', args=[self.escola.pk, 're']),
+            {'setor': self.setor.pk, 'status': '', 'responsavel': self.user.pk},
+        )
+
+        re = RedeExterna.objects.get(escola=self.escola)
+        self.assertEqual(re.status_id, novo_existente.pk)
+        self.assertEqual(SetorStatus.objects.filter(setor=self.setor, nome="Novo").count(), 1)
+
+    def test_grid_global_nao_exibe_select_de_status(self):
+        """RN-035: no grid global, so o Setor e editavel — o campo Status
+        nao aparece como select, mesmo na primeira atribuicao."""
+        response = self.client.get(reverse('enderecos_lastmile'))
+
+        self.assertContains(response, f'id="setor-select-re-{self.escola.pk}"')
+        self.assertNotContains(response, f'id="status-select-re-{self.escola.pk}"')
+
+    def test_primeira_atribuicao_de_setor_e_permitida_na_tela_global(self):
+        response = self.client.post(
+            reverse('escola_rede_editar', args=[self.escola.pk, 're']),
+            {'setor': self.setor.pk, 'status': '', 'responsavel': self.user.pk},
+        )
+
+        re = RedeExterna.objects.get(escola=self.escola)
+        self.assertEqual(re.setor, self.setor)
+        self.assertContains(response, "atualizada")
+
+    def test_alterar_setor_de_atividade_ja_atribuida_e_bloqueado_na_tela_global(self):
+        """RN-056: este bloqueio (nao a obrigatoriedade de Responsavel) e o
+        motivo pelo qual mover uma subatividade ja atribuida para outro
+        Setor pelo grid global nunca chega a exigir Responsavel — so a
+        Tela do proprio Setor pode mover, e la a excecao ja existe."""
+        outro_setor = Setor.objects.create(processo=self.processo_re, nome="Setor QA Bloqueio")
+        RedeExterna.objects.create(escola=self.escola, processo=self.processo_re, setor=self.setor, status=self.status)
+
+        response = self.client.post(
+            reverse('escola_rede_editar', args=[self.escola.pk, 're']),
+            {'setor': outro_setor.pk, 'status': ''},
+        )
+
+        re = RedeExterna.objects.get(escola=self.escola)
+        self.assertEqual(re.setor, self.setor)
+        self.assertEqual(re.status, self.status)
+        self.assertContains(response, "So e possivel alterar pela tela desse Setor")
+
+    def test_alterar_status_de_atividade_ja_atribuida_e_bloqueado_na_tela_global(self):
+        outro_status = SetorStatus.objects.create(setor=self.setor, nome="Concluido QA")
+        RedeExterna.objects.create(escola=self.escola, processo=self.processo_re, setor=self.setor, status=self.status)
+
+        response = self.client.post(
+            reverse('escola_rede_editar', args=[self.escola.pk, 're']),
+            {'setor': self.setor.pk, 'status': outro_status.pk},
+        )
+
+        re = RedeExterna.objects.get(escola=self.escola)
+        self.assertEqual(re.status, self.status)
+        self.assertContains(response, "So e possivel alterar pela tela desse Setor")
+
+    def test_alterar_setor_e_permitido_na_tela_do_proprio_setor(self):
+        outro_setor = Setor.objects.create(processo=self.processo_re, nome="Setor QA Bloqueio")
+        RedeExterna.objects.create(escola=self.escola, processo=self.processo_re, setor=self.setor)
+
+        response = self.client.post(
+            reverse('escola_rede_editar', args=[self.escola.pk, 're']),
+            {'setor': outro_setor.pk, 'status': '', 'setor_atual': self.setor.nome},
+        )
+
+        re = RedeExterna.objects.get(escola=self.escola)
+        self.assertEqual(re.setor, outro_setor)
+        self.assertContains(response, "atualizada")
+
+    def test_tela_global_mostra_campos_read_only_quando_ja_tem_setor(self):
+        RedeExterna.objects.create(escola=self.escola, processo=self.processo_re, setor=self.setor, status=self.status)
+
+        response = self.client.get(reverse('enderecos_lastmile'))
+
+        self.assertNotContains(response, f'id="setor-select-re-{self.escola.pk}"')
+        self.assertContains(response, f"Está no Setor {self.setor.nome}")
+
+    def test_tela_global_mostra_select_quando_ainda_nao_tem_setor(self):
+        RedeExterna.objects.create(escola=self.escola, processo=self.processo_re)
+
+        response = self.client.get(reverse('enderecos_lastmile'))
+
+        self.assertContains(response, f'id="setor-select-re-{self.escola.pk}"')
+
+    def test_post_com_setor_atual_igual_ao_novo_setor_pertence_a_tela(self):
+        response = self.client.post(
+            reverse('escola_rede_editar', args=[self.escola.pk, 're']),
+            {'setor': self.setor.pk, 'status': '', 'setor_atual': self.setor.nome},
+        )
+
+        self.assertContains(response, 'data-pertence-ao-setor="sim"')
+
+    def test_post_com_setor_atual_diferente_do_novo_setor_nao_pertence_a_tela(self):
+        outro_setor = Setor.objects.create(processo=self.processo_re, nome="Setor QA Saida")
+
+        response = self.client.post(
+            reverse('escola_rede_editar', args=[self.escola.pk, 're']),
+            {'setor': outro_setor.pk, 'status': '', 'setor_atual': self.setor.nome},
+        )
+
+        self.assertContains(response, 'data-pertence-ao-setor="nao"')
+
+    def test_post_sem_setor_atual_sempre_pertence_a_tela(self):
+        response = self.client.post(
+            reverse('escola_rede_editar', args=[self.escola.pk, 're']),
+            {'setor': self.setor.pk, 'status': ''},
+        )
+
+        self.assertContains(response, 'data-pertence-ao-setor="sim"')
+
+    def test_rede_interna_usa_processo_padrao_diferente_do_externo(self):
+        setor_ri = Setor.objects.create(processo=self.processo_ri, nome="Setor RI QA")
+
+        self.client.post(reverse('escola_rede_editar', args=[self.escola.pk, 're']), {'setor': self.setor.pk, 'status': '', 'responsavel': self.user.pk})
+        self.client.post(reverse('escola_rede_editar', args=[self.escola.pk, 'ri']), {'setor': setor_ri.pk, 'status': '', 'responsavel': self.user.pk})
+
+        re = RedeExterna.objects.get(escola=self.escola)
+        ri = RedeInterna.objects.get(escola=self.escola)
+        self.assertEqual(re.processo, self.processo_re)
+        self.assertEqual(ri.processo, self.processo_ri)
+
+    def test_post_atualiza_rede_existente_em_vez_de_duplicar(self):
+        RedeExterna.objects.create(escola=self.escola, processo=self.processo_re, setor=self.setor)
+
+        self.client.post(
+            reverse('escola_rede_editar', args=[self.escola.pk, 're']),
+            {'setor': self.setor.pk, 'status': self.status.pk, 'setor_atual': self.setor.nome, 'responsavel': self.user.pk},
+        )
+
+        self.assertEqual(RedeExterna.objects.filter(escola=self.escola).count(), 1)
+        re = RedeExterna.objects.get(escola=self.escola)
+        self.assertEqual(re.status, self.status)
+
+    def test_post_com_setor_de_outro_processo_nao_salva(self):
+        setor_do_processo_ri = Setor.objects.create(processo=self.processo_ri, nome="Setor RI QA")
+
+        response = self.client.post(
+            reverse('escola_rede_editar', args=[self.escola.pk, 're']),
+            {'setor': setor_do_processo_ri.pk, 'status': ''},
+        )
+
+        self.assertFalse(RedeExterna.objects.filter(escola=self.escola).exists())
+        self.assertContains(response, "setor")
+
+    def test_post_com_status_de_outro_setor_nao_salva(self):
+        """A validacao de integridade Setor/Status (RN-026) so e alcancavel
+        onde o Status ainda vem do POST — na Tela de Setor (RN-033); no
+        grid global o Status deixou de vir do POST (RN-035)."""
+        RedeExterna.objects.create(escola=self.escola, processo=self.processo_re, setor=self.setor)
+        outro_setor = Setor.objects.create(processo=self.processo_re, nome="Setor QA Outro")
+        status_de_outro_setor = SetorStatus.objects.create(setor=outro_setor, nome="Concluido")
+
+        response = self.client.post(
+            reverse('escola_rede_editar', args=[self.escola.pk, 're']),
+            {'setor': self.setor.pk, 'status': status_de_outro_setor.pk, 'setor_atual': self.setor.nome},
+        )
+
+        re = RedeExterna.objects.get(escola=self.escola)
+        self.assertIsNone(re.status)
+        self.assertContains(response, "status")
+
+    def test_post_sem_processo_padrao_cadastrado_mostra_erro(self):
+        self.processo_re.delete()
+
+        response = self.client.post(
+            reverse('escola_rede_editar', args=[self.escola.pk, 're']),
+            {'setor': '', 'status': ''},
+        )
+
+        self.assertFalse(RedeExterna.objects.filter(escola=self.escola).exists())
+        self.assertContains(response, "nao esta cadastrado")
+
+    def test_get_tipo_invalido_404(self):
+        response = self.client.get(reverse('escola_rede_editar', args=[self.escola.pk, 'xx']))
+
+        self.assertEqual(response.status_code, 404)
+
+    def test_usuario_sem_permissao_e_bloqueado(self):
+        sem_permissao = get_user_model().objects.create_user(username="sem-permissao-rede", password="senha-segura")
+        self.client.force_login(sem_permissao)
+
+        response = self.client.post(
+            reverse('escola_rede_editar', args=[self.escola.pk, 're']),
+            {'setor': '', 'status': ''},
+        )
+
+        self.assertEqual(response.status_code, 403)
+
+    def test_setor_status_opcoes_filtra_por_setor(self):
+        outro_setor = Setor.objects.create(processo=self.processo_re, nome="Setor QA Outro")
+        SetorStatus.objects.create(setor=outro_setor, nome="Status de outro setor")
+
+        response = self.client.get(reverse('setor_status_opcoes'), {'setor': self.setor.pk})
+
+        self.assertContains(response, "Em andamento")
+        self.assertNotContains(response, "Status de outro setor")
+
+    def test_setor_status_opcoes_sem_setor_devolve_lista_vazia(self):
+        response = self.client.get(reverse('setor_status_opcoes'))
+
+        self.assertNotContains(response, "Em andamento")
+
+    def test_enviar_para_outro_setor_define_status_aguardando_automaticamente(self):
+        """RN-033: ao enviar a subatividade para outro Setor pela Tela de
+        Setor, o Status vai automaticamente para "Aguardando" do Setor de
+        destino, mesmo sem nenhum Status enviado no POST."""
+        outro_setor = Setor.objects.create(processo=self.processo_re, nome="Setor QA Destino")
+        RedeExterna.objects.create(escola=self.escola, processo=self.processo_re, setor=self.setor, status=self.status)
+
+        response = self.client.post(
+            reverse('escola_rede_editar', args=[self.escola.pk, 're']),
+            {'setor': outro_setor.pk, 'status': '', 'setor_atual': self.setor.nome},
+        )
+
+        re = RedeExterna.objects.get(escola=self.escola)
+        self.assertEqual(re.setor, outro_setor)
+        self.assertEqual(re.status.nome, "Aguardando")
+        self.assertEqual(re.status.setor, outro_setor)
+        self.assertContains(response, "atualizada")
+
+    def test_enviar_para_outro_setor_ignora_status_escolhido_no_post(self):
+        """RN-033: o Status enviado no POST nao decide nada quando o Setor
+        selecionado deixa de ser o Setor atual — quem envia nao escolhe o
+        status do Setor de destino."""
+        outro_setor = Setor.objects.create(processo=self.processo_re, nome="Setor QA Destino")
+        status_de_outro_setor = SetorStatus.objects.create(setor=outro_setor, nome="Concluido")
+        RedeExterna.objects.create(escola=self.escola, processo=self.processo_re, setor=self.setor, status=self.status)
+
+        self.client.post(
+            reverse('escola_rede_editar', args=[self.escola.pk, 're']),
+            {'setor': outro_setor.pk, 'status': status_de_outro_setor.pk, 'setor_atual': self.setor.nome},
+        )
+
+        re = RedeExterna.objects.get(escola=self.escola)
+        self.assertEqual(re.status.nome, "Aguardando")
+
+    def test_enviar_para_outro_setor_reaproveita_status_aguardando_existente(self):
+        """RN-033: se o Setor de destino ja tiver um Status "Aguardando",
+        ele e reaproveitado em vez de duplicado."""
+        outro_setor = Setor.objects.create(processo=self.processo_re, nome="Setor QA Destino")
+        aguardando_existente = SetorStatus.objects.create(setor=outro_setor, nome="Aguardando")
+        RedeExterna.objects.create(escola=self.escola, processo=self.processo_re, setor=self.setor, status=self.status)
+
+        self.client.post(
+            reverse('escola_rede_editar', args=[self.escola.pk, 're']),
+            {'setor': outro_setor.pk, 'status': '', 'setor_atual': self.setor.nome},
+        )
+
+        re = RedeExterna.objects.get(escola=self.escola)
+        self.assertEqual(re.status_id, aguardando_existente.pk)
+        self.assertEqual(SetorStatus.objects.filter(setor=outro_setor, nome="Aguardando").count(), 1)
+
+    def test_manter_no_proprio_setor_respeita_status_escolhido_no_post(self):
+        """RN-033: a trava e so para quando o Setor muda — permanecendo no
+        Setor atual, o Status escolhido continua valendo normalmente."""
+        outro_status = SetorStatus.objects.create(setor=self.setor, nome="Concluido QA")
+        RedeExterna.objects.create(escola=self.escola, processo=self.processo_re, setor=self.setor, status=self.status)
+
+        self.client.post(
+            reverse('escola_rede_editar', args=[self.escola.pk, 're']),
+            {'setor': self.setor.pk, 'status': outro_status.pk, 'setor_atual': self.setor.nome, 'responsavel': self.user.pk},
+        )
+
+        re = RedeExterna.objects.get(escola=self.escola)
+        self.assertEqual(re.status, outro_status)
+
+    def test_subatividade_ja_em_setor_nao_mostra_opcao_selecione(self):
+        """Subatividade ja dentro de um Setor so vai para outro Setor —
+        nao existe a opcao de deixar Setor/Status em branco."""
+        RedeExterna.objects.create(escola=self.escola, processo=self.processo_re, setor=self.setor, status=self.status)
+
+        response = self.client.post(
+            reverse('escola_rede_editar', args=[self.escola.pk, 're']),
+            {'setor': self.setor.pk, 'status': self.status.pk, 'setor_atual': self.setor.nome},
+        )
+
+        self.assertNotContains(response, '<option value="">Selecione</option>')
+        self.assertNotContains(response, '<option value="">Selecione um setor</option>')
+
+    def test_subatividade_sem_setor_ainda_mostra_opcao_selecione(self):
+        """Sem Setor atribuido ainda (tela global), a opcao de deixar em
+        branco continua disponivel para a primeira atribuicao no select de
+        Setor. RN-035: ausencia do select de Status e verificada em
+        test_grid_global_nao_exibe_select_de_status (aqui o texto isolado
+        tambem aparece no JS de carregarStatusRede, entao nao serve de
+        evidencia)."""
+        response = self.client.get(reverse('enderecos_lastmile'))
+
+        # Escola criada no setUp ainda nao tem RedeExterna/RedeInterna.
+        self.assertContains(response, '<option value="">Selecione</option>')
+
+
+class EscolaRedeResponsavelTests(TestCase):
+    """PO-073/RN-052/ADR-027: Responsavel (usuario do sistema) de RE/RI/
+    MapaCalor, atribuivel/reatribuivel manualmente nas mesmas telas que
+    editam Setor/Status (grid global RN-026 e Tela de Setor RN-027/028),
+    zerado junto com o Status ao trocar de Setor (RN-033), com historico
+    De/Para (RN-029/041)."""
+
+    def setUp(self):
+        self.user = get_user_model().objects.create_user(
+            username="dev-tester-responsavel", password="senha-segura", is_superuser=True,
+        )
+        self.outro_usuario = get_user_model().objects.create_user(
+            username="outro-responsavel", password="senha-segura", first_name="Outro", last_name="Responsavel",
+        )
+        self.client.force_login(self.user)
+
+        self.escola = Escola.objects.create(jira_key="EACE-RESP-VIEW", nome="Escola Responsavel View")
+        self.processo_re, _ = Processo.objects.get_or_create(nome=RedeExterna.NOME_PROCESSO_PADRAO)
+        self.setor = Setor.objects.create(processo=self.processo_re, nome="Setor Responsavel QA")
+        self.status = SetorStatus.objects.create(setor=self.setor, nome="Em andamento")
+
+    def _content_type_re(self):
+        return ContentType.objects.get_for_model(RedeExterna)
+
+    def test_responsavel_e_atribuido_manualmente_na_tela_do_setor(self):
+        RedeExterna.objects.create(escola=self.escola, processo=self.processo_re, setor=self.setor, status=self.status)
+
+        response = self.client.post(
+            reverse('escola_rede_editar', args=[self.escola.pk, 're']),
+            {
+                'setor': self.setor.pk, 'status': self.status.pk,
+                'setor_atual': self.setor.nome, 'responsavel': self.user.pk,
+            },
+        )
+
+        re = RedeExterna.objects.get(escola=self.escola)
+        self.assertEqual(re.responsavel, self.user)
+        self.assertContains(response, "atualizada")
+
+    def test_responsavel_e_reatribuivel_para_outro_usuario(self):
+        RedeExterna.objects.create(
+            escola=self.escola, processo=self.processo_re, setor=self.setor, status=self.status,
+            responsavel=self.user,
+        )
+
+        self.client.post(
+            reverse('escola_rede_editar', args=[self.escola.pk, 're']),
+            {
+                'setor': self.setor.pk, 'status': self.status.pk,
+                'setor_atual': self.setor.nome, 'responsavel': self.outro_usuario.pk,
+            },
+        )
+
+        re = RedeExterna.objects.get(escola=self.escola)
+        self.assertEqual(re.responsavel, self.outro_usuario)
+
+    def test_responsavel_editavel_na_primeira_atribuicao_do_grid_global(self):
+        """RN-052/ADR-027 (pendencia resolvida): no grid global, Responsavel
+        segue a mesma trava de edicao ja usada para Setor — editavel na
+        primeira atribuicao, junto com o Setor."""
+        response = self.client.post(
+            reverse('escola_rede_editar', args=[self.escola.pk, 're']),
+            {'setor': self.setor.pk, 'status': '', 'responsavel': self.user.pk},
+        )
+
+        re = RedeExterna.objects.get(escola=self.escola)
+        self.assertEqual(re.responsavel, self.user)
+        self.assertContains(response, "atualizada")
+
+    def test_obrigatoriedade_nao_se_aplica_na_primeira_atribuicao_do_grid_global(self):
+        """RN-056: a primeira atribuicao de Setor pelo grid global (sem
+        setor_atual, subatividade que ainda nao tinha nenhum Setor) nunca
+        exige Responsavel — quem atribui por ali nao esta necessariamente
+        dentro do Setor de destino."""
+        response = self.client.post(
+            reverse('escola_rede_editar', args=[self.escola.pk, 're']),
+            {'setor': self.setor.pk, 'status': ''},
+        )
+
+        re = RedeExterna.objects.get(escola=self.escola)
+        self.assertEqual(re.setor, self.setor)
+        self.assertIsNone(re.responsavel)
+        self.assertContains(response, "atualizada")
+
+    def test_responsavel_e_zerado_ao_enviar_para_outro_setor(self):
+        """RN-052/ADR-027: RN-033 ja zera o Status para "Aguardando" ao
+        enviar a subatividade a outro Setor — Responsavel e zerado no
+        mesmo momento, liberando a subatividade para reatribuicao."""
+        outro_setor = Setor.objects.create(processo=self.processo_re, nome="Setor Responsavel Destino")
+        RedeExterna.objects.create(
+            escola=self.escola, processo=self.processo_re, setor=self.setor, status=self.status,
+            responsavel=self.user,
+        )
+
+        response = self.client.post(
+            reverse('escola_rede_editar', args=[self.escola.pk, 're']),
+            {'setor': outro_setor.pk, 'status': '', 'setor_atual': self.setor.nome},
+        )
+
+        re = RedeExterna.objects.get(escola=self.escola)
+        self.assertEqual(re.setor, outro_setor)
+        self.assertEqual(re.status.nome, "Aguardando")
+        self.assertIsNone(re.responsavel)
+        self.assertContains(response, "atualizada")
+
+    def test_obrigatoriedade_bloqueia_salvar_sem_responsavel_quando_setor_e_status_ficam_preenchidos(self):
+        """RN-052: Setor/Status/Responsavel continuam opcionais no banco,
+        mas o fluxo de edicao nao permite concluir a atribuicao (Setor e
+        Status preenchidos) sem Responsavel."""
+        response = self.client.post(
+            reverse('escola_rede_editar', args=[self.escola.pk, 're']),
+            {'setor': self.setor.pk, 'status': self.status.pk, 'setor_atual': self.setor.nome},
+        )
+
+        self.assertFalse(RedeExterna.objects.filter(escola=self.escola).exists())
+        self.assertContains(response, "Responsável")
+
+    def test_obrigatoriedade_nao_bloqueia_edicao_parcial_com_status_em_branco(self):
+        """Edicao que deixa Status em branco (ex.: so ajustando outro campo
+        na Tela de Setor) nao e bloqueada pela obrigatoriedade — o par
+        Setor+Status preenchidos e que exige Responsavel junto."""
+        RedeExterna.objects.create(escola=self.escola, processo=self.processo_re, setor=self.setor)
+
+        response = self.client.post(
+            reverse('escola_rede_editar', args=[self.escola.pk, 're']),
+            {'setor': self.setor.pk, 'status': '', 'setor_atual': self.setor.nome},
+        )
+
+        re = RedeExterna.objects.get(escola=self.escola)
+        self.assertIsNone(re.status)
+        self.assertContains(response, "atualizada")
+
+    def test_obrigatoriedade_nao_se_aplica_ao_enviar_para_outro_setor(self):
+        """RN-056: a zeragem automatica de Responsavel ao trocar de Setor
+        (RN-033) nao e bloqueada pela obrigatoriedade — e o unico caso em
+        que a subatividade fica, de proposito, sem Responsavel apos salvar."""
+        outro_setor = Setor.objects.create(processo=self.processo_re, nome="Setor Responsavel Destino 2")
+        RedeExterna.objects.create(
+            escola=self.escola, processo=self.processo_re, setor=self.setor, status=self.status,
+            responsavel=self.user,
+        )
+
+        response = self.client.post(
+            reverse('escola_rede_editar', args=[self.escola.pk, 're']),
+            {'setor': outro_setor.pk, 'status': '', 'setor_atual': self.setor.nome},
+        )
+
+        re = RedeExterna.objects.get(escola=self.escola)
+        self.assertEqual(re.setor, outro_setor)
+        self.assertContains(response, "atualizada")
+
+    def test_historico_de_para_ao_atribuir_responsavel(self):
+        RedeExterna.objects.create(escola=self.escola, processo=self.processo_re, setor=self.setor, status=self.status)
+
+        self.client.post(
+            reverse('escola_rede_editar', args=[self.escola.pk, 're']),
+            {
+                'setor': self.setor.pk, 'status': self.status.pk,
+                'setor_atual': self.setor.nome, 'responsavel': self.user.pk,
+            },
+        )
+
+        re = RedeExterna.objects.get(escola=self.escola)
+        registro = RegistroHistorico.objects.get(
+            content_type=self._content_type_re(), object_id=re.id, rotulo="Responsavel",
+        )
+        self.assertEqual(registro.valor_anterior, "Vazio")
+        self.assertEqual(registro.valor_novo, self.user.username)
+        self.assertIn("Responsavel", registro.acao)
+
+    def test_historico_de_para_ao_reatribuir_responsavel(self):
+        RedeExterna.objects.create(
+            escola=self.escola, processo=self.processo_re, setor=self.setor, status=self.status,
+            responsavel=self.user,
+        )
+
+        self.client.post(
+            reverse('escola_rede_editar', args=[self.escola.pk, 're']),
+            {
+                'setor': self.setor.pk, 'status': self.status.pk,
+                'setor_atual': self.setor.nome, 'responsavel': self.outro_usuario.pk,
+            },
+        )
+
+        re = RedeExterna.objects.get(escola=self.escola)
+        registro = RegistroHistorico.objects.get(
+            content_type=self._content_type_re(), object_id=re.id, rotulo="Responsavel",
+        )
+        self.assertEqual(registro.valor_anterior, self.user.username)
+        self.assertEqual(registro.valor_novo, self.outro_usuario.get_full_name())
+
+    def test_historico_de_para_ao_zerar_responsavel_por_troca_de_setor(self):
+        outro_setor = Setor.objects.create(processo=self.processo_re, nome="Setor Responsavel Destino 3")
+        RedeExterna.objects.create(
+            escola=self.escola, processo=self.processo_re, setor=self.setor, status=self.status,
+            responsavel=self.user,
+        )
+
+        self.client.post(
+            reverse('escola_rede_editar', args=[self.escola.pk, 're']),
+            {'setor': outro_setor.pk, 'status': '', 'setor_atual': self.setor.nome},
+        )
+
+        re = RedeExterna.objects.get(escola=self.escola)
+        registro = RegistroHistorico.objects.get(
+            content_type=self._content_type_re(), object_id=re.id, rotulo="Responsavel",
+        )
+        self.assertEqual(registro.valor_anterior, self.user.username)
+        self.assertEqual(registro.valor_novo, "Vazio")
+
+    def test_reatribuir_para_o_mesmo_responsavel_nao_gera_historico_duplicado(self):
+        RedeExterna.objects.create(
+            escola=self.escola, processo=self.processo_re, setor=self.setor, status=self.status,
+            responsavel=self.user,
+        )
+
+        self.client.post(
+            reverse('escola_rede_editar', args=[self.escola.pk, 're']),
+            {
+                'setor': self.setor.pk, 'status': self.status.pk,
+                'setor_atual': self.setor.nome, 'responsavel': self.user.pk,
+            },
+        )
+
+        re = RedeExterna.objects.get(escola=self.escola)
+        self.assertFalse(
+            RegistroHistorico.objects.filter(
+                content_type=self._content_type_re(), object_id=re.id, rotulo="Responsavel",
+            ).exists()
+        )
+
+    def test_usuario_sem_permissao_e_bloqueado(self):
+        sem_permissao = get_user_model().objects.create_user(username="sem-permissao-responsavel", password="senha-segura")
+        self.client.force_login(sem_permissao)
+
+        response = self.client.post(
+            reverse('escola_rede_editar', args=[self.escola.pk, 're']),
+            {'setor': self.setor.pk, 'status': self.status.pk, 'responsavel': self.user.pk},
+        )
+
+        self.assertEqual(response.status_code, 403)
+
+    def test_select_de_responsavel_aparece_no_grid_com_usuarios_ativos(self):
+        response = self.client.get(reverse('enderecos_lastmile'))
+
+        self.assertContains(response, f'id="responsavel-select-re-{self.escola.pk}"')
+        self.assertContains(response, self.outro_usuario.get_full_name())
+
+    def test_mapa_calor_tambem_aceita_responsavel(self):
+        """RN-052: a regra vale igualmente para as tres subatividades —
+        RedeExterna, RedeInterna e MapaCalor, sem excecao."""
+        processo_mc, _ = Processo.objects.get_or_create(nome=MapaCalor.NOME_PROCESSO_PADRAO)
+        setor_mc = Setor.objects.create(processo=processo_mc, nome="Setor MC Responsavel QA")
+        status_mc = SetorStatus.objects.create(setor=setor_mc, nome="Em andamento MC")
+        MapaCalor.objects.create(escola=self.escola, processo=processo_mc, setor=setor_mc, status=status_mc)
+
+        self.client.post(
+            reverse('escola_rede_editar', args=[self.escola.pk, 'mc']),
+            {
+                'setor': setor_mc.pk, 'status': status_mc.pk,
+                'setor_atual': setor_mc.nome, 'responsavel': self.user.pk,
+            },
+        )
+
+        mc = MapaCalor.objects.get(escola=self.escola)
+        self.assertEqual(mc.responsavel, self.user)
+
+
+class EscolaRedeHistoricoTests(TestCase):
+    """PO-054/RN-029: historico e anexo individuais de RedeExterna/
+    RedeInterna, com log automatico de alteracao de Setor/Status feita
+    pela tela, e visao combinada na Escola (RE + RI)."""
+
+    def setUp(self):
+        self.user = get_user_model().objects.create_user(
+            username="dev-tester-historico-rede", password="senha-segura", is_superuser=True,
+        )
+        self.client.force_login(self.user)
+
+        self.escola = Escola.objects.create(jira_key="EACE-HIST", nome="Escola Historico")
+        self.processo_re, _ = Processo.objects.get_or_create(nome=RedeExterna.NOME_PROCESSO_PADRAO)
+        self.processo_ri, _ = Processo.objects.get_or_create(nome=RedeInterna.NOME_PROCESSO_PADRAO)
+        self.setor = Setor.objects.create(processo=self.processo_re, nome="Setor Historico QA")
+        self.status = SetorStatus.objects.create(setor=self.setor, nome="Em andamento")
+        self.setor_ri = Setor.objects.create(processo=self.processo_ri, nome="Setor RI Historico QA")
+
+    def _content_type_re(self):
+        return ContentType.objects.get_for_model(RedeExterna)
+
+    def test_editar_rede_gera_historico_sistema_com_antes_e_depois(self):
+        # setor_atual: RN-035 faz o grid global ignorar o Status do POST,
+        # o que esconderia o "Status: Em andamento" verificado abaixo.
+        # RN-041 ampliada: Setor e Status mudam juntos (cascata) nesse
+        # submit, entao cada um gera o seu proprio RegistroHistorico.
+        self.client.post(
+            reverse('escola_rede_editar', args=[self.escola.pk, 're']),
+            {'setor': self.setor.pk, 'status': self.status.pk, 'setor_atual': self.setor.nome, 'responsavel': self.user.pk},
+        )
+
+        re = RedeExterna.objects.get(escola=self.escola)
+        registros = RegistroHistorico.objects.filter(content_type=self._content_type_re(), object_id=re.id)
+        # RN-052: Responsavel tambem muda (de Vazio para self.user) nesse
+        # mesmo submit, gerando seu proprio registro (Setor + Status +
+        # Responsavel).
+        self.assertEqual(registros.count(), 3)
+        for registro in registros:
+            self.assertEqual(registro.tipo, 'sistema')
+            self.assertIn("Antes:", registro.acao)
+
+        registro_setor = registros.get(rotulo="Setor")
+        self.assertIn(f"Setor: {self.setor.nome}", registro_setor.acao)
+        self.assertEqual(registro_setor.valor_novo, self.setor.nome)
+        self.assertEqual(registro_setor.valor_anterior, "Vazio")
+
+        registro_status = registros.get(rotulo="Status")
+        self.assertIn(f"Status: {self.status.nome}", registro_status.acao)
+        self.assertEqual(registro_status.valor_novo, self.status.nome)
+        self.assertEqual(registro_status.valor_anterior, "Vazio")
+
+        registro_responsavel = registros.get(rotulo="Responsavel")
+        self.assertEqual(registro_responsavel.valor_novo, self.user.username)
+        self.assertEqual(registro_responsavel.valor_anterior, "Vazio")
+
+    def test_reenviar_mesmo_setor_e_status_nao_duplica_historico(self):
+        url = reverse('escola_rede_editar', args=[self.escola.pk, 're'])
+        self.client.post(url, {'setor': self.setor.pk, 'status': self.status.pk, 'setor_atual': self.setor.nome, 'responsavel': self.user.pk})
+
+        re = RedeExterna.objects.get(escola=self.escola)
+        total_apos_primeira = RegistroHistorico.objects.filter(
+            content_type=self._content_type_re(), object_id=re.id,
+        ).count()
+
+        self.client.post(url, {'setor': self.setor.pk, 'status': self.status.pk, 'setor_atual': self.setor.nome, 'responsavel': self.user.pk})
+
+        total_apos_segunda = RegistroHistorico.objects.filter(
+            content_type=self._content_type_re(), object_id=re.id,
+        ).count()
+        self.assertEqual(total_apos_primeira, total_apos_segunda)
+
+    def test_alterar_so_status_gera_historico_so_com_status(self):
+        RedeExterna.objects.create(
+            escola=self.escola, processo=self.processo_re, setor=self.setor, status=self.status,
+            responsavel=self.user,
+        )
+        outro_status = SetorStatus.objects.create(setor=self.setor, nome="Concluido QA")
+
+        self.client.post(
+            reverse('escola_rede_editar', args=[self.escola.pk, 're']),
+            {'setor': self.setor.pk, 'status': outro_status.pk, 'setor_atual': self.setor.nome, 'responsavel': self.user.pk},
+        )
+
+        re = RedeExterna.objects.get(escola=self.escola)
+        registro = RegistroHistorico.objects.get(content_type=self._content_type_re(), object_id=re.id)
+        self.assertIn(f"Status: {outro_status.nome}", registro.acao)
+        self.assertNotIn("Setor:", registro.acao)
+
+    def test_alterar_so_status_preenche_de_para_estruturado(self):
+        """RN-041: quando so um dos tres campos (Setor/Status/Parceiro)
+        muda no mesmo submit, o registro preenche rotulo/valor_anterior/
+        valor_novo/setor_nome, alem de manter `acao`."""
+        RedeExterna.objects.create(
+            escola=self.escola, processo=self.processo_re, setor=self.setor, status=self.status,
+            responsavel=self.user,
+        )
+        outro_status = SetorStatus.objects.create(setor=self.setor, nome="Concluido Estruturado")
+
+        self.client.post(
+            reverse('escola_rede_editar', args=[self.escola.pk, 're']),
+            {'setor': self.setor.pk, 'status': outro_status.pk, 'setor_atual': self.setor.nome, 'responsavel': self.user.pk},
+        )
+
+        re = RedeExterna.objects.get(escola=self.escola)
+        registro = RegistroHistorico.objects.get(content_type=self._content_type_re(), object_id=re.id)
+        self.assertEqual(registro.rotulo, "Status")
+        self.assertEqual(registro.valor_anterior, self.status.nome)
+        self.assertEqual(registro.valor_novo, outro_status.nome)
+        self.assertEqual(registro.setor_nome, self.setor.nome)
+
+    def test_alterar_setor_e_status_juntos_gera_um_registro_estruturado_por_campo(self):
+        """RN-041 (ampliada): quando mais de um campo muda no mesmo submit
+        (cascata Setor->Status), cada campo alterado gera o seu proprio
+        RegistroHistorico estruturado — nao mais um unico registro com
+        frase combinada. Os dois registros compartilham o mesmo instante
+        (`data`) e o mesmo Setor capturado (`setor_nome`)."""
+        self.client.post(
+            reverse('escola_rede_editar', args=[self.escola.pk, 're']),
+            {'setor': self.setor.pk, 'status': self.status.pk, 'setor_atual': self.setor.nome, 'responsavel': self.user.pk},
+        )
+
+        re = RedeExterna.objects.get(escola=self.escola)
+        registros = RegistroHistorico.objects.filter(content_type=self._content_type_re(), object_id=re.id)
+        # RN-052: Responsavel muda junto (de Vazio para self.user) neste
+        # mesmo submit, entao tambem gera o seu proprio registro.
+        self.assertEqual(registros.count(), 3)
+
+        registro_setor = registros.get(rotulo="Setor")
+        self.assertEqual(registro_setor.valor_anterior, "Vazio")
+        self.assertEqual(registro_setor.valor_novo, self.setor.nome)
+        self.assertEqual(registro_setor.setor_nome, self.setor.nome)
+
+        registro_status = registros.get(rotulo="Status")
+        self.assertEqual(registro_status.valor_anterior, "Vazio")
+        self.assertEqual(registro_status.valor_novo, self.status.nome)
+        self.assertEqual(registro_status.setor_nome, self.setor.nome)
+
+        registro_responsavel = registros.get(rotulo="Responsavel")
+        self.assertEqual(registro_responsavel.valor_anterior, "Vazio")
+        self.assertEqual(registro_responsavel.valor_novo, self.user.username)
+
+        self.assertEqual(registro_setor.data, registro_status.data)
+        self.assertEqual(registro_setor.data, registro_responsavel.data)
+
+    def test_modal_exibe_formato_de_para_para_registro_estruturado(self):
+        RedeExterna.objects.create(
+            escola=self.escola, processo=self.processo_re, setor=self.setor, status=self.status,
+            responsavel=self.user,
+        )
+        outro_status = SetorStatus.objects.create(setor=self.setor, nome="Concluido Modal")
+        self.client.post(
+            reverse('escola_rede_editar', args=[self.escola.pk, 're']),
+            {'setor': self.setor.pk, 'status': outro_status.pk, 'setor_atual': self.setor.nome, 'responsavel': self.user.pk},
+        )
+
+        response = self.client.get(reverse('escola_rede_historico', args=[self.escola.pk, 're']))
+
+        self.assertContains(response, "Status")
+        self.assertContains(response, self.status.nome)
+        self.assertContains(response, outro_status.nome)
+        self.assertContains(response, self.setor.nome)
+
+    def test_modal_mostra_traco_quando_registro_estruturado_sem_setor(self):
+        """RN-041: Setor nao capturado nesse registro mostra "—", sem
+        quebrar o layout."""
+        re = RedeExterna.objects.create(escola=self.escola, processo=self.processo_re)
+        RegistroHistorico.objects.create(
+            tipo='sistema', acao='Atualizado:\n• Setor: Setor X', rotulo='Setor',
+            valor_anterior='Vazio', valor_novo='Setor X', setor_nome=None,
+            content_type=self._content_type_re(), object_id=re.id,
+        )
+
+        response = self.client.get(reverse('escola_rede_historico', args=[self.escola.pk, 're']))
+
+        self.assertContains(response, "—")
+
+    def test_modal_de_historico_e_20_por_cento_mais_largo(self):
+        """RN-041: modal de historico com 20% mais de largura em relacao
+        ao tamanho anterior (590px -> ~710px)."""
+        response = self.client.get(reverse('enderecos_lastmile'))
+
+        self.assertContains(response, "max-w-[710px]")
+
+    def test_modal_lista_historico_individual_do_re(self):
+        re = RedeExterna.objects.create(escola=self.escola, processo=self.processo_re)
+        RegistroHistorico.objects.create(
+            tipo='comentario', acao='Comentario exclusivo do RE', usuario=self.user,
+            content_type=self._content_type_re(), object_id=re.id,
+        )
+
+        response = self.client.get(reverse('escola_rede_historico', args=[self.escola.pk, 're']))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Comentario exclusivo do RE")
+
+    def test_anexo_e_comentario_de_re_nao_aparecem_no_historico_do_ri(self):
+        re = RedeExterna.objects.create(escola=self.escola, processo=self.processo_re)
+        ri = RedeInterna.objects.create(escola=self.escola, processo=self.processo_ri)
+        RegistroHistorico.objects.create(
+            tipo='comentario', acao='Somente do RE', usuario=self.user,
+            content_type=self._content_type_re(), object_id=re.id,
+        )
+
+        response = self.client.get(reverse('escola_rede_historico', args=[self.escola.pk, 'ri']))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, "Somente do RE")
+
+    def test_post_no_modal_adiciona_comentario(self):
+        RedeExterna.objects.create(escola=self.escola, processo=self.processo_re)
+
+        response = self.client.post(
+            reverse('escola_rede_historico', args=[self.escola.pk, 're']),
+            {'descricao': 'Novo comentario pelo modal'},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        re = RedeExterna.objects.get(escola=self.escola)
+        registro = RegistroHistorico.objects.get(content_type=self._content_type_re(), object_id=re.id)
+        self.assertEqual(registro.tipo, 'comentario')
+        self.assertEqual(registro.acao, 'Novo comentario pelo modal')
+
+    def test_post_no_modal_com_anexo_cria_tipo_anexo(self):
+        RedeExterna.objects.create(escola=self.escola, processo=self.processo_re)
+        arquivo = SimpleUploadedFile("nota.txt", b"conteudo", content_type="text/plain")
+
+        response = self.client.post(
+            reverse('escola_rede_historico', args=[self.escola.pk, 're']),
+            {'arquivo': arquivo},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        re = RedeExterna.objects.get(escola=self.escola)
+        registro = RegistroHistorico.objects.get(content_type=self._content_type_re(), object_id=re.id)
+        self.assertEqual(registro.tipo, 'anexo')
+
+    def test_post_no_modal_vazio_mostra_erro_e_nao_cria_registro(self):
+        RedeExterna.objects.create(escola=self.escola, processo=self.processo_re)
+
+        response = self.client.post(reverse('escola_rede_historico', args=[self.escola.pk, 're']), {})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Informe um comentario")
+        re = RedeExterna.objects.get(escola=self.escola)
+        self.assertFalse(RegistroHistorico.objects.filter(content_type=self._content_type_re(), object_id=re.id).exists())
+
+    def test_modal_404_quando_rede_ainda_nao_existe(self):
+        response = self.client.get(reverse('escola_rede_historico', args=[self.escola.pk, 're']))
+
+        self.assertEqual(response.status_code, 404)
+
+    def test_modal_404_com_tipo_invalido(self):
+        response = self.client.get(reverse('escola_rede_historico', args=[self.escola.pk, 'xx']))
+
+        self.assertEqual(response.status_code, 404)
+
+    def test_usuario_sem_permissao_e_bloqueado_no_modal(self):
+        RedeExterna.objects.create(escola=self.escola, processo=self.processo_re)
+        sem_permissao = get_user_model().objects.create_user(username="sem-permissao-historico", password="senha-segura")
+        self.client.force_login(sem_permissao)
+
+        response = self.client.get(reverse('escola_rede_historico', args=[self.escola.pk, 're']))
+
+        self.assertEqual(response.status_code, 403)
+
+    def test_historico_combinado_da_escola_mostra_re_e_ri_marcados_e_ordenados(self):
+        re = RedeExterna.objects.create(escola=self.escola, processo=self.processo_re)
+        ri = RedeInterna.objects.create(escola=self.escola, processo=self.processo_ri)
+        RegistroHistorico.objects.create(
+            tipo='comentario', acao='Entrada do RE', usuario=self.user,
+            content_type=self._content_type_re(), object_id=re.id,
+        )
+        RegistroHistorico.objects.create(
+            tipo='comentario', acao='Entrada do RI', usuario=self.user,
+            content_type=ContentType.objects.get_for_model(RedeInterna), object_id=ri.id,
+        )
+
+        response = self.client.get(reverse('escola_historico', args=[self.escola.pk]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Entrada do RE")
+        self.assertContains(response, "Entrada do RI")
+
+    def test_historico_combinado_funciona_mesmo_sem_ri_cadastrado(self):
+        RedeExterna.objects.create(escola=self.escola, processo=self.processo_re)
+
+        response = self.client.get(reverse('escola_historico', args=[self.escola.pk]))
+
+        self.assertEqual(response.status_code, 200)
+
+    def test_historico_combinado_inclui_registro_gravado_no_nivel_da_escola(self):
+        """PO-066/RN-042: registro gravado direto no content_type da Escola
+        (ex.: e-mail enviado a partir da tela da Escola) tambem aparece na
+        visao combinada — e a mesma tela chamada de "Histórico da Escola"."""
+        RegistroHistorico.objects.create(
+            tipo='sistema', acao='E-mail enviado pela tela de Escola.', usuario=self.user,
+            content_type=ContentType.objects.get_for_model(Escola), object_id=self.escola.id,
+        )
+
+        entradas = services.historico_combinado_escola(self.escola)
+
+        self.assertEqual(len(entradas), 1)
+        self.assertEqual(entradas[0].origem_tipo, 'escola')
+
+        response = self.client.get(reverse('escola_historico', args=[self.escola.pk]))
+        self.assertContains(response, 'E-mail enviado pela tela de Escola.')
+        self.assertContains(response, 'ESCOLA')
+
+
+class EscolaRedeParceiroTests(TestCase):
+    """PO-056/RN-030/ADR-018: Parceiro de RedeExterna/RedeInterna editavel
+    somente na tela do Setor de negocio "Lastmile", via modal de selecao."""
+
+    def setUp(self):
+        self.user = get_user_model().objects.create_user(
+            username="dev-tester-parceiro-rede", password="senha-segura", is_superuser=True,
+        )
+        self.client.force_login(self.user)
+
+        self.escola = Escola.objects.create(
+            jira_key="EACE-PARC", nome="Escola Parceiro", municipio="Recife", uf="PE",
+        )
+        self.processo_re, _ = Processo.objects.get_or_create(nome=RedeExterna.NOME_PROCESSO_PADRAO)
+        # Migration 0006 ja semeia Setor "Lastmile"/"Suprimentos" para o
+        # Processo padrao de RE — get_or_create evita duplicidade
+        # (escolas_setor.setor_unico_por_processo).
+        self.setor_lastmile, _ = Setor.objects.get_or_create(processo=self.processo_re, nome="Lastmile")
+        self.setor_suprimentos, _ = Setor.objects.get_or_create(processo=self.processo_re, nome="Suprimentos")
+
+        self.parceiro = Partner.objects.create(
+            nome_fantasia="Parceiro Recife", razao_social="Parceiro Recife LTDA",
+            cnpj_cpf="99999999000199", status="ativo",
+        )
+
+    def _content_type_re(self):
+        return ContentType.objects.get_for_model(RedeExterna)
+
+    def test_parceiro_e_salvo_na_tela_do_setor_lastmile(self):
+        RedeExterna.objects.create(escola=self.escola, processo=self.processo_re, setor=self.setor_lastmile)
+
+        response = self.client.post(
+            reverse('escola_rede_editar', args=[self.escola.pk, 're']),
+            {
+                'setor': self.setor_lastmile.pk, 'status': '',
+                'parceiro': self.parceiro.pk, 'setor_atual': 'Lastmile',
+            },
+        )
+
+        re = RedeExterna.objects.get(escola=self.escola)
+        self.assertEqual(re.parceiro, self.parceiro)
+        self.assertContains(response, str(self.parceiro))
+        self.assertContains(response, f'value="{self.parceiro.pk}"')
+
+    def test_parceiro_e_ignorado_fora_da_tela_do_setor_lastmile(self):
+        RedeExterna.objects.create(escola=self.escola, processo=self.processo_re, setor=self.setor_suprimentos)
+
+        self.client.post(
+            reverse('escola_rede_editar', args=[self.escola.pk, 're']),
+            {
+                'setor': self.setor_suprimentos.pk, 'status': '',
+                'parceiro': self.parceiro.pk, 'setor_atual': 'Suprimentos',
+            },
+        )
+
+        re = RedeExterna.objects.get(escola=self.escola)
+        self.assertIsNone(re.parceiro)
+
+    def test_parceiro_e_ignorado_na_tela_global_mesmo_sem_setor_ainda(self):
+        self.client.post(
+            reverse('escola_rede_editar', args=[self.escola.pk, 're']),
+            {'setor': '', 'status': '', 'parceiro': self.parceiro.pk},
+        )
+
+        re = RedeExterna.objects.get(escola=self.escola)
+        self.assertIsNone(re.parceiro)
+
+    def test_botao_de_parceiro_so_aparece_na_tela_do_setor_lastmile(self):
+        RedeExterna.objects.create(escola=self.escola, processo=self.processo_re, setor=self.setor_lastmile)
+
+        response_lastmile = self.client.get(reverse('setor_detail', args=['Lastmile']))
+        self.assertContains(response_lastmile, f'id="parceiro-btn-re-{self.escola.pk}"')
+
+        response_global = self.client.get(reverse('enderecos_lastmile'))
+        self.assertNotContains(response_global, f'id="parceiro-btn-re-{self.escola.pk}"')
+
+    def test_alterar_parceiro_gera_historico_com_antes_e_depois(self):
+        RedeExterna.objects.create(escola=self.escola, processo=self.processo_re, setor=self.setor_lastmile)
+
+        self.client.post(
+            reverse('escola_rede_editar', args=[self.escola.pk, 're']),
+            {
+                'setor': self.setor_lastmile.pk, 'status': '',
+                'parceiro': self.parceiro.pk, 'setor_atual': 'Lastmile',
+            },
+        )
+
+        re = RedeExterna.objects.get(escola=self.escola)
+        registro = RegistroHistorico.objects.get(content_type=self._content_type_re(), object_id=re.id)
+        self.assertIn(f"Parceiro: {self.parceiro}", registro.acao)
+        self.assertIn("Antes:", registro.acao)
+
+    def test_alterar_parceiro_preenche_de_para_estruturado(self):
+        """RN-041: alteracao so de Parceiro (unico campo mudando no
+        submit) preenche rotulo/valor_anterior/valor_novo/setor_nome."""
+        RedeExterna.objects.create(escola=self.escola, processo=self.processo_re, setor=self.setor_lastmile)
+
+        self.client.post(
+            reverse('escola_rede_editar', args=[self.escola.pk, 're']),
+            {
+                'setor': self.setor_lastmile.pk, 'status': '',
+                'parceiro': self.parceiro.pk, 'setor_atual': 'Lastmile',
+            },
+        )
+
+        re = RedeExterna.objects.get(escola=self.escola)
+        registro = RegistroHistorico.objects.get(content_type=self._content_type_re(), object_id=re.id)
+        self.assertEqual(registro.rotulo, "Parceiro")
+        self.assertEqual(registro.valor_anterior, "Vazio")
+        self.assertEqual(registro.valor_novo, str(self.parceiro))
+        self.assertEqual(registro.setor_nome, "Lastmile")
+
+    def test_modal_bloqueado_fora_da_tela_do_setor_lastmile(self):
+        response = self.client.get(
+            reverse('escola_rede_parceiro_modal', args=[self.escola.pk, 're']),
+            {'setor_atual': 'Suprimentos'},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Setor Lastmile")
+        self.assertNotContains(response, "Parceiro Recife")
+
+    def test_modal_lista_parceiros_na_tela_do_setor_lastmile(self):
+        response = self.client.get(
+            reverse('escola_rede_parceiro_modal', args=[self.escola.pk, 're']),
+            {'setor_atual': 'Lastmile'},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Parceiro Recife")
+
+    def test_modal_filtra_por_nome(self):
+        outro_parceiro = Partner.objects.create(
+            nome_fantasia="Outro Parceiro", razao_social="Outro Parceiro LTDA",
+            cnpj_cpf="88888888000188", status="ativo",
+        )
+
+        response = self.client.get(
+            reverse('escola_rede_parceiro_modal', args=[self.escola.pk, 're']),
+            {'setor_atual': 'Lastmile', 'q': 'Recife'},
+        )
+
+        self.assertContains(response, "Parceiro Recife")
+        self.assertNotContains(response, outro_parceiro.nome_fantasia)
+
+
+class SeedStatusCotacaoLastmileTests(TestCase):
+    """RN-044/ADR-026: migration 0016_seed_status_cotacao_lastmile garante
+    que "Cotacao" existe como SetorStatus do Setor "Lastmile", nos
+    Processos de RE e de RI (RN-025), sem exigir cadastro manual."""
+
+    def test_status_cotacao_existe_para_re_e_ri_no_setor_lastmile(self):
+        for nome_processo in [RedeExterna.NOME_PROCESSO_PADRAO, RedeInterna.NOME_PROCESSO_PADRAO]:
+            processo = Processo.objects.get(nome=nome_processo)
+            setor = Setor.objects.get(processo=processo, nome="Lastmile")
+            self.assertTrue(SetorStatus.objects.filter(setor=setor, nome="Cotacao").exists())
+
+
+class EscolaRedeCotacaoTests(TestCase):
+    """PO-068/RN-044/ADR-026: modal de gestao de cotacao (N Parceiros
+    candidatos, um vencedor) de RedeExterna/RedeInterna, disponivel so na
+    Tela do Setor "Lastmile" com o RE/RI no Status "Cotacao"."""
+
+    def setUp(self):
+        self.user = get_user_model().objects.create_user(
+            username="dev-tester-cotacao", password="senha-segura", is_superuser=True,
+        )
+        self.client.force_login(self.user)
+
+        self.escola = Escola.objects.create(jira_key="EACE-COT", nome="Escola Cotacao")
+        self.processo_re, _ = Processo.objects.get_or_create(nome=RedeExterna.NOME_PROCESSO_PADRAO)
+        # Migration 0016 ja semeia o Status "Cotacao" para o Setor "Lastmile"
+        # do Processo padrao de RE — get_or_create evita duplicidade.
+        self.setor_lastmile, _ = Setor.objects.get_or_create(processo=self.processo_re, nome="Lastmile")
+        self.status_cotacao, _ = SetorStatus.objects.get_or_create(setor=self.setor_lastmile, nome="Cotacao")
+        self.status_outro = SetorStatus.objects.create(setor=self.setor_lastmile, nome="Em andamento QA")
+
+        self.re = RedeExterna.objects.create(
+            escola=self.escola, processo=self.processo_re, setor=self.setor_lastmile, status=self.status_cotacao,
+        )
+
+        self.parceiro1 = Partner.objects.create(
+            nome_fantasia="Parceiro Um", razao_social="Parceiro Um LTDA", cnpj_cpf="11111111000111", status="ativo",
+        )
+        self.parceiro2 = Partner.objects.create(
+            nome_fantasia="Parceiro Dois", razao_social="Parceiro Dois LTDA", cnpj_cpf="22222222000122", status="ativo",
+        )
+
+    def _content_type_re(self):
+        return ContentType.objects.get_for_model(RedeExterna)
+
+    def _adicionar(self, parceiro, setor_atual="Lastmile"):
+        return self.client.post(
+            reverse('escola_rede_cotacao_adicionar', args=[self.escola.pk, 're']),
+            {'parceiro': parceiro.pk, 'setor_atual': setor_atual},
+        )
+
+    def test_modal_bloqueado_fora_da_tela_do_setor_lastmile(self):
+        response = self.client.get(
+            reverse('escola_rede_cotacao_modal', args=[self.escola.pk, 're']),
+            {'setor_atual': 'Suprimentos'},
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Setor Lastmile")
+
+    def test_modal_bloqueado_quando_status_nao_e_cotacao(self):
+        self.re.status = self.status_outro
+        self.re.save()
+
+        response = self.client.get(
+            reverse('escola_rede_cotacao_modal', args=[self.escola.pk, 're']),
+            {'setor_atual': 'Lastmile'},
+        )
+        self.assertContains(response, "Cotacao")
+
+    def test_modal_disponivel_na_tela_do_setor_lastmile_com_status_cotacao(self):
+        response = self.client.get(
+            reverse('escola_rede_cotacao_modal', args=[self.escola.pk, 're']),
+            {'setor_atual': 'Lastmile'},
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Nenhum candidato adicionado ainda")
+
+    def test_tipo_mapa_calor_e_404_fora_do_escopo(self):
+        response = self.client.get(
+            reverse('escola_rede_cotacao_modal', args=[self.escola.pk, 'mc']),
+            {'setor_atual': 'Lastmile'},
+        )
+        self.assertEqual(response.status_code, 404)
+
+    def test_usuario_sem_permissao_e_bloqueado(self):
+        sem_permissao = get_user_model().objects.create_user(username="sem-permissao-cotacao", password="senha-segura")
+        self.client.force_login(sem_permissao)
+
+        response = self.client.get(
+            reverse('escola_rede_cotacao_modal', args=[self.escola.pk, 're']),
+            {'setor_atual': 'Lastmile'},
+        )
+        self.assertEqual(response.status_code, 403)
+
+    def test_adicionar_candidato_cria_em_cotacao(self):
+        self._adicionar(self.parceiro1)
+
+        candidato = CotacaoParceiro.objects.get(content_type=self._content_type_re(), object_id=self.re.id)
+        self.assertEqual(candidato.parceiro, self.parceiro1)
+        self.assertEqual(candidato.situacao, CotacaoParceiro.SITUACAO_EM_COTACAO)
+
+    def test_adicionar_mesmo_parceiro_duas_vezes_nao_duplica(self):
+        self._adicionar(self.parceiro1)
+        self._adicionar(self.parceiro1)
+
+        self.assertEqual(
+            CotacaoParceiro.objects.filter(content_type=self._content_type_re(), object_id=self.re.id).count(), 1,
+        )
+
+    def test_adicionar_fora_da_tela_do_setor_lastmile_e_bloqueado(self):
+        self._adicionar(self.parceiro1, setor_atual="Suprimentos")
+
+        self.assertFalse(
+            CotacaoParceiro.objects.filter(content_type=self._content_type_re(), object_id=self.re.id).exists()
+        )
+
+    def test_selecionar_candidato_move_demais_para_recusado(self):
+        self._adicionar(self.parceiro1)
+        self._adicionar(self.parceiro2)
+        candidato1 = CotacaoParceiro.objects.get(parceiro=self.parceiro1)
+        candidato2 = CotacaoParceiro.objects.get(parceiro=self.parceiro2)
+
+        self.client.post(
+            reverse('escola_rede_cotacao_selecionar', args=[self.escola.pk, 're', candidato1.pk]),
+            {'setor_atual': 'Lastmile'},
+        )
+
+        candidato1.refresh_from_db()
+        candidato2.refresh_from_db()
+        self.assertEqual(candidato1.situacao, CotacaoParceiro.SITUACAO_SELECIONADO)
+        self.assertEqual(candidato2.situacao, CotacaoParceiro.SITUACAO_RECUSADO)
+
+    def test_selecionar_candidato_preenche_parceiro_do_re(self):
+        self._adicionar(self.parceiro1)
+        candidato1 = CotacaoParceiro.objects.get(parceiro=self.parceiro1)
+
+        self.client.post(
+            reverse('escola_rede_cotacao_selecionar', args=[self.escola.pk, 're', candidato1.pk]),
+            {'setor_atual': 'Lastmile'},
+        )
+
+        self.re.refresh_from_db()
+        self.assertEqual(self.re.parceiro, self.parceiro1)
+
+    def test_selecionar_candidato_gera_historico_antes_depois(self):
+        self._adicionar(self.parceiro1)
+        candidato1 = CotacaoParceiro.objects.get(parceiro=self.parceiro1)
+
+        self.client.post(
+            reverse('escola_rede_cotacao_selecionar', args=[self.escola.pk, 're', candidato1.pk]),
+            {'setor_atual': 'Lastmile'},
+        )
+
+        registro = RegistroHistorico.objects.get(content_type=self._content_type_re(), object_id=self.re.id)
+        self.assertEqual(registro.rotulo, "Parceiro")
+        self.assertEqual(registro.valor_anterior, "Vazio")
+        self.assertEqual(registro.valor_novo, str(self.parceiro1))
+
+    def test_selecionar_nao_move_status_automaticamente(self):
+        """RN-044/ADR-026: selecionar o vencedor nao dispara transicao
+        automatica de Status — trocar de Status continua manual (RN-033)."""
+        self._adicionar(self.parceiro1)
+        candidato1 = CotacaoParceiro.objects.get(parceiro=self.parceiro1)
+
+        self.client.post(
+            reverse('escola_rede_cotacao_selecionar', args=[self.escola.pk, 're', candidato1.pk]),
+            {'setor_atual': 'Lastmile'},
+        )
+
+        self.re.refresh_from_db()
+        self.assertEqual(self.re.status, self.status_cotacao)
+
+    def test_remover_candidato_em_cotacao(self):
+        self._adicionar(self.parceiro1)
+        candidato1 = CotacaoParceiro.objects.get(parceiro=self.parceiro1)
+
+        self.client.post(
+            reverse('escola_rede_cotacao_remover', args=[self.escola.pk, 're', candidato1.pk]),
+            {'setor_atual': 'Lastmile'},
+        )
+
+        self.assertFalse(CotacaoParceiro.objects.filter(pk=candidato1.pk).exists())
+
+    def test_remover_candidato_ja_selecionado_e_bloqueado(self):
+        self._adicionar(self.parceiro1)
+        candidato1 = CotacaoParceiro.objects.get(parceiro=self.parceiro1)
+        self.client.post(
+            reverse('escola_rede_cotacao_selecionar', args=[self.escola.pk, 're', candidato1.pk]),
+            {'setor_atual': 'Lastmile'},
+        )
+
+        response = self.client.post(
+            reverse('escola_rede_cotacao_remover', args=[self.escola.pk, 're', candidato1.pk]),
+            {'setor_atual': 'Lastmile'},
+        )
+
+        candidato1.refresh_from_db()
+        self.assertEqual(candidato1.situacao, CotacaoParceiro.SITUACAO_SELECIONADO)
+        self.assertContains(response, "já selecionado")
+
+    def test_botao_de_cotacao_so_aparece_com_status_cotacao_na_tela_do_setor(self):
+        response = self.client.get(reverse('setor_detail', args=['Lastmile']))
+        self.assertContains(response, f"window.abrirCotacaoRede('re', {self.escola.pk})")
+
+    def test_botao_de_cotacao_nao_aparece_com_outro_status(self):
+        self.re.status = self.status_outro
+        self.re.save()
+
+        response = self.client.get(reverse('setor_detail', args=['Lastmile']))
+        self.assertNotContains(response, f"window.abrirCotacaoRede('re', {self.escola.pk})")
+
+    def test_botao_de_cotacao_nao_aparece_fora_da_tela_do_setor(self):
+        response = self.client.get(reverse('enderecos_lastmile'))
+        self.assertNotContains(response, f"window.abrirCotacaoRede('re', {self.escola.pk})")
+
+
+class EscolaRedeCamposTests(TestCase):
+    """PO-058/RN-032/ADR-019: modal de Campos personalizados (RN-031) no
+    grid de Enderecos Lastmile, agrupados por Setor dono e editaveis
+    somente no Setor da tela atual (mesma regra do Parceiro, RN-030)."""
+
+    def setUp(self):
+        self.user = get_user_model().objects.create_user(
+            username="dev-tester-campos-rede", password="senha-segura", is_superuser=True,
+        )
+        self.client.force_login(self.user)
+
+        self.escola = Escola.objects.create(jira_key="EACE-CAMPOS", nome="Escola Campos")
+        self.processo_re, _ = Processo.objects.get_or_create(nome=RedeExterna.NOME_PROCESSO_PADRAO)
+
+        self.campo_lastmile = Campo.objects.create(nome="Data de instalação", tipo=Campo.TIPO_DATA, setor_nome="Lastmile")
+        self.campo_suprimentos = Campo.objects.create(
+            nome="Categoria", tipo=Campo.TIPO_LISTA, setor_nome="Suprimentos", opcoes=["A", "B"],
+        )
+
+    def _content_type_re(self):
+        return ContentType.objects.get_for_model(RedeExterna)
+
+    def test_usuario_sem_permissao_e_bloqueado(self):
+        RedeExterna.objects.create(escola=self.escola, processo=self.processo_re)
+        sem_permissao = get_user_model().objects.create_user(username="sem-permissao-campos-rede", password="senha-segura")
+        self.client.force_login(sem_permissao)
+
+        response = self.client.get(reverse('escola_rede_campos', args=[self.escola.pk, 're']))
+
+        self.assertEqual(response.status_code, 403)
+
+    def test_modal_404_quando_rede_ainda_nao_existe(self):
+        response = self.client.get(reverse('escola_rede_campos', args=[self.escola.pk, 're']))
+
+        self.assertEqual(response.status_code, 404)
+
+    def test_modal_404_com_tipo_invalido(self):
+        response = self.client.get(reverse('escola_rede_campos', args=[self.escola.pk, 'xx']))
+
+        self.assertEqual(response.status_code, 404)
+
+    def test_modal_mostra_campos_agrupados_por_setor(self):
+        RedeExterna.objects.create(escola=self.escola, processo=self.processo_re)
+
+        response = self.client.get(
+            reverse('escola_rede_campos', args=[self.escola.pk, 're']), {'setor_atual': 'Lastmile'},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Data de instalação")
+        self.assertContains(response, "Categoria")
+        self.assertContains(response, "Lastmile")
+        self.assertContains(response, "Suprimentos")
+
+    def test_salva_valor_do_campo_do_setor_atual(self):
+        re = RedeExterna.objects.create(escola=self.escola, processo=self.processo_re)
+
+        response = self.client.post(
+            reverse('escola_rede_campos', args=[self.escola.pk, 're']),
+            {'setor_atual': 'Lastmile', f'campo_{self.campo_lastmile.pk}': '2026-08-10'},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        valor = CampoValor.objects.get(campo=self.campo_lastmile, content_type=self._content_type_re(), object_id=re.id)
+        self.assertEqual(valor.valor, '2026-08-10')
+
+    def test_valor_numerico_e_reexibido_com_ponto_decimal(self):
+        """Regressao: LANGUAGE_CODE=pt-br faz o Django trocar o ponto por
+        virgula ao exibir um float no template; um input type=number so
+        aceita ponto, entao o navegador descartava o valor ja salvo e a
+        pessoa via o campo "vazio" apos reabrir o modal."""
+        campo_numero = Campo.objects.create(nome="Velocidade", tipo=Campo.TIPO_NUMERO, setor_nome="Lastmile")
+        re = RedeExterna.objects.create(escola=self.escola, processo=self.processo_re)
+
+        self.client.post(
+            reverse('escola_rede_campos', args=[self.escola.pk, 're']),
+            {'setor_atual': 'Lastmile', f'campo_{campo_numero.pk}': '150'},
+        )
+        response = self.client.get(
+            reverse('escola_rede_campos', args=[self.escola.pk, 're']), {'setor_atual': 'Lastmile'},
+        )
+
+        self.assertContains(response, f'name="campo_{campo_numero.pk}" value="150.0"')
+        self.assertNotContains(response, f'name="campo_{campo_numero.pk}" value="150,0"')
+
+    def test_campo_de_outro_setor_e_ignorado_mesmo_enviado_no_post(self):
+        re = RedeExterna.objects.create(escola=self.escola, processo=self.processo_re)
+
+        self.client.post(
+            reverse('escola_rede_campos', args=[self.escola.pk, 're']),
+            {'setor_atual': 'Lastmile', f'campo_{self.campo_suprimentos.pk}': 'A'},
+        )
+
+        self.assertFalse(
+            CampoValor.objects.filter(campo=self.campo_suprimentos, content_type=self._content_type_re(), object_id=re.id).exists()
+        )
+
+    def test_lista_com_valor_fora_das_opcoes_nao_salva_e_mostra_erro(self):
+        re = RedeExterna.objects.create(escola=self.escola, processo=self.processo_re)
+
+        response = self.client.post(
+            reverse('escola_rede_campos', args=[self.escola.pk, 're']),
+            {'setor_atual': 'Suprimentos', f'campo_{self.campo_suprimentos.pk}': 'Z'},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "selecione uma das opcoes cadastradas")
+        self.assertFalse(
+            CampoValor.objects.filter(campo=self.campo_suprimentos, content_type=self._content_type_re(), object_id=re.id).exists()
+        )
+
+    def test_edicao_bloqueada_fora_da_tela_de_um_setor(self):
+        re = RedeExterna.objects.create(escola=self.escola, processo=self.processo_re)
+
+        response = self.client.post(
+            reverse('escola_rede_campos', args=[self.escola.pk, 're']),
+            {f'campo_{self.campo_lastmile.pk}': '2026-08-10'},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(
+            CampoValor.objects.filter(campo=self.campo_lastmile, content_type=self._content_type_re(), object_id=re.id).exists()
+        )
+
+
+class RegistroHistoricoDeCampoTests(TestCase):
+    """PO-064/RN-040: alteracao de CampoValor feita pela tela do grid de
+    Enderecos Lastmile gera RegistroHistorico tipo sistema, com valor
+    anterior/novo (RN-041: tambem estruturado em rotulo/valor_anterior/
+    valor_novo/setor_nome)."""
+
+    def setUp(self):
+        self.user = get_user_model().objects.create_user(
+            username="dev-tester-historico-campo", password="senha-segura", is_superuser=True,
+        )
+        self.client.force_login(self.user)
+
+        self.escola = Escola.objects.create(jira_key="EACE-HIST-CAMPO", nome="Escola Historico Campo")
+        self.processo_re, _ = Processo.objects.get_or_create(nome=RedeExterna.NOME_PROCESSO_PADRAO)
+        self.campo_data = Campo.objects.create(nome="Data de instalação", tipo=Campo.TIPO_DATA, setor_nome="Lastmile")
+
+    def _content_type_re(self):
+        return ContentType.objects.get_for_model(RedeExterna)
+
+    def test_alterar_campo_gera_historico_sistema_estruturado(self):
+        re = RedeExterna.objects.create(escola=self.escola, processo=self.processo_re)
+
+        self.client.post(
+            reverse('escola_rede_campos', args=[self.escola.pk, 're']),
+            {'setor_atual': 'Lastmile', f'campo_{self.campo_data.pk}': '2026-08-10'},
+        )
+
+        registro = RegistroHistorico.objects.get(content_type=self._content_type_re(), object_id=re.id)
+        self.assertEqual(registro.tipo, 'sistema')
+        self.assertEqual(registro.rotulo, 'Data de instalação')
+        self.assertEqual(registro.valor_anterior, '(vazio)')
+        self.assertEqual(registro.valor_novo, '10/08/2026')
+        self.assertEqual(registro.setor_nome, 'Lastmile')
+        self.assertIn('Data de instalação', registro.acao)
+
+    def test_primeiro_valor_sem_campovalor_anterior_registra_vazio(self):
+        """RN-040: criacao do primeiro valor de um Campo (sem CampoValor
+        anterior) registra "anterior: (vazio)"."""
+        re = RedeExterna.objects.create(escola=self.escola, processo=self.processo_re)
+
+        self.client.post(
+            reverse('escola_rede_campos', args=[self.escola.pk, 're']),
+            {'setor_atual': 'Lastmile', f'campo_{self.campo_data.pk}': '2026-08-10'},
+        )
+
+        registro = RegistroHistorico.objects.get(content_type=self._content_type_re(), object_id=re.id)
+        self.assertEqual(registro.valor_anterior, '(vazio)')
+
+    def test_reenviar_mesmo_valor_nao_duplica_historico(self):
+        re = RedeExterna.objects.create(escola=self.escola, processo=self.processo_re)
+        url = reverse('escola_rede_campos', args=[self.escola.pk, 're'])
+        dados = {'setor_atual': 'Lastmile', f'campo_{self.campo_data.pk}': '2026-08-10'}
+
+        self.client.post(url, dados)
+        total_apos_primeira = RegistroHistorico.objects.filter(
+            content_type=self._content_type_re(), object_id=re.id,
+        ).count()
+
+        self.client.post(url, dados)
+        total_apos_segunda = RegistroHistorico.objects.filter(
+            content_type=self._content_type_re(), object_id=re.id,
+        ).count()
+
+        self.assertEqual(total_apos_primeira, total_apos_segunda)
+
+    def test_alterar_campo_de_outro_setor_nao_gera_historico_no_setor_atual(self):
+        campo_suprimentos = Campo.objects.create(nome="Categoria", tipo=Campo.TIPO_TEXTO, setor_nome="Suprimentos")
+        re = RedeExterna.objects.create(escola=self.escola, processo=self.processo_re)
+
+        self.client.post(
+            reverse('escola_rede_campos', args=[self.escola.pk, 're']),
+            {'setor_atual': 'Lastmile', f'campo_{campo_suprimentos.pk}': 'A'},
+        )
+
+        self.assertFalse(RegistroHistorico.objects.filter(content_type=self._content_type_re(), object_id=re.id).exists())
+
+    def test_alterar_campo_base_de_calculado_embute_valor_calculado_no_mesmo_registro(self):
+        """RN-040: quando o Campo alterado e `campo_base` de um Campo
+        Calculado (RN-039), o MESMO registro de historico tambem traz o
+        valor calculado resultante — sem RegistroHistorico separado para o
+        Calculado (que nunca tem CampoValor proprio)."""
+        campo_final = Campo.objects.create(
+            nome="Data Final Implantação", tipo=Campo.TIPO_CALCULADO, setor_nome="Lastmile",
+            campo_base=self.campo_data, horas_prazo=72,
+        )
+        re = RedeExterna.objects.create(escola=self.escola, processo=self.processo_re)
+
+        self.client.post(
+            reverse('escola_rede_campos', args=[self.escola.pk, 're']),
+            {'setor_atual': 'Lastmile', f'campo_{self.campo_data.pk}': '2026-08-10'},
+        )
+
+        registros = RegistroHistorico.objects.filter(content_type=self._content_type_re(), object_id=re.id)
+        self.assertEqual(registros.count(), 1)
+        registro = registros.get()
+        self.assertEqual(registro.rotulo, 'Data de instalação')
+        self.assertIn('Data Final Implantação: 13/08/2026', registro.valor_novo)
+        self.assertFalse(CampoValor.objects.filter(campo=campo_final).exists())
+
+    def test_campo_calculado_nunca_gera_historico_proprio(self):
+        campo_final = Campo.objects.create(
+            nome="Data Final Implantação", tipo=Campo.TIPO_CALCULADO, setor_nome="Lastmile",
+            campo_base=self.campo_data, horas_prazo=72,
+        )
+        re = RedeExterna.objects.create(escola=self.escola, processo=self.processo_re)
+
+        self.client.post(
+            reverse('escola_rede_campos', args=[self.escola.pk, 're']),
+            {'setor_atual': 'Lastmile', f'campo_{self.campo_data.pk}': '2026-08-10', f'campo_{campo_final.pk}': '2099-01-01'},
+        )
+
+        registros = RegistroHistorico.objects.filter(content_type=self._content_type_re(), object_id=re.id)
+        self.assertEqual(registros.count(), 1)
+        self.assertNotEqual(registros.get().rotulo, 'Data Final Implantação')
+
+    def test_historico_do_campo_aparece_no_modal_de_historico(self):
+        re = RedeExterna.objects.create(escola=self.escola, processo=self.processo_re)
+        self.client.post(
+            reverse('escola_rede_campos', args=[self.escola.pk, 're']),
+            {'setor_atual': 'Lastmile', f'campo_{self.campo_data.pk}': '2026-08-10'},
+        )
+
+        response = self.client.get(reverse('escola_rede_historico', args=[self.escola.pk, 're']))
+
+        self.assertContains(response, 'Data de instalação')
+        self.assertContains(response, '10/08/2026')
+        self.assertContains(response, 'Lastmile')
+
+
+class SetorEscopoFiltraCamposDeRedeTests(TestCase):
+    """PO-062/RN-037/ADR-022: Campo cujo Setor tem escopo "Escola", ou
+    "Sub-atividades" sem aplicar aquele tipo (RE/RI), sai do modal de
+    Campos de RE/RI (RN-032). Setor sem SetorEscopo mantem o comportamento
+    legado (Sub-atividades: RE e RI)."""
+
+    def setUp(self):
+        self.user = get_user_model().objects.create_user(
+            username="dev-tester-escopo-rede", password="senha-segura", is_superuser=True,
+        )
+        self.client.force_login(self.user)
+
+        self.escola = Escola.objects.create(jira_key="EACE-ESCOPO", nome="Escola Escopo")
+        self.processo_re, _ = Processo.objects.get_or_create(nome=RedeExterna.NOME_PROCESSO_PADRAO)
+        self.campo_lastmile = Campo.objects.create(nome="Data de instalação", tipo=Campo.TIPO_DATA, setor_nome="Lastmile")
+
+    def test_campo_sem_setorescopo_aparece_normalmente_no_modal_de_re(self):
+        RedeExterna.objects.create(escola=self.escola, processo=self.processo_re)
+
+        response = self.client.get(reverse('escola_rede_campos', args=[self.escola.pk, 're']))
+
+        self.assertContains(response, "Data de instalação")
+
+    def test_campo_com_escopo_escola_nao_aparece_no_modal_de_re(self):
+        SetorEscopo.objects.create(setor_nome="Lastmile", atividade=SetorEscopo.ATIVIDADE_ESCOLA)
+        RedeExterna.objects.create(escola=self.escola, processo=self.processo_re)
+
+        response = self.client.get(reverse('escola_rede_campos', args=[self.escola.pk, 're']))
+
+        self.assertNotContains(response, "Data de instalação")
+
+    def test_campo_com_sub_atividades_somente_ri_nao_aparece_no_modal_de_re(self):
+        SetorEscopo.objects.create(
+            setor_nome="Lastmile", atividade=SetorEscopo.ATIVIDADE_SUB_ATIVIDADES, aplica_re=False, aplica_ri=True,
+        )
+        RedeExterna.objects.create(escola=self.escola, processo=self.processo_re)
+
+        response = self.client.get(reverse('escola_rede_campos', args=[self.escola.pk, 're']))
+
+        self.assertNotContains(response, "Data de instalação")
+
+    def test_campo_com_sub_atividades_somente_ri_aparece_no_modal_de_ri(self):
+        SetorEscopo.objects.create(
+            setor_nome="Lastmile", atividade=SetorEscopo.ATIVIDADE_SUB_ATIVIDADES, aplica_re=False, aplica_ri=True,
+        )
+        processo_ri, _ = Processo.objects.get_or_create(nome=RedeInterna.NOME_PROCESSO_PADRAO)
+        RedeInterna.objects.create(escola=self.escola, processo=processo_ri)
+
+        response = self.client.get(reverse('escola_rede_campos', args=[self.escola.pk, 'ri']))
+
+        self.assertContains(response, "Data de instalação")
+
+    def test_salvar_bloqueado_quando_setor_atual_tem_escopo_escola(self):
+        SetorEscopo.objects.create(setor_nome="Lastmile", atividade=SetorEscopo.ATIVIDADE_ESCOLA)
+        re = RedeExterna.objects.create(escola=self.escola, processo=self.processo_re)
+
+        response = self.client.post(
+            reverse('escola_rede_campos', args=[self.escola.pk, 're']),
+            {'setor_atual': 'Lastmile', f'campo_{self.campo_lastmile.pk}': '2026-08-10'},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(
+            CampoValor.objects.filter(
+                campo=self.campo_lastmile, content_type=ContentType.objects.get_for_model(RedeExterna), object_id=re.id,
+            ).exists()
+        )
+
+
+class CampoCondicionadoEStatusECalculadoTests(TestCase):
+    """PO-063/RN-039/ADR-024: Campo com Status condicionante so aparece no
+    modal (RN-032) quando o Status atual do RE bate; Campo tipo Calculado
+    nunca e editavel e tem o valor derivado ao vivo do Campo base (dias
+    corridos equivalentes as Horas de prazo, arredondado para cima)."""
+
+    def setUp(self):
+        self.user = get_user_model().objects.create_user(
+            username="dev-tester-campo-calculado", password="senha-segura", is_superuser=True,
+        )
+        self.client.force_login(self.user)
+
+        self.escola = Escola.objects.create(jira_key="EACE-CALC", nome="Escola Calculado")
+        self.processo_re, _ = Processo.objects.get_or_create(nome=RedeExterna.NOME_PROCESSO_PADRAO)
+        # PO-050 (migration 0006) ja semeia um Setor "Implantacao" para este
+        # Processo — reaproveita em vez de criar (colidiria com a
+        # UniqueConstraint setor_unico_por_processo).
+        self.setor, _ = Setor.objects.get_or_create(processo=self.processo_re, nome="Implantacao")
+        self.status_agendando = SetorStatus.objects.create(setor=self.setor, nome="Agendando Parceiro")
+        self.status_outro = SetorStatus.objects.create(setor=self.setor, nome="Outro Status")
+
+        self.campo_inicio = Campo.objects.create(
+            nome="Início Implantação", tipo=Campo.TIPO_DATA, setor_nome="Implantacao",
+            status_condicionante_nome="Agendando Parceiro",
+        )
+        self.campo_final = Campo.objects.create(
+            nome="Data Final Implantação", tipo=Campo.TIPO_CALCULADO, setor_nome="Implantacao",
+            campo_base=self.campo_inicio, horas_prazo=72,
+        )
+
+    def _content_type_re(self):
+        return ContentType.objects.get_for_model(RedeExterna)
+
+    def test_campo_condicionado_nao_aparece_com_status_diferente(self):
+        RedeExterna.objects.create(escola=self.escola, processo=self.processo_re, setor=self.setor, status=self.status_outro)
+
+        response = self.client.get(
+            reverse('escola_rede_campos', args=[self.escola.pk, 're']), {'setor_atual': 'Implantacao'},
+        )
+
+        self.assertNotContains(response, "Início Implantação")
+
+    def test_campo_condicionado_aparece_com_status_igual(self):
+        RedeExterna.objects.create(
+            escola=self.escola, processo=self.processo_re, setor=self.setor, status=self.status_agendando,
+        )
+
+        response = self.client.get(
+            reverse('escola_rede_campos', args=[self.escola.pk, 're']), {'setor_atual': 'Implantacao'},
+        )
+
+        self.assertContains(response, "Início Implantação")
+
+    def test_campo_condicionado_nao_aparece_sem_status(self):
+        RedeExterna.objects.create(escola=self.escola, processo=self.processo_re, setor=self.setor)
+
+        response = self.client.get(
+            reverse('escola_rede_campos', args=[self.escola.pk, 're']), {'setor_atual': 'Implantacao'},
+        )
+
+        self.assertNotContains(response, "Início Implantação")
+
+    def test_campo_calculado_em_branco_quando_base_sem_valor(self):
+        RedeExterna.objects.create(
+            escola=self.escola, processo=self.processo_re, setor=self.setor, status=self.status_agendando,
+        )
+
+        response = self.client.get(
+            reverse('escola_rede_campos', args=[self.escola.pk, 're']), {'setor_atual': 'Implantacao'},
+        )
+
+        self.assertContains(response, "Data Final Implantação")
+        self.assertContains(response, f'name="campo_{self.campo_final.pk}" value=""')
+
+    def test_campo_calculado_soma_72_horas_como_3_dias_corridos(self):
+        re = RedeExterna.objects.create(
+            escola=self.escola, processo=self.processo_re, setor=self.setor, status=self.status_agendando,
+        )
+        CampoValor.objects.create(
+            campo=self.campo_inicio, content_type=self._content_type_re(), object_id=re.id, valor="2026-08-10",
+        )
+
+        response = self.client.get(
+            reverse('escola_rede_campos', args=[self.escola.pk, 're']), {'setor_atual': 'Implantacao'},
+        )
+
+        self.assertContains(response, f'name="campo_{self.campo_final.pk}" value="2026-08-13"')
+
+    def test_campo_calculado_arredonda_horas_nao_multiplas_de_24_para_cima(self):
+        campo_curto = Campo.objects.create(
+            nome="Prazo curto", tipo=Campo.TIPO_CALCULADO, setor_nome="Implantacao",
+            campo_base=self.campo_inicio, horas_prazo=25,
+        )
+        re = RedeExterna.objects.create(
+            escola=self.escola, processo=self.processo_re, setor=self.setor, status=self.status_agendando,
+        )
+        CampoValor.objects.create(
+            campo=self.campo_inicio, content_type=self._content_type_re(), object_id=re.id, valor="2026-08-10",
+        )
+
+        response = self.client.get(
+            reverse('escola_rede_campos', args=[self.escola.pk, 're']), {'setor_atual': 'Implantacao'},
+        )
+
+        self.assertContains(response, f'name="campo_{campo_curto.pk}" value="2026-08-12"')
+
+    def test_campo_calculado_e_sempre_somente_leitura_mesmo_no_setor_atual(self):
+        RedeExterna.objects.create(
+            escola=self.escola, processo=self.processo_re, setor=self.setor, status=self.status_agendando,
+        )
+
+        response = self.client.get(
+            reverse('escola_rede_campos', args=[self.escola.pk, 're']), {'setor_atual': 'Implantacao'},
+        )
+        content = response.content.decode()
+
+        self.assertIn(f'name="campo_{self.campo_final.pk}"', content)
+        idx = content.index(f'name="campo_{self.campo_final.pk}"')
+        trecho_input = content[max(0, idx - 20):idx + 200]
+        self.assertIn("disabled", trecho_input)
+
+    def test_campo_calculado_nunca_e_gravado_mesmo_enviado_no_post(self):
+        re = RedeExterna.objects.create(
+            escola=self.escola, processo=self.processo_re, setor=self.setor, status=self.status_agendando,
+        )
+
+        self.client.post(
+            reverse('escola_rede_campos', args=[self.escola.pk, 're']),
+            {'setor_atual': 'Implantacao', f'campo_{self.campo_final.pk}': '2099-01-01'},
+        )
+
+        self.assertFalse(
+            CampoValor.objects.filter(campo=self.campo_final, content_type=self._content_type_re(), object_id=re.id).exists()
+        )
+
+    def test_campo_condicionado_ignora_valor_enviado_no_post_quando_status_diferente(self):
+        re = RedeExterna.objects.create(
+            escola=self.escola, processo=self.processo_re, setor=self.setor, status=self.status_outro,
+        )
+
+        self.client.post(
+            reverse('escola_rede_campos', args=[self.escola.pk, 're']),
+            {'setor_atual': 'Implantacao', f'campo_{self.campo_inicio.pk}': '2026-08-10'},
+        )
+
+        self.assertFalse(
+            CampoValor.objects.filter(campo=self.campo_inicio, content_type=self._content_type_re(), object_id=re.id).exists()
+        )
+
+    def test_campo_condicionado_salva_valor_quando_status_igual(self):
+        re = RedeExterna.objects.create(
+            escola=self.escola, processo=self.processo_re, setor=self.setor, status=self.status_agendando,
+        )
+
+        response = self.client.post(
+            reverse('escola_rede_campos', args=[self.escola.pk, 're']),
+            {'setor_atual': 'Implantacao', f'campo_{self.campo_inicio.pk}': '2026-08-10'},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        valor = CampoValor.objects.get(campo=self.campo_inicio, content_type=self._content_type_re(), object_id=re.id)
+        self.assertEqual(valor.valor, '2026-08-10')
+
+
+class EscolaCamposTests(TestCase):
+    """PO-062/RN-037/ADR-022: modal de Campos com escopo "Escola" na linha
+    da Escola (grid de Enderecos Lastmile) — sem trava por setor_atual."""
+
+    def setUp(self):
+        self.user = get_user_model().objects.create_user(
+            username="dev-tester-campos-escola", password="senha-segura", is_superuser=True,
+        )
+        self.client.force_login(self.user)
+
+        self.escola = Escola.objects.create(jira_key="EACE-CAMPOS-ESCOLA", nome="Escola Campos Escola")
+        self.campo_escola = Campo.objects.create(nome="CNPJ do cliente", tipo=Campo.TIPO_TEXTO, setor_nome="Comercial")
+        SetorEscopo.objects.create(setor_nome="Comercial", atividade=SetorEscopo.ATIVIDADE_ESCOLA)
+
+        self.campo_rede = Campo.objects.create(nome="Data de instalação", tipo=Campo.TIPO_DATA, setor_nome="Lastmile")
+
+    def _content_type_escola(self):
+        return ContentType.objects.get_for_model(Escola)
+
+    def test_usuario_sem_permissao_e_bloqueado(self):
+        sem_permissao = get_user_model().objects.create_user(username="sem-permissao-campos-escola", password="senha-segura")
+        self.client.force_login(sem_permissao)
+
+        response = self.client.get(reverse('escola_campos', args=[self.escola.pk]))
+
+        self.assertEqual(response.status_code, 403)
+
+    def test_modal_mostra_somente_campos_com_escopo_escola(self):
+        response = self.client.get(reverse('escola_campos', args=[self.escola.pk]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "CNPJ do cliente")
+        self.assertNotContains(response, "Data de instalação")
+
+    def test_modal_mostra_dados_tecnicos_eace_somente_leitura(self):
+        """RN-057/ADR-029/PO-076: Velocidade Minima, Kit Inicial e TARGET
+        EACE aparecem no modal de Campos da Escola, sempre somente leitura
+        — nao passam pelo mecanismo de Campo/CampoValor (RN-031/038 nao se
+        aplica, pois variam por Escola)."""
+        self.escola.velocidade_dl_minima = 100
+        self.escola.kit_inicial = 2
+        self.escola.uf = "SP"
+        self.escola.save()
+        TargetRedeExterna.objects.create(uf="SP", velocidade_mbps=100, valor="543.21")
+
+        response = self.client.get(reverse('escola_campos', args=[self.escola.pk]))
+        content = response.content.decode()
+
+        self.assertContains(response, "Dados Técnicos EACE")
+        self.assertContains(response, "Velocidade Mínima")
+        self.assertIn("100 Mbps", content)
+        self.assertContains(response, "Kit Inicial")
+        self.assertContains(response, "TARGET EACE")
+        self.assertIn("543.21", content)
+        # somente leitura: nao pode haver input/select editavel para estes 3 dados
+        self.assertNotIn('name="velocidade_dl_minima"', content)
+        self.assertNotIn('name="kit_inicial"', content)
+        self.assertNotIn('name="target_eace"', content)
+
+    def test_modal_mostra_dados_tecnicos_eace_em_branco_sem_correspondencia(self):
+        """Sem Velocidade Minima/UF cadastrados, ou sem combinacao exata na
+        tabela de referencia, os 3 campos ficam em branco (nunca inventados
+        ou aproximados)."""
+        response = self.client.get(reverse('escola_campos', args=[self.escola.pk]))
+
+        self.assertContains(response, "Não informado")
+
+    def test_salva_valor_do_campo_com_escopo_escola(self):
+        response = self.client.post(
+            reverse('escola_campos', args=[self.escola.pk]),
+            {f'campo_{self.campo_escola.pk}': '12.345.678/0001-90'},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        valor = CampoValor.objects.get(campo=self.campo_escola, content_type=self._content_type_escola(), object_id=self.escola.id)
+        self.assertEqual(valor.valor, '12.345.678/0001-90')
+
+    def test_sem_campo_de_escopo_escola_mostra_erro_ao_salvar(self):
+        SetorEscopo.objects.filter(setor_nome="Comercial").delete()
+
+        response = self.client.post(
+            reverse('escola_campos', args=[self.escola.pk]),
+            {f'campo_{self.campo_escola.pk}': 'valor qualquer'},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Nenhum campo com escopo Escola cadastrado")
+        self.assertFalse(CampoValor.objects.filter(campo=self.campo_escola).exists())
+
+    def test_campo_com_status_condicionante_nunca_aparece_no_modal_da_escola(self):
+        """PO-063/RN-039: Escola nao tem Status (exclusivo de RE/RI,
+        RN-026) — um Campo com Status condicionante nunca aparece aqui,
+        mesmo com escopo Escola."""
+        campo_condicionado = Campo.objects.create(
+            nome="Campo condicionado", tipo=Campo.TIPO_TEXTO, setor_nome="Comercial",
+            status_condicionante_nome="Qualquer Status",
+        )
+
+        response = self.client.get(reverse('escola_campos', args=[self.escola.pk]))
+
+        self.assertNotContains(response, "Campo condicionado")
+
+        self.client.post(reverse('escola_campos', args=[self.escola.pk]), {f'campo_{campo_condicionado.pk}': 'valor'})
+        self.assertFalse(CampoValor.objects.filter(campo=campo_condicionado).exists())
+
+    def test_campo_calculado_com_escopo_escola_e_derivado_e_somente_leitura(self):
+        """PO-063/RN-039: Campo tipo Calculado tambem funciona no modal da
+        Escola (RN-037), com o mesmo mecanismo generico usado no de RE/RI."""
+        campo_base_data = Campo.objects.create(nome="Data base", tipo=Campo.TIPO_DATA, setor_nome="Comercial")
+        campo_calculado = Campo.objects.create(
+            nome="Data final calculada", tipo=Campo.TIPO_CALCULADO, setor_nome="Comercial",
+            campo_base=campo_base_data, horas_prazo=48,
+        )
+        CampoValor.objects.create(
+            campo=campo_base_data, content_type=self._content_type_escola(), object_id=self.escola.id, valor="2026-08-10",
+        )
+
+        response = self.client.get(reverse('escola_campos', args=[self.escola.pk]))
+        content = response.content.decode()
+
+        self.assertIn(f'name="campo_{campo_calculado.pk}" value="2026-08-12"', content)
+        idx = content.index(f'name="campo_{campo_calculado.pk}"')
+        self.assertIn("disabled", content[idx:idx + 200])
+
+    def test_alterar_campo_da_escola_gera_historico_sistema_estruturado(self):
+        """PO-064/RN-040: alteracao de Campo com escopo Escola tambem gera
+        RegistroHistorico, mesmo padrao usado no grid de RE/RI."""
+        self.client.post(
+            reverse('escola_campos', args=[self.escola.pk]),
+            {f'campo_{self.campo_escola.pk}': '12.345.678/0001-90'},
+        )
+
+        registro = RegistroHistorico.objects.get(content_type=self._content_type_escola(), object_id=self.escola.id)
+        self.assertEqual(registro.tipo, 'sistema')
+        self.assertEqual(registro.rotulo, 'CNPJ do cliente')
+        self.assertEqual(registro.valor_anterior, '(vazio)')
+        self.assertEqual(registro.valor_novo, '12.345.678/0001-90')
+        self.assertEqual(registro.setor_nome, 'Comercial')
+
+    def test_reenviar_mesmo_valor_na_escola_nao_duplica_historico(self):
+        url = reverse('escola_campos', args=[self.escola.pk])
+        dados = {f'campo_{self.campo_escola.pk}': '12.345.678/0001-90'}
+
+        self.client.post(url, dados)
+        total_apos_primeira = RegistroHistorico.objects.filter(
+            content_type=self._content_type_escola(), object_id=self.escola.id,
+        ).count()
+
+        self.client.post(url, dados)
+        total_apos_segunda = RegistroHistorico.objects.filter(
+            content_type=self._content_type_escola(), object_id=self.escola.id,
+        ).count()
+
+        self.assertEqual(total_apos_primeira, total_apos_segunda)
+
+
+class SetoresViewsTests(TestCase):
+    """PO-052/ADR-016: visao por Setor (nome), cruzando RE e RI de qualquer
+    Processo que compartilhe aquele nome de Setor."""
+
+    def setUp(self):
+        self.user = get_user_model().objects.create_user(
+            username="dev-tester-setores", password="senha-segura", is_superuser=True,
+        )
+        self.client.force_login(self.user)
+
+        self.processo_re, _ = Processo.objects.get_or_create(nome=RedeExterna.NOME_PROCESSO_PADRAO)
+        self.processo_ri, _ = Processo.objects.get_or_create(nome=RedeInterna.NOME_PROCESSO_PADRAO)
+        self.setor_re = Setor.objects.create(processo=self.processo_re, nome="Setor QA Comum")
+        self.setor_ri = Setor.objects.create(processo=self.processo_ri, nome="Setor QA Comum")
+        self.status_re = SetorStatus.objects.create(setor=self.setor_re, nome="Em andamento")
+
+    def test_setores_list_mostra_nomes_cadastrados(self):
+        response = self.client.get(reverse('setores_list'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Setor QA Comum")
+
+    def test_setor_detail_agrupa_re_e_ri_de_processos_diferentes_pelo_mesmo_nome(self):
+        escola_re = Escola.objects.create(jira_key="EACE-SETOR-RE", nome="Escola RE")
+        escola_ri = Escola.objects.create(jira_key="EACE-SETOR-RI", nome="Escola RI")
+        RedeExterna.objects.create(escola=escola_re, processo=self.processo_re, setor=self.setor_re, status=self.status_re)
+        RedeInterna.objects.create(escola=escola_ri, processo=self.processo_ri, setor=self.setor_ri)
+
+        response = self.client.get(reverse('setor_detail', args=['Setor QA Comum']))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Escola RE")
+        self.assertContains(response, "Escola RI")
+        self.assertContains(response, "Em andamento")
+
+    def test_setor_detail_nao_mostra_atividade_de_outro_setor(self):
+        outro_setor = Setor.objects.create(processo=self.processo_re, nome="Setor QA Diferente")
+        escola = Escola.objects.create(jira_key="EACE-OUTRO", nome="Escola Outro Setor")
+        RedeExterna.objects.create(escola=escola, processo=self.processo_re, setor=outro_setor)
+
+        response = self.client.get(reverse('setor_detail', args=['Setor QA Comum']))
+
+        self.assertNotContains(response, "Escola Outro Setor")
+
+    def test_setor_detail_mostra_so_a_subatividade_que_bate_com_o_setor(self):
+        outro_setor = Setor.objects.create(processo=self.processo_ri, nome="Setor QA Diferente")
+        escola = Escola.objects.create(jira_key="EACE-MISTA", nome="Escola Mista")
+        RedeExterna.objects.create(escola=escola, processo=self.processo_re, setor=self.setor_re)
+        RedeInterna.objects.create(escola=escola, processo=self.processo_ri, setor=outro_setor)
+
+        response = self.client.get(reverse('setor_detail', args=['Setor QA Comum']))
+
+        self.assertContains(response, "Escola Mista")
+        self.assertContains(response, 'id="setor-select-re-')
+        self.assertNotContains(response, 'id="setor-select-ri-')
+
+    def test_enderecos_lastmile_view_global_mostra_re_e_ri_mesmo_com_setores_diferentes(self):
+        outro_setor = Setor.objects.create(processo=self.processo_ri, nome="Setor QA Diferente")
+        escola = Escola.objects.create(jira_key="EACE-MISTA-2", nome="Escola Mista Global")
+        RedeExterna.objects.create(escola=escola, processo=self.processo_re, setor=self.setor_re)
+        RedeInterna.objects.create(escola=escola, processo=self.processo_ri, setor=outro_setor)
+
+        response = self.client.get(reverse('enderecos_lastmile'))
+
+        # Ja atribuidos a um Setor: aparecem somente-leitura na tela global
+        # (RN-029) — o RE/RI so e editavel na tela do proprio Setor.
+        self.assertContains(response, f'id="rede-re-{escola.pk}"')
+        self.assertContains(response, f'id="rede-ri-{escola.pk}"')
+        self.assertContains(response, f"Está no Setor {self.setor_re.nome}")
+        self.assertContains(response, f"Está no Setor {outro_setor.nome}")
+
+    def test_setor_detail_nome_inexistente_404(self):
+        response = self.client.get(reverse('setor_detail', args=['Nao Existe']))
+
+        self.assertEqual(response.status_code, 404)
+
+    def test_usuario_sem_permissao_e_bloqueado(self):
+        sem_permissao = get_user_model().objects.create_user(username="sem-permissao-setores", password="senha-segura")
+        self.client.force_login(sem_permissao)
+
+        response = self.client.get(reverse('setores_list'))
+
+        self.assertEqual(response.status_code, 403)
+
+    def test_grupo_lastmile_nao_da_mais_acesso_ao_modulo_setores(self):
+        """RN-054: o modulo Setores deixa de depender do grupo LastMile."""
+        usuario_lastmile = get_user_model().objects.create_user(username="lastmile-sem-setor", password="senha-segura")
+        usuario_lastmile.groups.add(Group.objects.create(name="LastMile"))
+        self.client.force_login(usuario_lastmile)
+
+        response_lista = self.client.get(reverse('setores_list'))
+        response_detalhe = self.client.get(reverse('setor_detail', args=['Setor QA Comum']))
+
+        self.assertEqual(response_lista.status_code, 403)
+        self.assertEqual(response_detalhe.status_code, 403)
+
+    def test_usuario_grupo_setor_sem_concessao_nao_ve_nenhum_nome(self):
+        """RN-055: grupo Setor, sozinho, nao concede nenhum nome."""
+        usuario_setor = get_user_model().objects.create_user(username="setor-sem-concessao", password="senha-segura")
+        usuario_setor.groups.add(Group.objects.create(name="Setor"))
+        self.client.force_login(usuario_setor)
+
+        response = self.client.get(reverse('setores_list'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, "Setor QA Comum")
+
+    def test_usuario_grupo_setor_ve_somente_nomes_concedidos(self):
+        """RN-055: usuario ve a intersecao entre catalogo e concessao, nao todo o catalogo."""
+        outro_setor = Setor.objects.create(processo=self.processo_re, nome="Setor QA Diferente")
+        usuario_setor = get_user_model().objects.create_user(username="setor-com-concessao", password="senha-segura")
+        usuario_setor.groups.add(Group.objects.create(name="Setor"))
+        AcessoSetor.objects.create(usuario=usuario_setor, setor_nome="Setor QA Comum")
+        self.client.force_login(usuario_setor)
+
+        response = self.client.get(reverse('setores_list'))
+
+        self.assertContains(response, "Setor QA Comum")
+        self.assertNotContains(response, outro_setor.nome)
+
+    def test_setor_detail_403_para_nome_nao_concedido_mesmo_existindo_e_no_grupo_setor(self):
+        """RN-055: nome existente no catalogo, usuario no grupo Setor, mas sem concessao -> 403."""
+        usuario_setor = get_user_model().objects.create_user(username="setor-nao-concedido", password="senha-segura")
+        usuario_setor.groups.add(Group.objects.create(name="Setor"))
+        self.client.force_login(usuario_setor)
+
+        response = self.client.get(reverse('setor_detail', args=['Setor QA Comum']))
+
+        self.assertEqual(response.status_code, 403)
+
+    def test_setor_detail_ok_para_nome_concedido_ao_usuario_do_grupo_setor(self):
+        usuario_setor = get_user_model().objects.create_user(username="setor-concedido", password="senha-segura")
+        usuario_setor.groups.add(Group.objects.create(name="Setor"))
+        AcessoSetor.objects.create(usuario=usuario_setor, setor_nome="Setor QA Comum")
+        self.client.force_login(usuario_setor)
+
+        response = self.client.get(reverse('setor_detail', args=['Setor QA Comum']))
+
+        self.assertEqual(response.status_code, 200)
+
+
+class NomesSetorVisiveisParaUsuarioTests(TestCase):
+    """PO-075/RN-054/RN-055: funcoes de servico que sustentam o menu e as
+    views de Setores (grupo dedicado + concessao individual por nome)."""
+
+    def setUp(self):
+        # Nomes distintos dos Setores semeados de fabrica (RN-025), para nao
+        # colidir com o catalogo ja existente no banco de testes.
+        self.processo_re, _ = Processo.objects.get_or_create(nome=RedeExterna.NOME_PROCESSO_PADRAO)
+        self.setor_a = Setor.objects.create(processo=self.processo_re, nome="Setor PO075 A")
+        self.setor_b = Setor.objects.create(processo=self.processo_re, nome="Setor PO075 B")
+
+    def test_usuario_comum_sem_concessao_nao_ve_nenhum_nome_novo(self):
+        usuario = get_user_model().objects.create_user(username="serv-sem-concessao", password="senha-segura")
+
+        visiveis = services.nomes_setor_visiveis_para_usuario(usuario)
+
+        self.assertNotIn("Setor PO075 A", visiveis)
+        self.assertNotIn("Setor PO075 B", visiveis)
+        self.assertFalse(services.usuario_pode_acessar_setor(usuario, "Setor PO075 A"))
+
+    def test_usuario_comum_ve_somente_o_concedido(self):
+        usuario = get_user_model().objects.create_user(username="serv-com-concessao", password="senha-segura")
+        AcessoSetor.objects.create(usuario=usuario, setor_nome="Setor PO075 A")
+
+        visiveis = services.nomes_setor_visiveis_para_usuario(usuario)
+
+        self.assertIn("Setor PO075 A", visiveis)
+        self.assertNotIn("Setor PO075 B", visiveis)
+        self.assertTrue(services.usuario_pode_acessar_setor(usuario, "Setor PO075 A"))
+        self.assertFalse(services.usuario_pode_acessar_setor(usuario, "Setor PO075 B"))
+
+    def test_superuser_ve_todos_sem_precisar_de_concessao(self):
+        superuser = get_user_model().objects.create_superuser(username="serv-superuser", password="senha-segura", email="s@s.com")
+
+        visiveis = services.nomes_setor_visiveis_para_usuario(superuser)
+
+        self.assertIn("Setor PO075 A", visiveis)
+        self.assertIn("Setor PO075 B", visiveis)
+        self.assertTrue(services.usuario_pode_acessar_setor(superuser, "Setor PO075 A"))
+        self.assertTrue(services.usuario_pode_acessar_setor(superuser, "Setor PO075 B"))
+
+
+class SetoresDisponiveisContextProcessorTests(TestCase):
+    """PO-075/RN-055: `setores_disponiveis` roda em toda pagina do sistema
+    (registrado em TEMPLATES, nao so nas telas de Setores). Regressao de um
+    incidente em que a consulta a `AcessoSetor` derrubava com erro 500
+    qualquer pagina acessada por um usuario autenticado nao-superusuario."""
+
+    def setUp(self):
+        self.factory = RequestFactory()
+
+    def _contexto_para(self, usuario):
+        request = self.factory.get("/qualquer-pagina-do-sistema/")
+        request.user = usuario
+        return context_processors.setores_disponiveis(request)
+
+    def test_usuario_anonimo_nao_recebe_variavel_de_menu(self):
+        self.assertEqual(self._contexto_para(AnonymousUser()), {})
+
+    def test_usuario_comum_sem_concessao_nao_gera_erro_e_recebe_lista_vazia(self):
+        usuario = get_user_model().objects.create_user(username="ctx-sem-concessao", password="senha-segura")
+
+        self.assertEqual(self._contexto_para(usuario), {"nomes_setor_menu": []})
+
+    def test_usuario_comum_com_concessao_recebe_somente_o_nome_concedido(self):
+        processo, _ = Processo.objects.get_or_create(nome=RedeExterna.NOME_PROCESSO_PADRAO)
+        Setor.objects.create(processo=processo, nome="Setor Contexto A")
+        Setor.objects.create(processo=processo, nome="Setor Contexto B")
+        usuario = get_user_model().objects.create_user(username="ctx-com-concessao", password="senha-segura")
+        AcessoSetor.objects.create(usuario=usuario, setor_nome="Setor Contexto A")
+
+        contexto = self._contexto_para(usuario)
+
+        self.assertIn("Setor Contexto A", contexto["nomes_setor_menu"])
+        self.assertNotIn("Setor Contexto B", contexto["nomes_setor_menu"])
+
+    def test_superuser_recebe_todos_os_nomes_cadastrados_sem_concessao(self):
+        processo, _ = Processo.objects.get_or_create(nome=RedeExterna.NOME_PROCESSO_PADRAO)
+        Setor.objects.create(processo=processo, nome="Setor Contexto C")
+        superuser = get_user_model().objects.create_superuser(
+            username="ctx-superuser", password="senha-segura", email="ctx-superuser@teste.com",
+        )
+
+        contexto = self._contexto_para(superuser)
+
+        self.assertIn("Setor Contexto C", contexto["nomes_setor_menu"])
+
+
+class EscolaMapaCalorTests(TestCase):
+    """RN-043/PO-067: Mapa Calor (MC), terceira subatividade fixa da Escola,
+    no mesmo molde de RedeExterna/RedeInterna — grid, cascata Setor/Status,
+    Parceiro, historico individual/combinado e Campos por Setor."""
+
+    def setUp(self):
+        self.user = get_user_model().objects.create_user(
+            username="dev-tester-mapa-calor", password="senha-segura", is_superuser=True,
+        )
+        self.client.force_login(self.user)
+
+        self.escola = Escola.objects.create(jira_key="EACE-MC", nome="Escola Mapa Calor")
+        self.processo_re, _ = Processo.objects.get_or_create(nome=RedeExterna.NOME_PROCESSO_PADRAO)
+        self.processo_mc, _ = Processo.objects.get_or_create(nome=MapaCalor.NOME_PROCESSO_PADRAO)
+        self.setor = Setor.objects.create(processo=self.processo_mc, nome="Setor MC QA")
+        self.status = SetorStatus.objects.create(setor=self.setor, nome="Em andamento MC")
+
+    def _content_type_mc(self):
+        return ContentType.objects.get_for_model(MapaCalor)
+
+    def test_post_cria_mapa_calor_com_processo_fixo(self):
+        response = self.client.post(
+            reverse('escola_rede_editar', args=[self.escola.pk, 'mc']),
+            {'setor': self.setor.pk, 'status': self.status.pk, 'responsavel': self.user.pk},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        mc = MapaCalor.objects.get(escola=self.escola)
+        self.assertEqual(mc.processo, self.processo_mc)
+        self.assertEqual(mc.setor, self.setor)
+        # RN-035: grid global ignora o Status enviado no POST — fica "Novo".
+        self.assertEqual(mc.status.nome, "Novo")
+        self.assertContains(response, "Mapa Calor atualizado")
+
+    def test_mapa_calor_independente_de_setor_status_parceiro_de_re_e_ri(self):
+        parceiro_re = Partner.objects.create(nome_fantasia="Parceiro RE MC")
+        parceiro_mc = Partner.objects.create(nome_fantasia="Parceiro MC")
+        setor_re = Setor.objects.create(processo=self.processo_re, nome="Setor RE QA MC")
+        status_re = SetorStatus.objects.create(setor=setor_re, nome="Status RE MC")
+
+        RedeExterna.objects.create(
+            escola=self.escola, processo=self.processo_re, setor=setor_re, status=status_re, parceiro=parceiro_re,
+        )
+        MapaCalor.objects.create(
+            escola=self.escola, processo=self.processo_mc, setor=self.setor, status=self.status, parceiro=parceiro_mc,
+        )
+
+        self.escola.refresh_from_db()
+        self.assertNotEqual(self.escola.mapa_calor.setor, self.escola.rede_externa.setor)
+        self.assertNotEqual(self.escola.mapa_calor.status, self.escola.rede_externa.status)
+        self.assertNotEqual(self.escola.mapa_calor.parceiro, self.escola.rede_externa.parceiro)
+
+    def test_cascata_setor_status_no_mapa_calor_na_tela_do_proprio_setor(self):
+        """RN-026: Setor e Status editaveis juntos na tela do proprio Setor."""
+        response = self.client.post(
+            reverse('escola_rede_editar', args=[self.escola.pk, 'mc']),
+            {'setor': self.setor.pk, 'status': self.status.pk, 'setor_atual': self.setor.nome, 'responsavel': self.user.pk},
+        )
+
+        mc = MapaCalor.objects.get(escola=self.escola)
+        self.assertEqual(mc.setor, self.setor)
+        self.assertEqual(mc.status, self.status)
+        self.assertContains(response, "atualizado")
+
+    def test_enviar_mapa_calor_a_outro_setor_aplica_aguardando_automatico(self):
+        """RN-033: enviar o MC para um Setor diferente do setor_atual da
+        tela aplica o Status "Aguardando" automaticamente no Setor de
+        destino, independente do que foi submetido."""
+        outro_setor = Setor.objects.create(processo=self.processo_mc, nome="Setor MC Destino")
+        MapaCalor.objects.create(escola=self.escola, processo=self.processo_mc, setor=self.setor, status=self.status)
+
+        self.client.post(
+            reverse('escola_rede_editar', args=[self.escola.pk, 'mc']),
+            {'setor': outro_setor.pk, 'status': '', 'setor_atual': self.setor.nome},
+        )
+
+        mc = MapaCalor.objects.get(escola=self.escola)
+        self.assertEqual(mc.setor, outro_setor)
+        self.assertEqual(mc.status.nome, "Aguardando")
+        self.assertEqual(mc.status.setor, outro_setor)
+
+    def test_parceiro_do_mapa_calor_editavel_na_tela_do_setor_lastmile(self):
+        """RN-030: Parceiro so e editavel pela tela do Setor de negocio
+        "Lastmile" — mesma regra ja usada por RE/RI."""
+        parceiro = Partner.objects.create(nome_fantasia="Parceiro Lastmile MC")
+        setor_lastmile, _ = Setor.objects.get_or_create(processo=self.processo_mc, nome="Lastmile")
+        MapaCalor.objects.create(escola=self.escola, processo=self.processo_mc, setor=setor_lastmile)
+
+        self.client.post(
+            reverse('escola_rede_editar', args=[self.escola.pk, 'mc']),
+            {'setor': setor_lastmile.pk, 'status': '', 'setor_atual': setor_lastmile.nome, 'parceiro': parceiro.pk},
+        )
+
+        mc = MapaCalor.objects.get(escola=self.escola)
+        self.assertEqual(mc.parceiro, parceiro)
+
+    def test_parceiro_do_mapa_calor_nao_editavel_fora_da_tela_lastmile(self):
+        parceiro = Partner.objects.create(nome_fantasia="Parceiro Fora MC")
+        MapaCalor.objects.create(escola=self.escola, processo=self.processo_mc, setor=self.setor)
+
+        self.client.post(
+            reverse('escola_rede_editar', args=[self.escola.pk, 'mc']),
+            {'setor': self.setor.pk, 'status': '', 'setor_atual': self.setor.nome, 'parceiro': parceiro.pk},
+        )
+
+        mc = MapaCalor.objects.get(escola=self.escola)
+        self.assertIsNone(mc.parceiro_id)
+
+    def test_historico_individual_do_mapa_calor(self):
+        MapaCalor.objects.create(escola=self.escola, processo=self.processo_mc)
+
+        response = self.client.post(
+            reverse('escola_rede_historico', args=[self.escola.pk, 'mc']),
+            {'descricao': 'Comentario exclusivo do Mapa Calor'},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        mc = MapaCalor.objects.get(escola=self.escola)
+        registro = RegistroHistorico.objects.get(content_type=self._content_type_mc(), object_id=mc.id)
+        self.assertEqual(registro.acao, 'Comentario exclusivo do Mapa Calor')
+        self.assertContains(response, 'Comentario exclusivo do Mapa Calor')
+
+    def test_comentario_do_mapa_calor_nao_aparece_no_historico_do_re(self):
+        mc = MapaCalor.objects.create(escola=self.escola, processo=self.processo_mc)
+        RedeExterna.objects.create(escola=self.escola, processo=self.processo_re)
+        RegistroHistorico.objects.create(
+            tipo='comentario', acao='Somente do Mapa Calor', usuario=self.user,
+            content_type=self._content_type_mc(), object_id=mc.id,
+        )
+
+        response = self.client.get(reverse('escola_rede_historico', args=[self.escola.pk, 're']))
+
+        self.assertNotContains(response, 'Somente do Mapa Calor')
+
+    def test_historico_combinado_da_escola_inclui_mapa_calor(self):
+        mc = MapaCalor.objects.create(escola=self.escola, processo=self.processo_mc)
+        RegistroHistorico.objects.create(
+            tipo='comentario', acao='Entrada do Mapa Calor', usuario=self.user,
+            content_type=self._content_type_mc(), object_id=mc.id,
+        )
+
+        entradas = services.historico_combinado_escola(self.escola)
+        self.assertEqual(len(entradas), 1)
+        self.assertEqual(entradas[0].origem_tipo, 'mc')
+
+        response = self.client.get(reverse('escola_historico', args=[self.escola.pk]))
+        self.assertContains(response, 'Entrada do Mapa Calor')
+        self.assertContains(response, 'MC')
+
+    def test_grid_exibe_linha_do_mapa_calor(self):
+        MapaCalor.objects.create(escola=self.escola, processo=self.processo_mc)
+
+        response = self.client.get(reverse('enderecos_lastmile'))
+
+        self.assertContains(response, f'id="rede-mc-{self.escola.pk}"')
+
+    def test_campo_com_sub_atividades_aplica_mapa_calor_aparece_no_modal_do_mc(self):
+        SetorEscopo.objects.create(
+            setor_nome="Setor Campo MC", atividade=SetorEscopo.ATIVIDADE_SUB_ATIVIDADES,
+            aplica_re=False, aplica_ri=False, aplica_mapa_calor=True,
+        )
+        Campo.objects.create(nome="Campo do Mapa Calor", tipo=Campo.TIPO_TEXTO, setor_nome="Setor Campo MC")
+        MapaCalor.objects.create(escola=self.escola, processo=self.processo_mc)
+
+        response = self.client.get(reverse('escola_rede_campos', args=[self.escola.pk, 'mc']))
+
+        self.assertContains(response, "Campo do Mapa Calor")
+
+    def test_campo_so_re_ri_nao_aparece_no_modal_do_mc(self):
+        SetorEscopo.objects.create(
+            setor_nome="Setor Campo Sem MC", atividade=SetorEscopo.ATIVIDADE_SUB_ATIVIDADES,
+            aplica_re=True, aplica_ri=True, aplica_mapa_calor=False,
+        )
+        Campo.objects.create(nome="Campo Sem Mapa Calor", tipo=Campo.TIPO_TEXTO, setor_nome="Setor Campo Sem MC")
+        MapaCalor.objects.create(escola=self.escola, processo=self.processo_mc)
+
+        response = self.client.get(reverse('escola_rede_campos', args=[self.escola.pk, 'mc']))
+
+        self.assertNotContains(response, "Campo Sem Mapa Calor")
+
+    def test_tipo_invalido_continua_devolvendo_404(self):
+        response = self.client.get(reverse('escola_rede_historico', args=[self.escola.pk, 'xx']))
+
+        self.assertEqual(response.status_code, 404)

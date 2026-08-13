@@ -1,0 +1,35 @@
+{% extends "core/base.html" %}
+
+{% block title %}Speed | Setores{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto p-6 md:p-10">
+    <div class="mb-10">
+        <nav class="flex mb-2" aria-label="Breadcrumb">
+            <ol class="flex items-center space-x-2 text-xs font-black uppercase tracking-widest text-gray-400">
+                <li class="text-gray-900">Setores</li>
+            </ol>
+        </nav>
+        <h1 class="text-4xl font-black text-gray-900 italic uppercase tracking-tighter leading-none">
+            Setores
+        </h1>
+        <p class="text-sm text-gray-500 mt-3 font-bold uppercase tracking-wider">Atividades de RE, RI e Mapa Calor por Setor</p>
+    </div>
+
+    <div class="bg-white rounded-[2.5rem] border border-gray-100 shadow-sm overflow-hidden">
+        <div class="divide-y divide-gray-100">
+            {% for nome in nomes_setor %}
+            <a href="{% url 'setor_detail' nome=nome %}" class="flex items-center justify-between px-8 py-5 hover:bg-gray-50 transition-all">
+                <span class="font-black text-gray-900 uppercase text-sm">{{ nome }}</span>
+                <i data-lucide="chevron-right" class="w-5 h-5 text-gray-300"></i>
+            </a>
+            {% empty %}
+            <div class="px-8 py-16 text-center opacity-40">
+                <p class="font-black italic uppercase text-gray-600">Nenhum Setor cadastrado</p>
+                <p class="text-xs font-bold text-gray-400 mt-1">Cadastre Setores na tela de Processos.</p>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+{% endblock %}

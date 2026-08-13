@@ -7,17 +7,13 @@ from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse_lazy
 
-from clientes.models import Endereco
-from core.models import RegistroHistorico
-from partners.models import Partner, Proposal
+from apps.clientes.models import Endereco
+from apps.core.models import RegistroHistorico
+from apps.partners.models import Partner, Proposal
 
 from .models import LeadEndereco
-from .views import (
-    _get_request_param_or_default,
-    _montar_cobertura_parceiros_por_regiao,
-    _obter_ou_criar_parceiro_do_lead,
-    grupo_LastMile_required,
-)
+from .services import montar_cobertura_parceiros_por_regiao, obter_ou_criar_parceiro_do_lead
+from .views import _get_request_param_or_default, grupo_LastMile_required
 
 
 @user_passes_test(grupo_LastMile_required)
@@ -114,7 +110,7 @@ def endereco_lastmile_partner_search(request, endereco_pk):
                 "cidade": endereco.cidade or "",
                 "estado": endereco.estado or "",
             },
-            "cobertura": _montar_cobertura_parceiros_por_regiao(endereco),
+            "cobertura": montar_cobertura_parceiros_por_regiao(endereco),
             "busca_ampla_ativa": busca_ampla,
             "resultados": resultados,
         }
@@ -124,7 +120,7 @@ def endereco_lastmile_partner_search(request, endereco_pk):
 def _obter_ou_criar_parceiro_do_endereco_lead(lead_endereco_item):
     lead_espelho_item = lead_endereco_item.leads_legados.order_by("id").first()
     if lead_espelho_item:
-        partner_item, _ = _obter_ou_criar_parceiro_do_lead(lead_espelho_item)
+        partner_item, _ = obter_ou_criar_parceiro_do_lead(lead_espelho_item)
         return partner_item, lead_espelho_item
 
     empresa = lead_endereco_item.empresa
