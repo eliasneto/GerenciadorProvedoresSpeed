@@ -1,29 +1,23 @@
+import sys
 import os
-import requests
-import json
-import base64
-import urllib3
 
-urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+# Ferramenta manual de exploracao. Toda leitura do IXC passa pelo IXCClient
+# (ADR-005, PO-025) e o token vem de IXC_TOKEN (variavel de ambiente),
+# nunca hardcoded no codigo.
+DIRETORIO_ATUAL = os.path.dirname(os.path.abspath(__file__))
+BASE_DIR = os.path.dirname(os.path.dirname(DIRETORIO_ATUAL))
+if BASE_DIR not in sys.path:
+    sys.path.append(BASE_DIR)
 
-IXC_URL = os.getenv("IXC_URL", "https://megainfraestrutura.com.br/webservice/v1")
-IXC_TOKEN = "COLOQUE_SEU_TOKEN_AQUI" # Cole o mesmo token que funcionou no outro script!
+from apps.integracoes.ixc.client import IXCClient
 
-token_b64 = base64.b64encode(IXC_TOKEN.encode('utf-8')).decode('utf-8')
-HEADERS = {
-    'Content-Type': 'application/json',
-    'Authorization': f'Basic {token_b64}',
-    'ixcsoft': 'listar'
-}
 
 def explorar_tabela(nome_tabela):
     """Busca apenas 1 registro da tabela e lista todos os campos disponíveis"""
     print(f"\n{'='*50}")
     print(f"🔍 EXPLORANDO TABELA: {nome_tabela.upper()}")
     print(f"{'='*50}")
-    
-    url = f"{IXC_URL}/{nome_tabela}"
-    
+
     # Payload pedindo apenas 1 registro (rp: 1)
     payload = {
         "qtype": "id",
@@ -32,11 +26,14 @@ def explorar_tabela(nome_tabela):
         "page": "1",
         "rp": "1"
     }
-    
+
     try:
-        response = requests.post(url, headers=HEADERS, data=json.dumps(payload), verify=False)
-        dados = response.json()
-        
+        status_code, dados = IXCClient().listar(nome_tabela, payload)
+
+        if status_code is None or not (200 <= status_code < 300) or not isinstance(dados, dict):
+            print(f"Erro ao acessar {nome_tabela}: HTTP {status_code}")
+            return
+
         if 'registros' in dados and len(dados['registros']) > 0:
             registro_exemplo = dados['registros'][0]
             

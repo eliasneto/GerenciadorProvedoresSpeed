@@ -1,39 +1,14 @@
-import os
-import requests
-import base64
-import urllib3
 import json
 import re
 from itertools import combinations
 
-urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+from apps.integracoes.ixc.client import IXCClient
 
-IXC_URL = os.getenv("IXC_URL", "https://megainfraestrutura.com.br/webservice/v1")
-IXC_TOKEN = os.getenv("IXC_TOKEN")
-if not IXC_TOKEN:
-    raise RuntimeError("IXC_TOKEN nao configurado. Defina a variavel de ambiente IXC_TOKEN.")
-ENDPOINT = f"{IXC_URL}/su_ticket"
+# Toda escrita no IXC passa pelo IXCClient (ADR-005, PO-025).
 
-def auth_headers():
-    token_b64 = base64.b64encode(IXC_TOKEN.encode("utf-8")).decode("utf-8")
-    return {
-        "Authorization": f"Basic {token_b64}",
-        "Content-Type": "application/json"
-    }
 
 def chamar_ixc(payload):
-    r = requests.post(
-        ENDPOINT,
-        json=payload,
-        headers=auth_headers(),
-        verify=False,
-        timeout=30
-    )
-    try:
-        body = r.json()
-    except Exception:
-        body = {"raw": r.text}
-    return r.status_code, body
+    return IXCClient().escrever("su_ticket", payload)
 
 def faltando_descricao(body):
     msg = ""

@@ -2,7 +2,7 @@ from django.contrib.auth import get_user_model
 from django.core.management.base import BaseCommand
 from django.db.models import Q
 
-from core.ad_sync import ADDirectoryClient, sincronizar_email_usuario
+from apps.integracoes.ad.ad_sync import ADDirectoryClient, sincronizar_email_usuario
 
 
 class Command(BaseCommand):

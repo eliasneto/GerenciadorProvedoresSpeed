@@ -4,7 +4,7 @@ import unicodedata
 from datetime import datetime
 from html import unescape
 
-from scripts.integracoes.ixc_client import IXCClient
+from apps.integracoes.ixc.client import IXCClient
 
 
 USUARIO_IXC_PADRAO = os.getenv("IXC_DEFAULT_USER_ID", "76")
@@ -283,6 +283,7 @@ def montar_payload_fechamento_real(
     usuario_ixc_id=None,
     tecnico_ixc_id=None,
     finaliza_atendimento=False,
+    id_proxima_tarefa=None,
 ):
     usuario_ixc_id = normalizar_texto(usuario_ixc_id) or USUARIO_IXC_PADRAO
     tecnico_ixc_id = (
@@ -291,11 +292,12 @@ def montar_payload_fechamento_real(
         or TECNICO_IXC_PADRAO
     )
     data_hora = agora_ixc()
+    id_proxima_tarefa = normalizar_texto(id_proxima_tarefa)
 
     payload = {
         "id_chamado": primeiro_preenchido(detalhes_os, ["id"]),
         "id_tarefa_atual": primeiro_preenchido(detalhes_os, ["id_wfl_tarefa"]),
-        "eh_tarefa_decisao": "N",
+        "eh_tarefa_decisao": "S" if id_proxima_tarefa else "N",
         "sequencia_atual": "1",
         "proxima_sequencia_forcada": "3",
         "finaliza_processo_aux": "S",
@@ -315,7 +317,7 @@ def montar_payload_fechamento_real(
         "id_diagnostico_especifico": "0",
         "justificativa_sla_atrasado": primeiro_preenchido(detalhes_os, ["justificativa_sla_atrasado"]),
         "id_evento_status": "0",
-        "id_proxima_tarefa": "0",
+        "id_proxima_tarefa": id_proxima_tarefa or "0",
         "id_proxima_tarefa_aux": "",
         "latitude": primeiro_preenchido(detalhes_os, ["latitude"]),
         "longitude": primeiro_preenchido(detalhes_os, ["longitude"]),
@@ -335,6 +337,7 @@ def finalizar_os_existente(
     finaliza_atendimento=False,
     usuario_sistema=None,
     email_ixc=None,
+    id_proxima_tarefa=None,
 ):
     detalhes_os = buscar_os_por_id(os_id)
     if not detalhes_os:
@@ -368,6 +371,7 @@ def finalizar_os_existente(
         usuario_ixc_id=usuario_ixc_id,
         tecnico_ixc_id=tecnico_ixc_id,
         finaliza_atendimento=finaliza_atendimento,
+        id_proxima_tarefa=id_proxima_tarefa,
     )
     endpoint = "su_oss_chamado_fechar"
     status_code, body = IXCClient().escrever(endpoint, payload)

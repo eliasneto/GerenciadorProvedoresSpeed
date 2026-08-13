@@ -1,19 +1,13 @@
-import os
-import base64
 import json
 import re
 from datetime import datetime
 
 import pandas as pd
-import requests
-import urllib3
 
-urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+from apps.integracoes.ixc.client import IXCClient
 
-IXC_URL = os.getenv("IXC_URL", "https://megainfraestrutura.com.br/webservice/v1")
-IXC_TOKEN = os.getenv("IXC_TOKEN")
-if not IXC_TOKEN:
-    raise RuntimeError("IXC_TOKEN nao configurado. Defina a variavel de ambiente IXC_TOKEN.")
+# Toda escrita no IXC passa pelo IXCClient (ADR-005, PO-025).
+
 USUARIO_IXC_PADRAO = "76"
 MENSAGEM_CAMPO_ID_NUMERICO = (
     "deve conter apenas o ID numerico do IXC. Nao use endereco, nome ou outro texto."
@@ -21,14 +15,6 @@ MENSAGEM_CAMPO_ID_NUMERICO = (
 
 TIPOS_PROCESSO = ["Avulso", "Cotacao Parceiro", "Outro"]
 WORKFLOW_COTACAO_PARCEIRO = "18"
-
-
-def get_headers():
-    token_b64 = base64.b64encode(IXC_TOKEN.encode()).decode()
-    return {
-        "Authorization": f"Basic {token_b64}",
-        "Content-Type": "application/json",
-    }
 
 
 def limpar_id(valor):
@@ -116,9 +102,6 @@ def validar_tipo_processo(linha):
 
 
 def executar_abertura_atendimento(dados, usuario_sistema=None):
-    endpoint_ticket = f"{IXC_URL}/su_ticket"
-    headers = get_headers()
-
     linha = {str(k).replace("\ufeff", "").strip(): v for k, v in dados.items()}
 
     id_cliente, erro = normalizar_id_numerico(
@@ -223,7 +206,6 @@ def executar_abertura_atendimento(dados, usuario_sistema=None):
     payload = {k: v for k, v in payload.items() if v not in ("", None)}
 
     print("\n--- DEBUG TICKET PAYLOAD ---")
-    print("URL TICKET:", endpoint_ticket)
     print("id_cliente:", id_cliente)
     print("id_login:", id_login)
     print("id_contrato:", id_contrato)
@@ -235,31 +217,28 @@ def executar_abertura_atendimento(dados, usuario_sistema=None):
     print("----------------------------\n")
 
     try:
-        response = requests.post(
-            endpoint_ticket,
-            json=payload,
-            headers=headers,
-            verify=False,
-            timeout=30,
-        )
+        status_code, resposta = IXCClient().escrever("su_ticket", payload)
 
-        print("STATUS TICKET:", response.status_code)
-        print("RESPOSTA BRUTA TICKET:", response.text)
+        print("STATUS TICKET:", status_code)
+        print("RESPOSTA BRUTA TICKET:", resposta)
 
-        try:
-            resposta = response.json()
-        except Exception:
-            return False, f"Erro HTTP {response.status_code}: {response.text[:500]}"
+        if not isinstance(resposta, dict):
+            return False, f"Erro HTTP {status_code}"
+
+        if 'raw' in resposta:
+            return False, f"Erro HTTP {status_code}: {str(resposta['raw'])[:500]}"
 
         print("\n--- DEBUG RESPOSTA TICKET ---")
         print(json.dumps(resposta, indent=2, ensure_ascii=False))
         print("-----------------------------\n")
 
-        if response.status_code == 401:
+        if status_code == 401:
             return False, "Erro 401: token invalido ou sem permissao"
 
-        if response.status_code != 200:
-            return False, f"Erro HTTP {response.status_code}"
+        if status_code != 200:
+            mensagem = resposta.get("message")
+            detalhe = f": {mensagem}" if mensagem else ""
+            return False, f"Erro HTTP {status_code}{detalhe}"
 
         if resposta.get("type") != "success":
             return False, f"IXC negou o ticket: {resposta.get('message')}"

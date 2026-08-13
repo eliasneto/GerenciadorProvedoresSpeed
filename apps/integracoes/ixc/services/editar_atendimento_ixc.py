@@ -1,11 +1,11 @@
 import pandas as pd
 
-from scripts.integracoes.backoffice.cria_atendimento_ixc import (
+from apps.integracoes.ixc.services.cria_atendimento_ixc import (
     montar_identificacao_usuario_importacao,
     normalizar_id_numerico,
     limpar_texto,
 )
-from scripts.integracoes.ixc_client import IXCClient
+from apps.integracoes.ixc.client import IXCClient
 
 
 CONFIRMACAO_ALTERACAO_VALIDAS = {"SIM", "S", "TRUE", "1", "CONFIRMADO", "CONFIRMAR"}

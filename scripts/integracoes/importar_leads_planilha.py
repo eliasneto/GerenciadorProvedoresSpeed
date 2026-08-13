@@ -10,18 +10,14 @@ BASE_DIR = os.path.dirname(os.path.dirname(DIRETORIO_ATUAL))
 if BASE_DIR not in sys.path:
     sys.path.append(BASE_DIR)
 
-APPS_DIR = os.path.join(BASE_DIR, "apps")
-if APPS_DIR not in sys.path:
-    sys.path.insert(0, APPS_DIR)
-
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings")
 
 import django
 
 django.setup()
 
-from core.models import IntegrationAudit
-from core_admin.import_services import processar_importacao_leads
+from apps.core.models import IntegrationAudit
+from apps.core_admin.import_services import processar_importacao_leads
 
 
 def main():

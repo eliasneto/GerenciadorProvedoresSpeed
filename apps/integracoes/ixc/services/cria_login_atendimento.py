@@ -1,20 +1,11 @@
-import os
 import pandas as pd
-import requests
-import base64
-import urllib3
 import re
 import unicodedata
 import json  # Importado para conseguirmos ver o Raio-X no terminal
 
-# Desativa os avisos de segurança (InsecureRequestWarning) no terminal
-# Isso deixa o seu log limpo quando usamos o verify=False no requests.post
-urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+from apps.integracoes.ixc.client import IXCClient
 
-IXC_URL = os.getenv("IXC_URL", "https://megainfraestrutura.com.br/webservice/v1")
-IXC_TOKEN = os.getenv("IXC_TOKEN")
-if not IXC_TOKEN:
-    raise RuntimeError("IXC_TOKEN nao configurado. Defina a variavel de ambiente IXC_TOKEN.")
+# Toda escrita no IXC passa pelo IXCClient (ADR-005, PO-025).
 
 
 def _parse_campos_tecnicos_obs(obs_texto):
@@ -48,7 +39,7 @@ def _parse_campos_tecnicos_obs(obs_texto):
 
 def _atualizar_endereco_tecnico(linha, observacao):
     try:
-        from clientes.models import Endereco
+        from apps.clientes.models import Endereco
         from django.db.models import Q
     except Exception:
         return
@@ -107,14 +98,6 @@ def _atualizar_endereco_tecnico(linha, observacao):
         endereco.save(update_fields=update_fields)
 
 def executar_cadastro_ixc(dados):
-    endpoint = f"{IXC_URL}/radusuarios"
-    token_b64 = base64.b64encode(IXC_TOKEN.encode()).decode()
-    
-    headers = {
-        'Authorization': f'Basic {token_b64}',
-        'Content-Type': 'application/json'
-    }
-
     # 🚀 BLINDAGEM CONTRA O EXCEL:
     # Remove qualquer espaço invisível do nome das colunas lidas da planilha
     # Exemplo: Transforma 'Plano_ID ' em 'Plano_ID' para o Python não se perder
@@ -284,22 +267,21 @@ def executar_cadastro_ixc(dados):
     print("---------------------------------------------------\n")
 
     try:
-        # Envio da requisição (POST) ao IXC
-        response = requests.post(endpoint, json=payload, headers=headers, verify=False)
-        resposta_json = response.json()
+        # Envio da requisição (POST) ao IXC via IXCClient
+        status_code, resposta_json = IXCClient().escrever("radusuarios", payload)
 
         # Se o servidor respondeu (Status 200 = OK)
-        if response.status_code == 200:
+        if status_code == 200 and isinstance(resposta_json, dict):
             if resposta_json.get('type') == 'success':
                 id_ixc = resposta_json.get('id')
                 _atualizar_endereco_tecnico(linha, observacao_cliente)
                 return True, "Criado com sucesso!", id_ixc
-            
+
             # Se a requisição chegou, mas o IXC negou
             return False, f"IXC Negou: {resposta_json.get('message')}", resposta_json.get('id')
-        
+
         # Erro de rota ou indisponibilidade
-        return False, f"Erro HTTP {response.status_code}", None
+        return False, f"Erro HTTP {status_code}", None
 
     except Exception as e:
         # Erro de execução do Python

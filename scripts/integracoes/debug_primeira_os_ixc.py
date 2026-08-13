@@ -1,10 +1,6 @@
 import os
 import sys
 import json
-import base64
-
-import requests
-import urllib3
 
 
 DIRETORIO_ATUAL = os.path.dirname(os.path.abspath(__file__))
@@ -13,41 +9,19 @@ BASE_DIR = os.path.dirname(os.path.dirname(DIRETORIO_ATUAL))
 if BASE_DIR not in sys.path:
     sys.path.append(BASE_DIR)
 
-APPS_DIR = os.path.join(BASE_DIR, 'apps')
-if APPS_DIR not in sys.path:
-    sys.path.insert(0, APPS_DIR)
-
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings')
 
 import django
 django.setup()
 
-from clientes.models import Endereco
+from apps.clientes.models import Endereco
+from apps.integracoes.ixc.client import IXCClient
 
-
-urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-
-IXC_URL = os.getenv("IXC_URL", "https://megainfraestrutura.com.br/webservice/v1")
-IXC_TOKEN = os.getenv("IXC_TOKEN")
-if not IXC_TOKEN:
-    raise RuntimeError("IXC_TOKEN nao configurado. Defina a variavel de ambiente IXC_TOKEN.")
-
-TOKEN_B64 = base64.b64encode(IXC_TOKEN.encode('utf-8')).decode('utf-8')
-HEADERS = {
-    'Content-Type': 'application/json',
-    'Authorization': f'Basic {TOKEN_B64}',
-    'ixcsoft': 'listar',
-}
+# Toda leitura do IXC passa pelo IXCClient (ADR-005, PO-025).
 
 
 def consultar_ixc_raw(tabela, payload):
-    url = f"{IXC_URL}/{tabela}"
-    response = requests.post(url, headers=HEADERS, data=json.dumps(payload), verify=False, timeout=30)
-    try:
-        body = response.json()
-    except Exception:
-        body = {"raw": response.text}
-    return response.status_code, body
+    return IXCClient().listar(tabela, payload)
 
 
 def main():

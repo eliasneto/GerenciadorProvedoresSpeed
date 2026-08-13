@@ -3,11 +3,11 @@ from datetime import datetime
 
 import pandas as pd
 
-from scripts.integracoes.backoffice.cria_atendimento_ixc import (
+from apps.integracoes.ixc.services.cria_atendimento_ixc import (
     montar_identificacao_usuario_importacao,
     normalizar_id_numerico,
 )
-from scripts.integracoes.ixc_client import IXCClient
+from apps.integracoes.ixc.client import IXCClient
 from scripts.integracoes.ixc_finalizacao_service import normalizar_texto
 
 
@@ -312,6 +312,63 @@ def _ordenar_ids(ids):
     return sorted(ids, key=lambda x: int(x) if x.isdigit() else x)
 
 
+def verificar_duplicidade_ixc(razao_social, documento):
+    """Procura no IXC um cliente com o mesmo CNPJ/CPF ou, no fallback, a mesma razao social.
+
+    Retorna None quando nao encontra nenhuma correspondencia, ou uma tupla
+    (mensagem, cliente_ixc_id) no formato de RN-015 quando encontra.
+    """
+    cliente_existente = buscar_cliente_por_cnpj_cpf(documento)
+    campo_correspondencia = "CNPJ/CPF"
+    valor_correspondencia = formatar_documento_ixc(documento)
+    if not cliente_existente:
+        cliente_existente = buscar_cliente_por_razao_social(razao_social)
+        campo_correspondencia = "razao social"
+        valor_correspondencia = razao_social
+
+    if not cliente_existente:
+        return None
+
+    cliente_ixc_id = limpar_texto(cliente_existente.get("id"))
+    mensagem = (
+        f"Cliente ja existente no IXC (ID {cliente_ixc_id}). Correspondencia encontrada pelo campo "
+        f"{campo_correspondencia} ('{valor_correspondencia}'). Nenhuma alteracao feita para {razao_social}."
+    )
+    return mensagem, cliente_ixc_id
+
+
+def detectar_cnpj_duplicado_na_planilha(linhas):
+    """Detecta CNPJ/CPF repetido entre as linhas de uma mesma planilha (RN-016).
+
+    Recebe a lista de linhas (na ordem da planilha, indice 0 = primeira linha
+    de dados) e retorna um dict {indice: mensagem} para cada linha cujo
+    CNPJ_CPF se repete em outra linha, exceto quando a propria linha tem
+    Permitir_Duplicidade = Sim.
+    """
+    indices_por_documento = {}
+    for indice, linha in enumerate(linhas):
+        documento = somente_digitos(linha.get("CNPJ_CPF"))
+        if documento:
+            indices_por_documento.setdefault(documento, []).append(indice)
+
+    erros = {}
+    for documento, indices in indices_por_documento.items():
+        if len(indices) < 2:
+            continue
+        for indice in indices:
+            linha = linhas[indice]
+            permitir_duplicidade = limpar_texto(linha.get("Permitir_Duplicidade")).upper() in {"SIM", "S", "TRUE", "1"}
+            if permitir_duplicidade:
+                continue
+            outras_linhas = ", ".join(str(i + 2) for i in indices if i != indice)
+            erros[indice] = (
+                f"CNPJ_CPF '{formatar_documento_ixc(documento)}' duplicado na planilha "
+                f"(tambem aparece na(s) linha(s) {outras_linhas}). Use Permitir_Duplicidade = Sim "
+                "se for intencional (ex.: mesmo CNPJ para clientes diferentes)."
+            )
+    return erros
+
+
 def validar_linha_pre_envio(linha, ids_tipo_cliente_validos=None, ids_filial_validos=None):
     linha = {str(k).replace("﻿", "").strip(): v for k, v in linha.items()}
     erros = []
@@ -424,16 +481,10 @@ def executar_cadastro_cliente_ixc(dados, usuario_sistema=None):
 
     permitir_duplicidade = limpar_texto(linha.get("Permitir_Duplicidade")).upper() in {"SIM", "S", "TRUE", "1"}
     if not permitir_duplicidade:
-        cliente_existente = buscar_cliente_por_cnpj_cpf(documento)
-        if not cliente_existente:
-            cliente_existente = buscar_cliente_por_razao_social(razao_social)
-        if cliente_existente:
-            cliente_ixc_id = limpar_texto(cliente_existente.get("id"))
-            return (
-                False,
-                f"Cliente ja existente no IXC (ID {cliente_ixc_id}). Nenhuma alteracao feita para {razao_social}.",
-                cliente_ixc_id,
-            )
+        resultado_duplicidade = verificar_duplicidade_ixc(razao_social, documento)
+        if resultado_duplicidade:
+            mensagem, cliente_ixc_id = resultado_duplicidade
+            return False, mensagem, cliente_ixc_id
 
     if not limpar_texto(linha.get("Email") or linha.get("EMAIL")):
         return False, "Email obrigatorio para cadastro do cliente no IXC.", ""

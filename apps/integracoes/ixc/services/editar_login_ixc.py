@@ -3,14 +3,14 @@ import unicodedata
 
 import pandas as pd
 
-from scripts.integracoes.backoffice.cria_atendimento_ixc import (
+from apps.integracoes.ixc.services.cria_atendimento_ixc import (
     montar_identificacao_usuario_importacao,
     normalizar_id_numerico,
 )
-from scripts.integracoes.backoffice.cria_login_atendimento import (
+from apps.integracoes.ixc.services.cria_login_atendimento import (
     _atualizar_endereco_tecnico,
 )
-from scripts.integracoes.ixc_client import IXCClient
+from apps.integracoes.ixc.client import IXCClient
 
 
 CONFIRMACAO_ALTERACAO_VALIDAS = {"SIM", "S", "TRUE", "1", "CONFIRMADO", "CONFIRMAR"}

@@ -7,7 +7,7 @@ from pathlib import Path
 import requests
 from dotenv import load_dotenv
 
-from scripts.integracoes.ixc_client import IXCClient
+from apps.integracoes.ixc.client import IXCClient
 from scripts.integracoes.ixc_finalizacao_service import buscar_os_por_id, normalizar_texto, primeiro_preenchido
 
 

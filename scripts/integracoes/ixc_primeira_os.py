@@ -1,11 +1,7 @@
 import os
 import sys
-import json
-import base64
 import traceback
 
-import requests
-import urllib3
 from tqdm import tqdm
 
 
@@ -21,10 +17,6 @@ BASE_DIR = os.path.dirname(os.path.dirname(DIRETORIO_ATUAL))
 if BASE_DIR not in sys.path:
     sys.path.append(BASE_DIR)
 
-APPS_DIR = os.path.join(BASE_DIR, 'apps')
-if APPS_DIR not in sys.path:
-    sys.path.insert(0, APPS_DIR)
-
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings')
 
 import django
@@ -32,32 +24,19 @@ django.setup()
 
 from django.utils import timezone
 
-from clientes.models import Endereco, HistoricoSincronizacao
+from apps.clientes.models import Endereco, HistoricoSincronizacao
+from apps.integracoes.ixc.client import IXCClient
 
-
-urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-
-IXC_URL = os.getenv("IXC_URL", "https://megainfraestrutura.com.br/webservice/v1")
-IXC_TOKEN = os.getenv("IXC_TOKEN")
-if not IXC_TOKEN:
-    raise RuntimeError("IXC_TOKEN nao configurado. Defina a variavel de ambiente IXC_TOKEN.")
-
-TOKEN_B64 = base64.b64encode(IXC_TOKEN.encode('utf-8')).decode('utf-8')
-HEADERS = {
-    'Content-Type': 'application/json',
-    'Authorization': f'Basic {TOKEN_B64}',
-    'ixcsoft': 'listar',
-}
+# Toda leitura do IXC passa pelo IXCClient (ADR-005, PO-025).
 
 
 def consultar_ixc(tabela, payload):
-    url = f"{IXC_URL}/{tabela}"
-    try:
-        response = requests.post(url, headers=HEADERS, data=json.dumps(payload), verify=False, timeout=30)
-        response.raise_for_status()
-        return response.json()
-    except Exception:
+    status_code, body = IXCClient().listar(tabela, payload)
+    if status_code is None or not (200 <= status_code < 300):
         return None
+    if not isinstance(body, dict) or 'raw' in body:
+        return None
+    return body
 
 
 def buscar_mapa_setores():

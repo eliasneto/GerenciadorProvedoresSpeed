@@ -1,7 +1,7 @@
 import pandas as pd
 
-from scripts.integracoes.backoffice.cria_atendimento_ixc import normalizar_id_numerico
-from scripts.integracoes.ixc_client import IXCClient
+from apps.integracoes.ixc.services.cria_atendimento_ixc import normalizar_id_numerico
+from apps.integracoes.ixc.client import IXCClient
 from scripts.integracoes.ixc_finalizacao_service import (
     finalizar_os_existente,
     normalizar_texto,
