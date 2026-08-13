@@ -4,7 +4,13 @@ from . import views
 urlpatterns = [
     # Rotas do Parceiro (Cadastro Mestre)
     path('', views.partner_list, name='partner_list'),
-    
+
+    # ROTAS DE PROVEDORES (menu Projeto, grupo LastMile - RN-045/PO-069):
+    # tela independente da lista de Parceiros acima (grupo Parceiro).
+    path('provedores/', views.provedores_list, name='provedores_list'),
+    path('provedores/novo/', views.provedores_create, name='provedores_create'),
+    path('provedores/<int:pk>/editar/', views.provedores_edit, name='provedores_edit'),
+
     # NOVAS ROTAS DA ESTEIRA DE REATIVAÇÃO:
     path('inativos/', views.partner_inactive_list, name='partner_inactive_list'), 
     path('winback/status/<int:pk>/', views.update_winback_status, name='update_winback_status'),

@@ -1,6 +1,6 @@
 from django import forms
 from .models import Partner, PartnerPlan, Proposal
-from clientes.models import Endereco 
+from apps.clientes.models import Endereco
 
 
 SIM_NAO_CHOICES = [

@@ -1,0 +1,114 @@
+{% extends "core/base.html" %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto p-6 md:p-10">
+    {% if messages %}
+    <div class="mb-8 space-y-3">
+        {% for message in messages %}
+        <div class="flex items-center gap-3 p-4 rounded-2xl border {% if message.tags == 'error' %}bg-red-50 border-red-100 text-red-700{% else %}bg-green-50 border-green-100 text-green-700{% endif %}">
+            <i data-lucide="{% if message.tags == 'error' %}alert-circle{% else %}check-circle{% endif %}" class="w-5 h-5"></i>
+            <p class="text-sm font-bold">{{ message }}</p>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    <div class="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-8">
+        <div>
+            <p class="text-[10px] text-gray-400 font-black uppercase tracking-[0.2em] mb-2">Projeto</p>
+            <h1 class="text-3xl font-black text-gray-900 italic uppercase tracking-tighter">Provedores</h1>
+            <p class="text-sm text-gray-500 mt-1 font-bold uppercase tracking-wider text-[11px]">Cadastro base de provedores (Partner)</p>
+        </div>
+        <div class="flex items-center gap-4">
+            <span class="bg-ageis-yellow text-black px-4 py-2.5 rounded-full text-[10px] font-black uppercase tracking-widest shadow-sm">
+                {{ total_provedores }} provedor{{ total_provedores|pluralize }}
+            </span>
+            <a href="{% url 'provedores_create' %}" class="inline-flex items-center justify-center gap-2 bg-ageis-black text-ageis-yellow px-6 py-2.5 rounded-full font-bold uppercase tracking-widest text-[10px] hover:bg-gray-800 transition shadow-lg">
+                <i data-lucide="plus" class="w-4 h-4"></i> Novo Provedor
+            </a>
+        </div>
+    </div>
+
+    <div class="bg-white rounded-[2.5rem] border border-gray-100 shadow-sm overflow-hidden flex flex-col">
+        <div class="overflow-x-auto">
+            <table class="w-full text-left border-collapse">
+                <thead>
+                    <tr class="text-[10px] font-black uppercase text-gray-500 bg-gray-100 border-b border-gray-300 divide-x divide-gray-300">
+                        <th class="px-4 py-3">Nome Fantasia / Razão Social</th>
+                        <th class="px-4 py-3">CNPJ/CPF</th>
+                        <th class="px-4 py-3">Contato</th>
+                        <th class="px-4 py-3">E-mail</th>
+                        <th class="px-4 py-3">Telefone</th>
+                        <th class="px-4 py-3">Status</th>
+                        <th class="px-4 py-3">Ações</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-200">
+                    {% for provedor in page_obj %}
+                    <tr class="hover:bg-gray-50 transition-all divide-x divide-gray-100">
+                        <td class="px-4 py-3">
+                            <span class="font-black text-gray-900 text-[12px]">{{ provedor.nome_fantasia|default:provedor.razao_social|default:"Sem nome" }}</span>
+                            {% if provedor.nome_fantasia and provedor.razao_social %}
+                            <p class="text-[10px] text-gray-400 font-bold mt-0.5">{{ provedor.razao_social }}</p>
+                            {% endif %}
+                        </td>
+                        <td class="px-4 py-3">
+                            <span class="text-[11px] text-gray-600 font-bold">{{ provedor.cnpj_cpf|default:"--" }}</span>
+                        </td>
+                        <td class="px-4 py-3">
+                            <span class="text-[11px] text-gray-600 font-bold">{{ provedor.contato_nome|default:"--" }}</span>
+                        </td>
+                        <td class="px-4 py-3">
+                            <span class="text-[11px] text-gray-600 font-bold">{{ provedor.email|default:"--" }}</span>
+                        </td>
+                        <td class="px-4 py-3">
+                            <span class="text-[11px] text-gray-600 font-bold">{{ provedor.telefone|default:"--" }}</span>
+                        </td>
+                        <td class="px-4 py-3">
+                            <span class="inline-flex items-center px-3 py-1 rounded-full text-[10px] font-bold uppercase
+                                {% if provedor.status == 'ativo' %} bg-emerald-100 text-emerald-700
+                                {% elif provedor.status == 'inativo' %} bg-gray-100 text-gray-700
+                                {% elif provedor.status == 'declinado' or provedor.status == 'inviavel' %} bg-orange-100 text-orange-700
+                                {% else %} bg-blue-100 text-blue-700 {% endif %}">
+                                {{ provedor.get_status_display }}
+                            </span>
+                        </td>
+                        <td class="px-4 py-3">
+                            <a href="{% url 'provedores_edit' provedor.pk %}" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest text-gray-600 border border-gray-200 hover:text-ageis-black hover:border-ageis-yellow hover:bg-ageis-yellow/10 transition">
+                                <i data-lucide="pencil" class="w-3.5 h-3.5"></i> Editar
+                            </a>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="7" class="px-4 py-16 text-center text-gray-400 text-sm font-bold">
+                            Nenhum provedor cadastrado ainda.
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    {% if page_obj.paginator.num_pages > 1 %}
+    <div class="mt-8 flex items-center justify-between gap-4">
+        <p class="text-[10px] font-black uppercase tracking-widest text-gray-400">
+            Página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}
+        </p>
+        <div class="flex items-center gap-2">
+            {% if page_obj.has_previous %}
+            <a href="?page={{ page_obj.previous_page_number }}" class="px-4 py-3 rounded-xl border border-gray-200 text-[10px] font-black uppercase tracking-widest text-gray-500 hover:text-gray-800 hover:border-gray-300 transition">
+                Anterior
+            </a>
+            {% endif %}
+            {% if page_obj.has_next %}
+            <a href="?page={{ page_obj.next_page_number }}" class="px-4 py-3 rounded-xl border border-gray-200 text-[10px] font-black uppercase tracking-widest text-gray-500 hover:text-gray-800 hover:border-gray-300 transition">
+                Próxima
+            </a>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

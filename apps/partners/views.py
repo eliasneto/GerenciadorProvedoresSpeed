@@ -1,28 +1,37 @@
 ﻿from django.shortcuts import render, get_object_or_404, redirect
+from django.contrib.auth import get_user_model
 from django.contrib.auth.decorators import login_required, user_passes_test
 from django.core.exceptions import PermissionDenied
 from django.core.paginator import Paginator
 from django.contrib import messages
-from django.db.models import Sum
 from django.contrib.contenttypes.models import ContentType
 from django.urls import reverse
-from django.utils.html import strip_tags
 from django.utils import timezone
 from datetime import datetime, time
-from html import unescape
 from urllib.parse import urlparse, urlencode
 
-from auditoria.models import CotacaoStatusAuditoria
+from apps.core import services as core_services
 
 # Importações do próprio app
-from .models import Partner, PartnerPlan, Proposal, ProposalMotivoInviavel
+from . import services
+from .models import Partner, PartnerPlan, Proposal
 from .forms import PartnerForm, PartnerPlanForm, ProposalForm
-from clientes.models import Endereco 
-from scripts.integracoes.ixc_finalizacao_service import finalizar_os_existente, resumir_erro_finalizacao
-from scripts.integracoes.ixc_ticket_arquivo_service import anexar_arquivo_atendimento_por_os
+from apps.clientes.models import Endereco
 
-# --- IMPORTAÇÃO DO HISTÓRICO SPEED ---
-from core.models import RegistroHistorico
+# Utilitarios genericos de ordenacao/paginacao/CSV e checagem de grupo,
+# reaproveitados do app core (camada 0) pelos relatorios de gestao abaixo.
+from apps.core.views import (
+    _build_sort_links,
+    _csv_response,
+    _report_status_choices,
+    _resolve_sort,
+    grupo_Gestao_required,
+)
+
+# Checagem de grupo "LastMile" (mesma trava do restante do menu Projeto).
+# Reaproveitada de apps.leads.views, mesmo precedente ja usado em
+# apps/core_admin/escola_email_views.py (RN-045/PO-069).
+from apps.leads.views import grupo_LastMile_required
 
 # 1. Cria a regra de verificação
 def grupo_Parceiro_required(user):
@@ -33,265 +42,6 @@ def grupo_Parceiro_required(user):
         return True
     # Se não for do grupo, gera erro 403 (acesso negado).
     raise PermissionDenied
-
-
-def _registrar_historico_proposta(proposal, usuario, acao, tipo='sistema', arquivo=None):
-    RegistroHistorico.objects.create(
-        tipo=tipo,
-        acao=acao,
-        arquivo=arquivo,
-        usuario=usuario,
-        content_type=ContentType.objects.get_for_model(Proposal),
-        object_id=proposal.id
-    )
-
-
-def _extrair_ip_request(request):
-    forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR', '')
-    if forwarded_for:
-        return forwarded_for.split(',')[0].strip()
-    return request.META.get('REMOTE_ADDR')
-
-
-def _extrair_user_agent_request(request):
-    return (request.META.get('HTTP_USER_AGENT') or '')[:500]
-
-
-def _registrar_auditoria_status_cotacao(
-    request,
-    proposal,
-    status_anterior,
-    status_novo,
-    *,
-    origem,
-    integrou_ixc=False,
-    detalhes='',
-):
-    if status_anterior == status_novo:
-        return
-
-    cliente_nome = str(proposal.cliente or '--')
-    endereco_referencia = ''
-    if proposal.client_address_id:
-        endereco_referencia = str(proposal.client_address)
-    elif proposal.lead_endereco_id:
-        endereco_referencia = str(proposal.lead_endereco)
-
-    CotacaoStatusAuditoria.objects.create(
-        usuario=request.user if getattr(request, 'user', None) and request.user.is_authenticated else None,
-        proposal=proposal,
-        codigo_cotacao=proposal.codigo_exibicao,
-        codigo_lote=proposal.codigo_proposta or '',
-        parceiro_nome=proposal.partner.nome_fantasia or proposal.partner.razao_social or '',
-        cliente_nome=cliente_nome,
-        endereco_referencia=endereco_referencia,
-        status_anterior=status_anterior,
-        status_novo=status_novo,
-        origem=origem,
-        integrou_ixc=integrou_ixc,
-        endereco_ip=_extrair_ip_request(request),
-        user_agent=_extrair_user_agent_request(request),
-        detalhes=detalhes,
-    )
-
-
-def _status_os_ixc_para_operador(alterar_os_ixc, resultado_ixc=None):
-    if not alterar_os_ixc:
-        return "Não alterada"
-    if isinstance(resultado_ixc, dict) and resultado_ixc.get('already_closed'):
-        return "Já estava finalizada"
-    return "Finalizada agora"
-
-
-def _detalhe_os_ixc_para_historico(alterar_os_ixc, observacao_contratacao='', resultado_ixc=None):
-    detalhe = f"O.S. no IXC: {_status_os_ixc_para_operador(alterar_os_ixc, resultado_ixc)}"
-    if alterar_os_ixc and observacao_contratacao:
-        detalhe += f"\nObservação enviada ao IXC: {observacao_contratacao}"
-    return detalhe
-
-
-def _detalhe_os_ixc_para_auditoria(alterar_os_ixc, observacao_contratacao='', resultado_ixc=None):
-    detalhe = f"Status da O.S. no IXC: {_status_os_ixc_para_operador(alterar_os_ixc, resultado_ixc)}."
-    if alterar_os_ixc and observacao_contratacao:
-        detalhe += f" Observacao enviada ao IXC: {observacao_contratacao}."
-    return detalhe.strip()
-
-
-def _mensagem_os_ixc_ja_finalizada(propostas):
-    if not propostas:
-        return ""
-    if len(propostas) == 1:
-        return f"A O.S. da cotação #{propostas[0].codigo_exibicao} já estava finalizada no IXC e o sistema tratou isso como sucesso."
-    return f"{len(propostas)} O.S. já estavam finalizadas no IXC e o sistema tratou esses casos como sucesso."
-
-
-def _baixar_endereco_da_fila_lastmile(endereco):
-    if not endereco:
-        return
-
-    update_fields = []
-
-    if endereco.os_atual_aberta:
-        endereco.os_atual_aberta = False
-        update_fields.append('os_atual_aberta')
-
-    if endereco.em_os_comercial_lastmile:
-        endereco.em_os_comercial_lastmile = False
-        update_fields.append('em_os_comercial_lastmile')
-
-    if endereco.status_os_atual_nome != 'Finalizada':
-        endereco.status_os_atual_nome = 'Finalizada'
-        update_fields.append('status_os_atual_nome')
-
-    if update_fields:
-        endereco.save(update_fields=update_fields)
-
-
-def _resumir_erro_anexo_ixc(resultado):
-    if not isinstance(resultado, dict):
-        return "Falha desconhecida ao enviar anexo ao atendimento no IXC."
-
-    if resultado.get('message'):
-        mensagem = strip_tags(unescape(str(resultado['message']))).strip()
-        return mensagem or "Falha ao enviar anexo ao atendimento no IXC."
-
-    body = resultado.get('body') or {}
-    detalhes_os = resultado.get('detalhes_os') or {}
-    os_id = detalhes_os.get('id') or '--'
-    ticket_id = resultado.get('ticket_id') or detalhes_os.get('id_ticket') or '--'
-    arquivo_nome = resultado.get('arquivo_nome') or '--'
-    mensagem = ''
-    if isinstance(body, dict):
-        mensagem = body.get('message') or body.get('raw') or ''
-
-    if mensagem:
-        mensagem_limpa = strip_tags(unescape(str(mensagem))).strip()
-        if 'sessão foi finalizada' in mensagem_limpa.lower() or 'sessao foi finalizada' in mensagem_limpa.lower():
-            return (
-                f"O.S. {os_id} / atendimento {ticket_id} / arquivo {arquivo_nome}: "
-                "o IXC recusou o anexo porque a sessão do painel não ficou autenticada. "
-                "Use o e-mail de login do IXC e a senha desse usuário, não um e-mail pessoal."
-            )
-        return f"O.S. {os_id} / atendimento {ticket_id} / arquivo {arquivo_nome}: {mensagem_limpa}"
-
-    return f"O.S. {os_id} / atendimento {ticket_id} / arquivo {arquivo_nome}: falha ao enviar anexo ao IXC."
-
-
-def _endereco_possui_os_lastmile(endereco):
-    if not endereco:
-        return False
-
-    setor_nome = (getattr(endereco, 'setor_os_atual_nome', '') or '').strip().lower()
-    return bool(
-        getattr(endereco, 'ticket_os_atual_ixc', None)
-        and getattr(endereco, 'os_atual_aberta', False)
-        and (
-            getattr(endereco, 'em_os_comercial_lastmile', False)
-            or 'lastmile' in setor_nome
-        )
-    )
-
-
-def _propostas_com_os_lastmile(propostas_lote):
-    return [
-        item for item in propostas_lote
-        if item.client_address_id and _endereco_possui_os_lastmile(item.client_address)
-    ]
-
-
-def _outras_cotacoes_em_negociacao_mesmo_endereco(propostas_lote):
-    endereco_ids = sorted({item.client_address_id for item in propostas_lote if item.client_address_id})
-    if not endereco_ids:
-        return []
-
-    proposal_ids = [item.id for item in propostas_lote if item.id]
-    codigos_lote = [item.codigo_proposta for item in propostas_lote if item.codigo_proposta]
-
-    queryset = (
-        Proposal.objects.filter(client_address_id__in=endereco_ids, status='analise')
-        .exclude(id__in=proposal_ids)
-        .select_related('partner', 'cliente', 'client_address')
-        .order_by('client_address_id', 'id')
-    )
-    if codigos_lote:
-        queryset = queryset.exclude(codigo_proposta__in=codigos_lote)
-
-    return list(queryset)
-
-
-def _montar_resumo_outras_cotacoes_por_endereco(outras_cotacoes):
-    grupos = []
-    grupos_map = {}
-
-    for item in outras_cotacoes:
-        endereco_id = item.client_address_id or f"sem-endereco-{item.id}"
-        if endereco_id not in grupos_map:
-            grupos_map[endereco_id] = {
-                'endereco_id': endereco_id,
-                'endereco_nome': str(item.client_address or '--'),
-                'cotacoes': [],
-            }
-            grupos.append(grupos_map[endereco_id])
-
-        grupos_map[endereco_id]['cotacoes'].append({
-            'id': item.id,
-            'codigo_exibicao': item.codigo_exibicao,
-            'parceiro_nome': item.partner.nome_fantasia or item.partner.razao_social,
-            'cliente_nome': str(item.cliente or '--'),
-        })
-
-    return grupos
-
-
-def _encerrar_outras_cotacoes_automaticamente(outras_cotacoes, proposal_referencia, usuario, request=None):
-    if not outras_cotacoes:
-        return 0
-
-    observacao_padrao = (
-        f"Fechada automaticamente porque foi decidido seguir com a cotação #{proposal_referencia.codigo_exibicao}."
-    )[:150]
-
-    for item in outras_cotacoes:
-        status_antigo = item.status
-        item.status = 'encerrada'
-        item.motivo_inviavel = None
-        item.observacao_inviavel = observacao_padrao
-        item.save(update_fields=['status', 'motivo_inviavel', 'observacao_inviavel'])
-
-        _registrar_historico_proposta(
-            item,
-            usuario,
-            (
-                "Cotação fechada automaticamente.\n\n"
-                f"ID da proposta: #{item.codigo_exibicao}\n"
-                f"De: {dict(Proposal.STATUS_CHOICES).get(status_antigo, status_antigo)}\n"
-                f"Para: {dict(Proposal.STATUS_CHOICES).get('encerrada', 'encerrada')}\n"
-                f"Observação: {observacao_padrao}"
-            ),
-        )
-        if request is not None:
-            _registrar_auditoria_status_cotacao(
-                request,
-                item,
-                status_antigo,
-                'encerrada',
-                origem='fechamento_automatico',
-                integrou_ixc=False,
-                detalhes=observacao_padrao,
-            )
-
-    return len(outras_cotacoes)
-
-
-def _mensagem_bloqueio_ixc_por_outras_cotacoes(outras_cotacoes):
-    quantidade = len(outras_cotacoes)
-    if quantidade <= 0:
-        return ""
-    return (
-        f"Não é possível finalizar a O.S. no IXC porque este endereço ainda possui "
-        f"{quantidade} outra(s) cotação(ões) em negociação. Feche essas cotações primeiro "
-        f"ou escolha a opção de encerrá-las automaticamente ao seguir com a cotação viável."
-    )
 
 
 def _resolver_periodo_historico(request):
@@ -358,36 +108,75 @@ def _append_next(url, next_param):
     return f"{url}{separador}{urlencode({'next': next_param})}"
 
 # ==============================================================================
+# VIEWS DE PROVEDORES (menu Projeto, grupo LastMile - RN-045/PO-069)
+# Tela independente da lista de Parceiros abaixo (grupo Parceiro): mesmo
+# model Partner, sem edicao/exclusao, sem vinculo com Proposal/cotacao.
+# ==============================================================================
+@user_passes_test(grupo_LastMile_required)
+@login_required
+def provedores_list(request):
+    """Lista em grid todos os Partner cadastrados (RN-045)."""
+    provedores_queryset = Partner.objects.all().order_by('nome_fantasia', 'razao_social')
+
+    paginator = Paginator(provedores_queryset, 20)
+    page_number = request.GET.get('page')
+    page_obj = paginator.get_page(page_number)
+
+    return render(request, 'partners/provedores_list.html', {
+        'page_obj': page_obj,
+        'total_provedores': provedores_queryset.count(),
+    })
+
+
+@user_passes_test(grupo_LastMile_required)
+@login_required
+def provedores_create(request):
+    """Cadastra um novo Partner a partir da tela de Provedores (RN-045)."""
+    if request.method == 'POST':
+        form = PartnerForm(request.POST)
+        if form.is_valid():
+            form.save()
+            messages.success(request, "Provedor cadastrado com sucesso.")
+            return redirect('provedores_list')
+    else:
+        form = PartnerForm()
+
+    return render(request, 'partners/provedores_form.html', {'form': form})
+
+
+@user_passes_test(grupo_LastMile_required)
+@login_required
+def provedores_edit(request, pk):
+    """Edita um Partner existente a partir da tela de Provedores (RN-046)."""
+    provedor = get_object_or_404(Partner, pk=pk)
+
+    if request.method == 'POST':
+        form = PartnerForm(request.POST, instance=provedor)
+        if form.is_valid():
+            form.save()
+            messages.success(request, "Provedor atualizado com sucesso.")
+            return redirect('provedores_list')
+    else:
+        form = PartnerForm(instance=provedor)
+
+    return render(request, 'partners/provedores_form.html', {'form': form, 'provedor': provedor})
+
+
+# ==============================================================================
 # VIEWS DE PARCEIROS (DADOS MESTRE E ESTEIRAS)
 # ==============================================================================
 @user_passes_test(grupo_Parceiro_required)
 @login_required
 def partner_list(request):
     """Lista apenas os parceiros ativos."""
-    proposal_statuses_partner_list = ['aguardando_contratacao', 'contratado', 'declinado']
-    partners_queryset = (
-        Partner.objects.filter(proposals__status__in=proposal_statuses_partner_list)
-        .distinct()
-        .order_by('-id')
-    )
-    
+    partners_queryset = services.listar_partners_convertidos()
+
     paginator = Paginator(partners_queryset, 10)
     page_number = request.GET.get('page')
     page_obj = paginator.get_page(page_number)
 
     partner_ids = [partner.id for partner in page_obj.object_list]
-    propostas_convertidas = (
-        Proposal.objects.filter(partner_id__in=partner_ids, status__in=proposal_statuses_partner_list)
-        .order_by('-id')
-    )
-    propostas_por_parceiro = {}
-    propostas_vistas = set()
-    for proposta in propostas_convertidas:
-        chave = (proposta.partner_id, proposta.codigo_proposta or f"proposal-{proposta.pk}")
-        if chave in propostas_vistas:
-            continue
-        propostas_vistas.add(chave)
-        propostas_por_parceiro.setdefault(proposta.partner_id, []).append(proposta)
+    propostas_por_parceiro = services.agrupar_propostas_convertidas_por_parceiro(partner_ids)
 
     for partner in page_obj.object_list:
         propostas_partner = propostas_por_parceiro.get(partner.id, [])
@@ -407,9 +196,8 @@ def partner_list(request):
 @login_required
 def partner_inactive_list(request):
     """Esteira de reativação (win-back) para parceiros inativos."""
-    # Traz todo mundo que não está ativo (inativo, negociacao, inviavel)
-    partners_inativos = Partner.objects.exclude(status__in=['ativo', 'aguardando_contratacao', 'contratado']).order_by('-data_cadastro')
-    
+    partners_inativos = services.listar_partners_inativos()
+
     paginator = Paginator(partners_inativos, 10)
     page_number = request.GET.get('page')
     page_obj = paginator.get_page(page_number)
@@ -424,59 +212,12 @@ def partner_detail(request, pk):
     """Exibe o perfil do parceiro, propostas e o histórico."""
     partner = get_object_or_404(Partner, pk=pk)
     back_url, next_param = _resolver_back_url(request, reverse('partner_list'))
-    proposals = partner.proposals.exclude(status__in=['encerrada', 'ativa', 'aguardando_contratacao', 'contratado', 'declinado']).order_by('-id')
-    proposal_groups = []
-    grouped_map = {}
+    proposals, proposal_groups = services.agrupar_propostas_do_partner(partner)
 
-    for proposal in proposals:
-        cliente_obj = proposal.cliente
-        group_key = cliente_obj.pk if cliente_obj else f"sem-cliente-{proposal.pk}"
-
-        if group_key not in grouped_map:
-            grouped_map[group_key] = {
-                'key': group_key,
-                'cliente': cliente_obj,
-                'cliente_nome': str(cliente_obj) if cliente_obj else 'Sem cliente vinculado',
-                'proposal_batches': [],
-                'proposal_batches_map': {},
-                'total_logins': 0,
-            }
-            proposal_groups.append(grouped_map[group_key])
-
-        batch_key = proposal.codigo_proposta or f"proposal-{proposal.pk}"
-        group = grouped_map[group_key]
-
-        if batch_key not in group['proposal_batches_map']:
-            group['proposal_batches_map'][batch_key] = {
-                'key': batch_key,
-                'proposal': proposal,
-                'codigo_exibicao': proposal.codigo_exibicao,
-                'nome_proposta': proposal.nome_proposta or 'Proposta sem nome',
-                'logins': [],
-            }
-            group['proposal_batches'].append(group['proposal_batches_map'][batch_key])
-
-        group['proposal_batches_map'][batch_key]['logins'].append(proposal)
-        group['total_logins'] += 1
-
-    for group in proposal_groups:
-        group.pop('proposal_batches_map', None)
-    
-    partner_type = ContentType.objects.get_for_model(Partner)
-    
-    # Leitura de histórico "ativo" x "arquivado"
     ver_antigos = request.GET.get('ver_antigos') == 'true'
-    
-    if ver_antigos:
-        # Traz tudo, ordenado do mais novo pro mais velho
-        historico = RegistroHistorico.objects.filter(content_type=partner_type, object_id=partner.id).order_by('-id')
-    else:
-        # Traz só os do ciclo atual
-        historico = RegistroHistorico.objects.filter(content_type=partner_type, object_id=partner.id, arquivado=False).order_by('-id')
-        
-    # Conta quantos são antigos para exibir o botão
-    qtd_antigo = RegistroHistorico.objects.filter(content_type=partner_type, object_id=partner.id, arquivado=True).count()
-    
+    historico = services.listar_historico_partner(partner, incluir_arquivados=ver_antigos)
+    qtd_antigo = services.contar_historico_arquivado_partner(partner)
+
     return render(request, 'partners/partner_detail.html', {
         'back_url': back_url,
         'next_param': next_param,
@@ -495,7 +236,7 @@ def partner_plan_manage(request, pk):
     partner = get_object_or_404(Partner, pk=pk)
     back_url, next_param = _resolver_back_url(request, reverse('lead_list'))
     form = PartnerPlanForm()
-    planos = partner.planos.all().order_by('-data_cadastro', '-id')
+    planos = services.listar_planos_partner(partner)
 
     return render(request, 'partners/partner_plan_manage.html', {
         'partner': partner,
@@ -542,23 +283,18 @@ def partner_plan_delete(request, partner_pk, plan_pk):
 def partner_add_historico(request, pk):
     """Recebe o POST do comentário/anexo na tela do parceiro."""
     partner = get_object_or_404(Partner, pk=pk)
-    
+
     if request.method == 'POST':
         descricao = request.POST.get('descricao')
         arquivo = request.FILES.get('arquivo')
-        
-        if descricao or arquivo:
-            tipo = 'anexo' if arquivo else 'comentario'
-            RegistroHistorico.objects.create(
-                tipo=tipo,
-                acao=descricao,         # CORRIGIDO
-                arquivo=arquivo,
-                usuario=request.user,   # CORRIGIDO
-                content_type=ContentType.objects.get_for_model(Partner),
-                object_id=partner.id
-            )
+
+        registro = core_services.registrar_historico_generico(
+            ContentType.objects.get_for_model(Partner), partner.id, request.user,
+            descricao=descricao, arquivo=arquivo,
+        )
+        if registro is not None:
             messages.success(request, "Anotação salva no histórico do parceiro!")
-            
+
     return redirect('partner_detail', pk=pk)
 
 # ==============================================================================
@@ -571,45 +307,17 @@ def update_partner_status(request, pk):
     if request.method == 'POST':
         partner = get_object_or_404(Partner, pk=pk)
         novo_status = request.POST.get('status')
-        observacao = request.POST.get('observacao') 
-        arquivo = request.FILES.get('arquivo')      
-        
-        if partner.status == 'aguardando_contratacao' and novo_status not in ['contratado', 'declinado']:
-            messages.error(request, "Parceiros em aguardando contratação só podem avançar para Contratado ou Declinado.")
-            return redirect('partner_list')
+        observacao = request.POST.get('observacao')
+        arquivo = request.FILES.get('arquivo')
 
-        if novo_status in ['ativo', 'aguardando_contratacao', 'contratado', 'declinado', 'inativo']:
-            status_antigo = partner.status
-            partner.status = novo_status
-            partner.save()
-            
-            if status_antigo != novo_status:
-                if novo_status == 'inativo':
-                    tipo_hist = 'anexo' if arquivo else 'sistema'
-                    texto_historico = f"PARCEIRO INATIVADO\n\nMotivo / Observação:\n{observacao}" if observacao else "PARCEIRO INATIVADO"
-                elif novo_status == 'declinado':
-                    tipo_hist = 'anexo' if arquivo else 'sistema'
-                    texto_historico = f"PARCEIRO DECLINADO\n\nMotivo / Observação:\n{observacao}" if observacao else "PARCEIRO DECLINADO"
-                elif novo_status == 'contratado':
-                    tipo_hist = 'sistema'
-                    texto_historico = "PARCEIRO CONTRATADO\n\nStatus operacional alterado para [CONTRATADO]."
-                elif novo_status == 'aguardando_contratacao':
-                    tipo_hist = 'sistema'
-                    texto_historico = "PARCEIRO EM AGUARDANDO CONTRATAÇÃO\n\nA proposta viável foi encaminhada para negociação contratual."
-                else:
-                    tipo_hist = 'sistema'
-                    texto_historico = "PARCEIRO REATIVADO\n\nStatus operacional alterado para [ATIVO]."
+        estado, mensagem = services.aplicar_transicao_status_partner(
+            partner, novo_status, request.user, observacao=observacao, arquivo=arquivo,
+        )
+        if estado == 'bloqueado':
+            messages.error(request, mensagem)
+        elif estado == 'aplicado':
+            messages.success(request, mensagem)
 
-                RegistroHistorico.objects.create(
-                    tipo=tipo_hist, 
-                    acao=texto_historico,   # CORRIGIDO
-                    arquivo=arquivo,
-                    usuario=request.user,   # CORRIGIDO
-                    content_type=ContentType.objects.get_for_model(Partner), 
-                    object_id=partner.id
-                )
-            messages.success(request, f"O status da {partner.nome_fantasia or partner.razao_social} foi atualizado para {novo_status.upper()}.")
-            
     return redirect('partner_list')
 @user_passes_test(grupo_Parceiro_required)
 @login_required
@@ -620,54 +328,15 @@ def update_winback_status(request, pk):
         novo_status = request.POST.get('status')
         observacao = request.POST.get('observacao')
 
-        if novo_status == 'andamento':
-            from core.models import RegistroHistorico
-            from django.contrib.contenttypes.models import ContentType
-            tipo_parceiro = ContentType.objects.get_for_model(Partner)
-
-            # 1. Arquiva um por um para evitar falhas silenciosas.
-            historicos_antigos = RegistroHistorico.objects.filter(content_type=tipo_parceiro, object_id=partner.id)
-            for hist in historicos_antigos:
-                hist.arquivado = True
-                hist.save()
-
-            # 2. Limpa as OS uma por uma.
-            for prop in partner.proposals.all():
-                prop.delete()
-
-            # 3. REATIVA O PARCEIRO
-            partner.status = 'ativo'
-            partner.save()
-            
-            # 4. GERA O LOG INICIAL DO NOVO CICLO (Blindado e Corrigido)
-            RegistroHistorico.objects.create(
-                tipo='sistema',
-                acao="NOVO CICLO DE PARCERIA!\nO parceiro foi reativado na esteira win-back. O histórico antigo foi arquivado e o perfil foi limpo para a inclusão de novas OS.",
-                usuario=request.user, # CORRIGIDO
-                content_type=tipo_parceiro,
-                object_id=partner.id,
-                arquivado=False
-            )
-            
-            messages.success(request, f"Show! {partner.nome_fantasia or partner.razao_social} reativado e histórico arquivado com sucesso!")
+        estado, mensagem = services.aplicar_reativacao_winback(
+            partner, novo_status, request.user, observacao=observacao,
+        )
+        if estado == 'reativado':
+            messages.success(request, mensagem)
             return redirect('partner_detail', pk=partner.pk)
+        elif estado == 'atualizado':
+            messages.info(request, mensagem)
 
-        elif novo_status in ['negociacao', 'inviavel']:
-            partner.status = novo_status
-            partner.save()
-            
-            texto = "Negociação de reativação iniciada." if novo_status == 'negociacao' else f"Tentativa de reativação recusada/inviável.\nMotivo: {observacao}"
-            
-            RegistroHistorico.objects.create(
-                tipo='sistema', 
-                acao=texto,             # CORRIGIDO
-                usuario=request.user,   # CORRIGIDO
-                content_type=ContentType.objects.get_for_model(Partner), 
-                object_id=partner.id, 
-                arquivado=False
-            )
-            messages.info(request, f"Estágio atualizado para: {partner.get_status_display()}")
-            
     return redirect('partner_inactive_list')
 
 # ==============================================================================
@@ -677,30 +346,11 @@ def update_winback_status(request, pk):
 @login_required
 def proposal_create(request, partner_pk):
     partner = get_object_or_404(Partner, pk=partner_pk)
-    proposal = Proposal(partner=partner)
-    
     endereco_id = request.GET.get('endereco')
-    if endereco_id:
-        endereco_obj = get_object_or_404(Endereco, pk=endereco_id)
-        proposal.client_address = endereco_obj
-        proposal.cliente = endereco_obj.cliente
-        
-    proposal.save()
-    if not proposal.grupo_proposta_id:
-        proposal.grupo_proposta_id = proposal.id
-    if not proposal.codigo_proposta:
-        proposal.codigo_proposta = Proposal.montar_codigo_proposta(proposal.grupo_proposta_id or proposal.id)
-    proposal.save(update_fields=['grupo_proposta_id', 'codigo_proposta'])
-    _registrar_historico_proposta(
-        proposal,
-        request.user,
-        (
-            "Proposta iniciada.\n\n"
-            f"ID da proposta: #{proposal.codigo_exibicao}\n"
-            f"Cliente: {proposal.cliente or '--'}\n"
-            f"Unidade: {proposal.client_address or '--'}"
-        ),
-    )
+    endereco_obj = get_object_or_404(Endereco, pk=endereco_id) if endereco_id else None
+
+    proposal = services.criar_proposal(partner, request.user, endereco=endereco_obj)
+
     messages.success(request, f"Nova OS iniciada para {partner.nome_fantasia or partner.razao_social}")
     return redirect('proposal_update', pk=proposal.pk)
 
@@ -710,11 +360,9 @@ def proposal_detail(request, pk):
     proposal = get_object_or_404(Proposal.objects.select_related('partner', 'cliente', 'client_address', 'responsavel'), pk=pk)
     back_url, next_param = _resolver_back_url(request, reverse('partner_detail', args=[proposal.partner_id]))
     periodo = _resolver_periodo_historico(request)
-    historico = RegistroHistorico.objects.filter(
-        content_type=ContentType.objects.get_for_model(Proposal),
-        object_id=proposal.id,
-        data__range=(periodo['inicio_dt'], periodo['fim_dt']),
-    ).order_by('-data')
+    historico = core_services.listar_historico_periodo(
+        ContentType.objects.get_for_model(Proposal), proposal.id, periodo['inicio_dt'], periodo['fim_dt'],
+    )
 
     return render(request, 'partners/proposal_detail.html', {
         'back_url': back_url,
@@ -735,33 +383,13 @@ def proposal_assumir_responsavel(request, pk):
     _, next_param = _resolver_back_url(request, reverse('partner_detail', args=[proposal.partner_id]))
 
     if request.method == 'POST':
-        if proposal.status != 'analise':
-            messages.error(request, "Só é possível assumir um login quando a proposta estiver em Em Negociação.")
-            return redirect(_append_next(reverse('proposal_detail', args=[proposal.pk]), next_param))
-
-        responsavel_anterior = proposal.responsavel
-        if responsavel_anterior_id := getattr(responsavel_anterior, 'id', None):
-            if responsavel_anterior_id == request.user.id:
-                messages.info(request, "Esse login já está com você como responsável.")
-                return redirect(_append_next(reverse('proposal_detail', args=[proposal.pk]), next_param))
-
-        proposal.responsavel = request.user
-        proposal.save(update_fields=['responsavel'])
-
-        nome_anterior = responsavel_anterior.get_full_name() or responsavel_anterior.username if responsavel_anterior else '--'
-        nome_atual = request.user.get_full_name() or request.user.username
-        _registrar_historico_proposta(
-            proposal,
-            request.user,
-            (
-                "Responsável do login atualizado.\n\n"
-                f"ID da proposta: #{proposal.codigo_exibicao}\n"
-                f"Login: {proposal.client_address.login_ixc if proposal.client_address else '--'}\n"
-                f"De: {nome_anterior}\n"
-                f"Para: {nome_atual}"
-            ),
-        )
-        messages.success(request, "Esse login foi atribuído ao seu usuário.")
+        estado, mensagem = services.assumir_responsavel_login(proposal, request.user)
+        if estado == 'bloqueado':
+            messages.error(request, mensagem)
+        elif estado == 'ja_responsavel':
+            messages.info(request, mensagem)
+        else:
+            messages.success(request, mensagem)
 
     return redirect(_append_next(reverse('proposal_detail', args=[proposal.pk]), next_param))
 
@@ -774,80 +402,14 @@ def proposal_batch_detail(request, pk):
     back_url, next_param = _resolver_back_url(request, reverse('partner_detail', args=[partner.id]))
     periodo = _resolver_periodo_historico(request)
 
-    proposal_ids = list(
-        Proposal.objects.filter(codigo_proposta=proposal.codigo_proposta)
-        .order_by('id')
-        .values_list('id', flat=True)
-    )
-    total_logins_lote = len(proposal_ids)
-
-    historico_qs = RegistroHistorico.objects.filter(
-        content_type=ContentType.objects.get_for_model(Proposal),
-        object_id__in=proposal_ids,
-        data__range=(periodo['inicio_dt'], periodo['fim_dt']),
-    ).order_by('-data')
-
-    proposal_ids_historico = {registro.object_id for registro in historico_qs}
-    proposals_map = {
-        item.id: item
-        for item in Proposal.objects.filter(id__in=proposal_ids_historico)
-        .select_related('cliente', 'client_address', 'partner')
-    }
-
-    historico_lote = []
-    historico_replicado_map = {}
-
-    for registro in historico_qs:
-        arquivo_nome = registro.arquivo.name if registro.arquivo else ''
-        chave_replicacao = (
-            registro.tipo,
-            registro.usuario_id,
-            (registro.acao or '').strip(),
-            arquivo_nome,
-            registro.data.replace(microsecond=0),
-        )
-
-        if chave_replicacao in historico_replicado_map:
-            item_existente = historico_replicado_map[chave_replicacao]
-            item_existente['proposals_afetadas'].append(registro.object_id)
-            continue
-
-        item = {
-            'registro': registro,
-            'proposal': proposals_map.get(registro.object_id),
-            'proposals_afetadas': [registro.object_id],
-            'replicado_lote': False,
-            'quantidade_afetada': 1,
-        }
-        historico_replicado_map[chave_replicacao] = item
-        historico_lote.append(item)
-
-    for item in historico_lote:
-        quantidade_afetada = len(set(item['proposals_afetadas']))
-        item['quantidade_afetada'] = quantidade_afetada
-        item['replicado_lote'] = quantidade_afetada > 1
-
-    motivos_inviavel_ativos = ProposalMotivoInviavel.objects.filter(status='ativo').order_by('nome')
-    propostas_lote = list(
-        Proposal.objects.filter(codigo_proposta=proposal.codigo_proposta)
-        .select_related('client_address')
-        .order_by('id')
-    )
-    possui_os_lastmile = bool(_propostas_com_os_lastmile(propostas_lote))
-    outras_cotacoes_abertas = _outras_cotacoes_em_negociacao_mesmo_endereco(propostas_lote)
-    outras_cotacoes_por_endereco = _montar_resumo_outras_cotacoes_por_endereco(outras_cotacoes_abertas)
+    contexto_lote = services.montar_contexto_lote(proposal, periodo['inicio_dt'], periodo['fim_dt'])
 
     return render(request, 'partners/proposal_batch_detail.html', {
         'back_url': back_url,
         'next_param': next_param,
         'proposal': proposal,
         'partner': partner,
-        'total_logins_lote': total_logins_lote,
-        'historico_lote': historico_lote,
-        'motivos_inviavel_ativos': motivos_inviavel_ativos,
-        'possui_os_lastmile': possui_os_lastmile,
-        'outras_cotacoes_abertas_qtd': len(outras_cotacoes_abertas),
-        'outras_cotacoes_por_endereco': outras_cotacoes_por_endereco,
+        **contexto_lote,
         'proposal_status_choices': [
             choice for choice in Proposal.STATUS_CHOICES
             if choice[0] in ['analise', 'ativa', 'encerrada']
@@ -862,11 +424,7 @@ def proposal_batch_detail(request, pk):
 @login_required
 def proposal_batch_logins(request, pk):
     proposal = get_object_or_404(Proposal, pk=pk)
-    proposals_lote = list(
-        Proposal.objects.filter(codigo_proposta=proposal.codigo_proposta)
-        .select_related('client_address')
-        .order_by('id')
-    )
+    proposals_lote = services.listar_propostas_do_lote(proposal)
     return render(request, 'partners/_proposal_batch_logins_list.html', {
         'proposals_lote': proposals_lote,
     })
@@ -881,19 +439,7 @@ def proposal_batch_add_historico(request, pk):
         descricao = request.POST.get('descricao')
         arquivo = request.FILES.get('arquivo')
 
-        if descricao or arquivo:
-            tipo = 'anexo' if arquivo else 'comentario'
-            acao = descricao or "Anexo registrado no lote da proposta."
-
-            for item in Proposal.objects.filter(codigo_proposta=proposal.codigo_proposta).order_by('id'):
-                _registrar_historico_proposta(
-                    item,
-                    request.user,
-                    acao,
-                    tipo=tipo,
-                    arquivo=arquivo,
-                )
-
+        if services.replicar_historico_lote(proposal, request.user, descricao=descricao, arquivo=arquivo):
             messages.success(request, "Registro adicionado ao lote e replicado para todas as propostas vinculadas.")
 
     return redirect(_append_next(reverse('proposal_batch_detail', args=[proposal.pk]), next_param))
@@ -905,201 +451,19 @@ def proposal_batch_status_update(request, pk):
     _, next_param = _resolver_back_url(request, reverse('partner_detail', args=[proposal.partner_id]))
 
     if request.method == 'POST':
-        novo_status = request.POST.get('status')
-        status_validos = {choice[0] for choice in Proposal.STATUS_CHOICES}
-
-        if novo_status not in status_validos:
-            messages.error(request, "Status de cotação inválido.")
-            return redirect(_append_next(reverse('proposal_batch_detail', args=[proposal.pk]), next_param))
-
-        propostas_lote = list(
-            Proposal.objects.filter(codigo_proposta=proposal.codigo_proposta)
-            .select_related('cliente', 'client_address')
+        resultado = services.aplicar_atualizacao_lote_status(
+            request, proposal,
+            novo_status=request.POST.get('status'),
+            observacao_inviavel=(request.POST.get('observacao_inviavel') or '').strip(),
+            observacao_contratacao=(request.POST.get('observacao_contratacao') or '').strip(),
+            alterar_os_ixc=(request.POST.get('alterar_os_ixc') or 'nao').strip().lower() == 'sim',
+            fechar_outras_cotacoes=(request.POST.get('fechar_outras_cotacoes') or 'nao').strip().lower(),
+            arquivo_ixc=request.FILES.get('arquivo_ixc'),
+            motivo_id=request.POST.get('motivo_inviavel'),
         )
-        status_antigo = proposal.status
-        motivo_inviavel = None
-        observacao_inviavel = (request.POST.get('observacao_inviavel') or '').strip()
-        observacao_contratacao = (request.POST.get('observacao_contratacao') or '').strip()
-        alterar_os_ixc = (request.POST.get('alterar_os_ixc') or 'nao').strip().lower() == 'sim'
-        fechar_outras_cotacoes = (request.POST.get('fechar_outras_cotacoes') or 'nao').strip().lower()
-        arquivo_ixc = request.FILES.get('arquivo_ixc')
-        if novo_status == 'encerrada':
-            motivo_id = request.POST.get('motivo_inviavel')
-            motivo_inviavel = ProposalMotivoInviavel.objects.filter(pk=motivo_id, status='ativo').first()
-            if not motivo_inviavel:
-                messages.error(request, "Selecione um motivo ativo para marcar a cotação como inviável.")
-                return redirect(_append_next(reverse('proposal_batch_detail', args=[proposal.pk]), next_param))
-            if not observacao_inviavel:
-                messages.error(request, "Preencha a observação da cotação inviável.")
-                return redirect(_append_next(reverse('proposal_batch_detail', args=[proposal.pk]), next_param))
-            if len(observacao_inviavel) > 150:
-                messages.error(request, "A observação da cotação inviável deve ter no máximo 150 caracteres.")
-                return redirect(_append_next(reverse('proposal_batch_detail', args=[proposal.pk]), next_param))
-
-        if novo_status == 'aguardando_contratacao':
-            falhas_ixc = []
-            propostas_com_os_lastmile = _propostas_com_os_lastmile(propostas_lote)
-            resultados_ixc_por_proposta = {}
-            propostas_com_os_ja_finalizada = []
-
-            if alterar_os_ixc:
-                if not observacao_contratacao:
-                    messages.error(request, "Preencha a observação para alterar a O.S. no IXC antes de enviar a cotação para aguardando contratação.")
-                    return redirect(_append_next(reverse('proposal_batch_detail', args=[proposal.pk]), next_param))
-                for item in propostas_com_os_lastmile:
-                    if arquivo_ixc:
-                        resultado_anexo = anexar_arquivo_atendimento_por_os(
-                            os_id=item.client_address.ticket_os_atual_ixc,
-                            uploaded_file=arquivo_ixc,
-                            descricao=observacao_contratacao or f"Anexo enviado na mudança da cotação #{item.codigo_exibicao} para aguardando contratação.",
-                        )
-                        if not resultado_anexo.get('ok'):
-                            falhas_ixc.append({
-                                'proposal': item,
-                                'resultado': resultado_anexo,
-                                'tipo': 'anexo',
-                            })
-                            continue
-
-                    resultado_ixc = finalizar_os_existente(
-                        os_id=item.client_address.ticket_os_atual_ixc,
-                        mensagem=observacao_contratacao,
-                        finaliza_atendimento=False,
-                        usuario_sistema=request.user,
-                    )
-                    if not resultado_ixc.get('ok'):
-                        falhas_ixc.append({
-                            'proposal': item,
-                            'resultado': resultado_ixc,
-                            'tipo': 'finalizacao',
-                        })
-                        continue
-
-                    resultados_ixc_por_proposta[item.id] = resultado_ixc
-                    if resultado_ixc.get('already_closed'):
-                        propostas_com_os_ja_finalizada.append(item)
-                    _baixar_endereco_da_fila_lastmile(item.client_address)
-
-            if falhas_ixc:
-                primeira_falha = falhas_ixc[0]
-                if primeira_falha.get('tipo') == 'anexo':
-                    messages.error(
-                        request,
-                        f"Não foi possível enviar o anexo ao atendimento no IXC para a cotação #{primeira_falha['proposal'].codigo_exibicao}. {_resumir_erro_anexo_ixc(primeira_falha['resultado'])}",
-                    )
-                    return redirect(_append_next(reverse('proposal_batch_detail', args=[proposal.pk]), next_param))
-                messages.error(
-                    request,
-                    f"Não foi possível finalizar a O.S. no IXC para a cotação #{primeira_falha['proposal'].codigo_exibicao}. {resumir_erro_finalizacao(primeira_falha['resultado'])}",
-                )
-                return redirect(_append_next(reverse('proposal_batch_detail', args=[proposal.pk]), next_param))
-
-            if propostas_com_os_ja_finalizada:
-                messages.info(request, _mensagem_os_ixc_ja_finalizada(propostas_com_os_ja_finalizada))
-
-        if novo_status == 'ativa':
-            messages.success(request, "Cotação marcada como viável. Complete agora os dados técnicos e financeiros.")
-            return redirect(
-                _append_next(
-                    f"{reverse('proposal_update', args=[proposal.pk])}?modo=convertida&status_pendente=ativa&fechar_outras_cotacoes={fechar_outras_cotacoes}",
-                    next_param,
-                )
-            )
-
-        if status_antigo != novo_status:
-            for item in propostas_lote:
-                item.status = novo_status
-                if novo_status == 'encerrada':
-                    item.motivo_inviavel = motivo_inviavel
-                    item.observacao_inviavel = observacao_inviavel
-                    item.save(update_fields=['status', 'motivo_inviavel', 'observacao_inviavel'])
-                else:
-                    item.motivo_inviavel = None
-                    item.observacao_inviavel = None
-                    item.save(update_fields=['status', 'motivo_inviavel', 'observacao_inviavel'])
-
-                detalhe_item_inviavel = ""
-                detalhe_item_contratacao = ""
-                if novo_status == 'encerrada':
-                    detalhe_item_inviavel = f"\nMotivo: {motivo_inviavel.nome}\nObservação: {observacao_inviavel}"
-                elif novo_status == 'aguardando_contratacao':
-                    detalhe_item_contratacao = (
-                        "\n"
-                        + _detalhe_os_ixc_para_historico(
-                            alterar_os_ixc,
-                            observacao_contratacao,
-                            resultados_ixc_por_proposta.get(item.id),
-                        )
-                    )
-
-                _registrar_historico_proposta(
-                    item,
-                    request.user,
-                    (
-                        "Status da proposta atualizado no lote.\n\n"
-                        f"ID da proposta: #{item.codigo_exibicao}\n"
-                        f"Cliente: {item.cliente or '--'}\n"
-                        f"De: {dict(Proposal.STATUS_CHOICES).get(status_antigo, status_antigo)}\n"
-                        f"Para: {item.get_status_display()}"
-                        f"{detalhe_item_inviavel}"
-                        f"{detalhe_item_contratacao}"
-                    ),
-                )
-                _registrar_auditoria_status_cotacao(
-                    request,
-                    item,
-                    status_antigo,
-                    novo_status,
-                    origem='alteracao_lote',
-                    integrou_ixc=bool(novo_status == 'aguardando_contratacao' and alterar_os_ixc),
-                    detalhes=(
-                        f"Atualizacao em lote da cotacao #{item.codigo_exibicao}."
-                        f"{f' Motivo inviavel: {motivo_inviavel.nome}.' if novo_status == 'encerrada' and motivo_inviavel else ''}"
-                        f"{f' Observacao inviavel: {observacao_inviavel}.' if novo_status == 'encerrada' and observacao_inviavel else ''}"
-                        f"{f' {_detalhe_os_ixc_para_auditoria(alterar_os_ixc, observacao_contratacao, resultados_ixc_por_proposta.get(item.id))}' if novo_status == 'aguardando_contratacao' else ''}"
-                    ).strip(),
-                )
-
-            detalhe_lote_inviavel = ""
-            detalhe_lote_contratacao = ""
-            if novo_status == 'encerrada':
-                detalhe_lote_inviavel = f"Motivo: {motivo_inviavel.nome}\nObservação: {observacao_inviavel}\n"
-            elif novo_status == 'aguardando_contratacao':
-                if propostas_com_os_lastmile:
-                    detalhes_os_lote = [
-                        f"Cotação #{item.codigo_exibicao}: {_status_os_ixc_para_operador(alterar_os_ixc, resultados_ixc_por_proposta.get(item.id))}"
-                        for item in propostas_com_os_lastmile
-                    ]
-                    detalhe_lote_contratacao = "Status das O.S. no IXC:\n" + "\n".join(detalhes_os_lote) + "\n"
-                    if alterar_os_ixc and observacao_contratacao:
-                        detalhe_lote_contratacao += f"Observação enviada ao IXC: {observacao_contratacao}\n"
-                else:
-                    detalhe_lote_contratacao = f"{_detalhe_os_ixc_para_historico(alterar_os_ixc, observacao_contratacao)}\n"
-
-            RegistroHistorico.objects.create(
-                tipo='sistema',
-                acao=(
-                    "Status do lote da proposta atualizado.\n\n"
-                    f"ID da proposta: #{proposal.codigo_exibicao}\n"
-                    f"De: {dict(Proposal.STATUS_CHOICES).get(status_antigo, status_antigo)}\n"
-                    f"Para: {dict(Proposal.STATUS_CHOICES).get(novo_status, novo_status)}\n"
-                    f"{detalhe_lote_inviavel}"
-                    f"{detalhe_lote_contratacao}"
-                    f"Quantidade de logins impactados: {len(propostas_lote)}"
-                ),
-                usuario=request.user,
-                content_type=ContentType.objects.get_for_model(Partner),
-                object_id=proposal.partner_id
-            )
-            if novo_status == 'ativa':
-                messages.success(request, "Cotação marcada como viável. Complete agora os dados técnicos e financeiros.")
-                return redirect(_append_next(f"{reverse('proposal_update', args=[proposal.pk])}?modo=convertida", next_param))
-
-            if novo_status in ['contratado', 'declinado']:
-                messages.success(request, "Status da cotação atualizado no lote com sucesso.")
-                return redirect(_append_next(reverse('partner_list'), next_param))
-
-            messages.success(request, "Status da cotação atualizado no lote com sucesso.")
+        for nivel, texto in resultado['mensagens']:
+            getattr(messages, nivel)(request, texto)
+        return redirect(_append_next(resultado['redirect_url'], next_param))
 
     return redirect(_append_next(reverse('proposal_batch_detail', args=[proposal.pk]), next_param))
 
@@ -1113,17 +477,32 @@ def proposal_add_historico(request, pk):
         descricao = request.POST.get('descricao')
         arquivo = request.FILES.get('arquivo')
 
-        if descricao or arquivo:
-            _registrar_historico_proposta(
-                proposal,
-                request.user,
-                descricao,
-                tipo='anexo' if arquivo else 'comentario',
-                arquivo=arquivo,
-            )
+        registro = core_services.registrar_historico_generico(
+            ContentType.objects.get_for_model(Proposal), proposal.id, request.user,
+            descricao=descricao, arquivo=arquivo,
+        )
+        if registro is not None:
             messages.success(request, "Registro adicionado ao histórico da cotação.")
 
     return redirect(_append_next(reverse('proposal_detail', args=[proposal.pk]), next_param))
+
+
+def _contexto_proposal_form(form, proposal, partner, is_conversion_completion, status_pendente, propostas_lote, possui_os_lastmile, fechar_outras_cotacoes, outras_cotacoes_abertas, outras_cotacoes_por_endereco, permite_alterar_os_ixc):
+    return {
+        'form': form,
+        'proposal': proposal,
+        'partner': partner,
+        'is_conversion_completion': is_conversion_completion,
+        'status_exibicao_conversao': dict(Proposal.STATUS_CHOICES).get(status_pendente, proposal.get_status_display()),
+        'propostas_lote': propostas_lote,
+        'possui_os_lastmile': possui_os_lastmile,
+        'fechar_outras_cotacoes': fechar_outras_cotacoes,
+        'outras_cotacoes_abertas_qtd': len(outras_cotacoes_abertas),
+        'outras_cotacoes_por_endereco': outras_cotacoes_por_endereco,
+        'permite_alterar_os_ixc': permite_alterar_os_ixc,
+    }
+
+
 @user_passes_test(grupo_Parceiro_required)
 @login_required
 def proposal_update(request, pk):
@@ -1136,9 +515,9 @@ def proposal_update(request, pk):
     propostas_lote = list(
         Proposal.objects.filter(codigo_proposta=proposal.codigo_proposta).select_related('cliente', 'client_address').order_by('id')
     ) if proposal.codigo_proposta else [proposal]
-    possui_os_lastmile = bool(_propostas_com_os_lastmile(propostas_lote))
-    outras_cotacoes_abertas = _outras_cotacoes_em_negociacao_mesmo_endereco(propostas_lote) if is_conversion_completion else []
-    outras_cotacoes_por_endereco = _montar_resumo_outras_cotacoes_por_endereco(outras_cotacoes_abertas)
+    possui_os_lastmile = bool(services._propostas_com_os_lastmile(propostas_lote))
+    outras_cotacoes_abertas = services._outras_cotacoes_em_negociacao_mesmo_endereco(propostas_lote) if is_conversion_completion else []
+    outras_cotacoes_por_endereco = services._montar_resumo_outras_cotacoes_por_endereco(outras_cotacoes_abertas)
     permite_alterar_os_ixc = bool(possui_os_lastmile and not (outras_cotacoes_abertas and fechar_outras_cotacoes != 'sim'))
 
     if request.method == 'POST':
@@ -1148,365 +527,37 @@ def proposal_update(request, pk):
 
         if form.is_valid():
             if is_conversion_completion:
-                observacao_contratacao = (request.POST.get('observacao_contratacao') or '').strip()
-                alterar_os_ixc = (request.POST.get('alterar_os_ixc') or 'nao').strip().lower() == 'sim'
-                if outras_cotacoes_abertas and fechar_outras_cotacoes != 'sim':
-                    if alterar_os_ixc:
-                        messages.error(request, _mensagem_bloqueio_ixc_por_outras_cotacoes(outras_cotacoes_abertas))
-                        return render(request, 'partners/proposal_form.html', {
-                            'form': form,
-                            'proposal': proposal,
-                            'partner': partner,
-                            'is_conversion_completion': is_conversion_completion,
-                            'status_exibicao_conversao': dict(Proposal.STATUS_CHOICES).get(status_pendente, proposal.get_status_display()),
-                            'propostas_lote': propostas_lote,
-                            'possui_os_lastmile': possui_os_lastmile,
-                            'fechar_outras_cotacoes': fechar_outras_cotacoes,
-                            'outras_cotacoes_abertas_qtd': len(outras_cotacoes_abertas),
-                            'outras_cotacoes_por_endereco': outras_cotacoes_por_endereco,
-                            'permite_alterar_os_ixc': permite_alterar_os_ixc,
-                        })
-                    alterar_os_ixc = False
-                propostas_com_os_lastmile = _propostas_com_os_lastmile(propostas_lote)
-
-                falhas_ixc = []
-                resultados_ixc_por_proposta = {}
-                propostas_com_os_ja_finalizada = []
-                if alterar_os_ixc:
-                    if not observacao_contratacao:
-                        messages.error(request, "Preencha a observação para alterar a O.S. no IXC antes de enviar a cotação para aguardando contratação.")
-                        return render(request, 'partners/proposal_form.html', {
-                            'form': form,
-                            'proposal': proposal,
-                            'partner': partner,
-                            'is_conversion_completion': is_conversion_completion,
-                            'status_exibicao_conversao': dict(Proposal.STATUS_CHOICES).get(status_pendente, proposal.get_status_display()),
-                            'propostas_lote': propostas_lote,
-                            'possui_os_lastmile': possui_os_lastmile,
-                            'fechar_outras_cotacoes': fechar_outras_cotacoes,
-                            'outras_cotacoes_abertas_qtd': len(outras_cotacoes_abertas),
-                            'outras_cotacoes_por_endereco': outras_cotacoes_por_endereco,
-                            'permite_alterar_os_ixc': permite_alterar_os_ixc,
-                        })
-                    for item in propostas_com_os_lastmile:
-                        if arquivo_ixc:
-                            resultado_anexo = anexar_arquivo_atendimento_por_os(
-                                os_id=item.client_address.ticket_os_atual_ixc,
-                                uploaded_file=arquivo_ixc,
-                                descricao=observacao_contratacao or f"Anexo enviado na mudança da cotação #{item.codigo_exibicao} para aguardando contratação.",
-                            )
-                            if not resultado_anexo.get('ok'):
-                                falhas_ixc.append({
-                                    'proposal': item,
-                                    'resultado': resultado_anexo,
-                                    'tipo': 'anexo',
-                                })
-                                continue
-
-                        resultado_ixc = finalizar_os_existente(
-                            os_id=item.client_address.ticket_os_atual_ixc,
-                            mensagem=observacao_contratacao,
-                            finaliza_atendimento=False,
-                            usuario_sistema=request.user,
-                        )
-                        if not resultado_ixc.get('ok'):
-                            falhas_ixc.append({
-                                'proposal': item,
-                                'resultado': resultado_ixc,
-                                'tipo': 'finalizacao',
-                            })
-                            continue
-
-                        resultados_ixc_por_proposta[item.id] = resultado_ixc
-                        if resultado_ixc.get('already_closed'):
-                            propostas_com_os_ja_finalizada.append(item)
-                        _baixar_endereco_da_fila_lastmile(item.client_address)
-
-                if falhas_ixc:
-                    primeira_falha = falhas_ixc[0]
-                    if primeira_falha.get('tipo') == 'anexo':
-                        messages.error(
-                            request,
-                            f"Não foi possível enviar o anexo ao atendimento no IXC para a cotação #{primeira_falha['proposal'].codigo_exibicao}. {_resumir_erro_anexo_ixc(primeira_falha['resultado'])}",
-                        )
-                        return render(request, 'partners/proposal_form.html', {
-                            'form': form,
-                            'proposal': proposal,
-                            'partner': partner,
-                            'is_conversion_completion': is_conversion_completion,
-                            'status_exibicao_conversao': dict(Proposal.STATUS_CHOICES).get(status_pendente, proposal.get_status_display()),
-                            'propostas_lote': propostas_lote,
-                            'possui_os_lastmile': possui_os_lastmile,
-                            'fechar_outras_cotacoes': fechar_outras_cotacoes,
-                            'outras_cotacoes_abertas_qtd': len(outras_cotacoes_abertas),
-                            'outras_cotacoes_por_endereco': outras_cotacoes_por_endereco,
-                            'permite_alterar_os_ixc': permite_alterar_os_ixc,
-                        })
-                    messages.error(
-                        request,
-                        f"Não foi possível finalizar a O.S. no IXC para a cotação #{primeira_falha['proposal'].codigo_exibicao}. {resumir_erro_finalizacao(primeira_falha['resultado'])}",
-                    )
-                    return render(request, 'partners/proposal_form.html', {
-                        'form': form,
-                        'proposal': proposal,
-                        'partner': partner,
-                        'is_conversion_completion': is_conversion_completion,
-                        'status_exibicao_conversao': dict(Proposal.STATUS_CHOICES).get(status_pendente, proposal.get_status_display()),
-                        'propostas_lote': propostas_lote,
-                        'possui_os_lastmile': possui_os_lastmile,
-                        'fechar_outras_cotacoes': fechar_outras_cotacoes,
-                        'outras_cotacoes_abertas_qtd': len(outras_cotacoes_abertas),
-                        'outras_cotacoes_por_endereco': outras_cotacoes_por_endereco,
-                        'permite_alterar_os_ixc': permite_alterar_os_ixc,
-                    })
-
-                if propostas_com_os_ja_finalizada:
-                    messages.info(request, _mensagem_os_ixc_ja_finalizada(propostas_com_os_ja_finalizada))
-
-                partner.cnpj_cpf = form.cleaned_data.get('partner_cnpj_cpf') or partner.cnpj_cpf
-                partner.save(update_fields=['cnpj_cpf'])
-
-                proposta_base = form.save(commit=False)
-                campos_compartilhados = [
-                    'nome_proposta', 'velocidade', 'tecnologia', 'disponibilidade', 'mttr',
-                    'perda_pacote', 'latencia', 'interfaces', 'tipo_acesso', 'ipv4_bloco',
-                    'dupla_abordagem', 'entrega_rb', 'designador', 'trunk', 'dhcp',
-                    'prazo_ativacao', 'contato_suporte', 'telefone_suporte', 'ticket_cliente', 'valor_mensal',
-                    'ticket_empresa',
-                    'taxa_instalacao', 'valor_parceiro', 'tempo_contrato', 'email_faturamento'
-                ]
-
-                for item in propostas_lote:
-                    status_item_anterior = item.status
-                    for campo in campos_compartilhados:
-                        setattr(item, campo, getattr(proposta_base, campo))
-                    item.status = 'aguardando_contratacao'
-                    item.save()
-
-                    if item.client_address_id:
-                        endereco = item.client_address
-                        endereco.velocidade = proposta_base.velocidade
-                        endereco.tecnologia = proposta_base.tecnologia
-                        endereco.disponibilidade = proposta_base.disponibilidade
-                        endereco.mttr = proposta_base.mttr
-                        endereco.perda_pacote = proposta_base.perda_pacote
-                        endereco.latencia = proposta_base.latencia
-                        endereco.interfaces = proposta_base.interfaces
-                        endereco.tipo_acesso = proposta_base.tipo_acesso
-                        endereco.ipv4_bloco = proposta_base.ipv4_bloco
-                        endereco.dupla_abordagem = proposta_base.dupla_abordagem
-                        endereco.entrega_rb = proposta_base.entrega_rb
-                        endereco.designador = proposta_base.designador
-                        endereco.trunk = proposta_base.trunk
-                        endereco.dhcp = proposta_base.dhcp
-                        endereco.prazo_ativacao = proposta_base.prazo_ativacao
-                        endereco.contato_suporte = proposta_base.contato_suporte
-                        endereco.telefone_suporte = proposta_base.telefone_suporte
-                        endereco.save(update_fields=[
-                            'velocidade',
-                            'tecnologia',
-                            'disponibilidade',
-                            'mttr',
-                            'perda_pacote',
-                            'latencia',
-                            'interfaces',
-                            'tipo_acesso',
-                            'ipv4_bloco',
-                            'dupla_abordagem',
-                            'entrega_rb',
-                            'designador',
-                            'trunk',
-                            'dhcp',
-                            'prazo_ativacao',
-                            'contato_suporte',
-                            'telefone_suporte',
-                        ])
-
-                    _registrar_historico_proposta(
-                        item,
-                        request.user,
-                        (
-                            "Dados técnicos e financeiros preenchidos após proposta viável.\n\n"
-                            f"ID da proposta: #{item.codigo_exibicao}\n"
-                            f"Unidade: {item.client_address or '--'}\n"
-                            f"{_detalhe_os_ixc_para_historico(alterar_os_ixc, observacao_contratacao, resultados_ixc_por_proposta.get(item.id))}"
-                        ),
-                    )
-                    _registrar_auditoria_status_cotacao(
-                        request,
-                        item,
-                        status_item_anterior,
-                        'aguardando_contratacao',
-                        origem='conversao_viavel',
-                        integrou_ixc=alterar_os_ixc,
-                        detalhes=(
-                            f"Conversao de cotacao viavel concluida para a proposta #{item.codigo_exibicao}."
-                            f" {_detalhe_os_ixc_para_auditoria(alterar_os_ixc, observacao_contratacao, resultados_ixc_por_proposta.get(item.id))}"
-                        ).strip(),
-                    )
-
-                if propostas_com_os_lastmile:
-                    detalhes_os_lote = [
-                        f"Cotação #{item.codigo_exibicao}: {_status_os_ixc_para_operador(alterar_os_ixc, resultados_ixc_por_proposta.get(item.id))}"
-                        for item in propostas_com_os_lastmile
-                    ]
-                    detalhe_lote_os_ixc = "Status das O.S. no IXC:\n" + "\n".join(detalhes_os_lote) + "\n"
-                    if alterar_os_ixc and observacao_contratacao:
-                        detalhe_lote_os_ixc += f"Observação enviada ao IXC: {observacao_contratacao}\n"
-                else:
-                    detalhe_lote_os_ixc = f"{_detalhe_os_ixc_para_historico(alterar_os_ixc, observacao_contratacao)}\n"
-
-                RegistroHistorico.objects.create(
-                    tipo='sistema',
-                    acao=(
-                        "Proposta enviada para aguardando contratação após complementação técnica e financeira.\n\n"
-                        f"ID da proposta: #{proposal.codigo_exibicao}\n"
-                        f"{detalhe_lote_os_ixc}"
-                        f"Quantidade de logins impactados: {len(propostas_lote)}"
-                    ),
-                    usuario=request.user,
-                    content_type=ContentType.objects.get_for_model(Partner),
-                    object_id=partner.id
+                resultado = services.processar_conversao_viavel(
+                    request, proposal, partner, form,
+                    propostas_lote=propostas_lote,
+                    outras_cotacoes_abertas=outras_cotacoes_abertas,
+                    fechar_outras_cotacoes=fechar_outras_cotacoes,
+                    arquivo_ixc=arquivo_ixc,
                 )
+                if not resultado['ok']:
+                    messages.error(request, resultado['erro'])
+                    return render(request, 'partners/proposal_form.html', _contexto_proposal_form(
+                        form, proposal, partner, is_conversion_completion, status_pendente, propostas_lote,
+                        possui_os_lastmile, fechar_outras_cotacoes, outras_cotacoes_abertas,
+                        outras_cotacoes_por_endereco, permite_alterar_os_ixc,
+                    ))
 
-                qtd_fechadas_automaticamente = 0
-                if fechar_outras_cotacoes == 'sim' and outras_cotacoes_abertas:
-                    qtd_fechadas_automaticamente = _encerrar_outras_cotacoes_automaticamente(
-                        outras_cotacoes_abertas,
-                        proposal,
-                        request.user,
-                        request=request,
-                    )
-                    RegistroHistorico.objects.create(
-                        tipo='sistema',
-                        acao=(
-                            "Outras cotações do mesmo endereço foram fechadas automaticamente.\n\n"
-                            f"Cotação escolhida: #{proposal.codigo_exibicao}\n"
-                            f"Quantidade de cotações fechadas: {qtd_fechadas_automaticamente}"
-                        ),
-                        usuario=request.user,
-                        content_type=ContentType.objects.get_for_model(Partner),
-                        object_id=partner.id
-                    )
-
-                if qtd_fechadas_automaticamente:
-                    messages.success(request, f"Dados salvos com sucesso. A cotação foi enviada para aguardando contratação e {qtd_fechadas_automaticamente} outra(s) cotação(ões) do mesmo endereço foram fechadas automaticamente.")
-                else:
-                    messages.success(request, "Dados técnicos e financeiros salvos com sucesso. A cotação foi enviada para a aba de parceiros em aguardando contratação.")
+                for mensagem_info in resultado['mensagens_info']:
+                    messages.info(request, mensagem_info)
+                messages.success(request, resultado['mensagem_sucesso'])
                 return redirect('partner_list')
 
-            valores_novos, valores_antigos = [], []
-            if form.has_changed():
-                for campo in form.changed_data:
-                    if campo not in ['enderecos_selecionados', 'partner', 'cliente', 'client_address']:
-                        valor_antigo = form.initial.get(campo)
-                        valor_novo = form.cleaned_data.get(campo)
-                        nome_campo = campo.replace('_', ' ').title()
-                        
-                        if any(p in campo for p in ['valor', 'taxa', 'custo', 'pago']):
-                            str_antigo = f"R$ {valor_antigo}" if valor_antigo else 'Vazio'
-                            str_novo = f"R$ {valor_novo}" if valor_novo else 'Vazio'
-                        elif campo in ['vigencia', 'tempo_contrato']:
-                            str_antigo = f"{valor_antigo} Meses" if valor_antigo else 'Vazio'
-                            str_novo = f"{valor_novo} Meses" if valor_novo else 'Vazio'
-                        else:
-                            str_antigo = str(valor_antigo) if valor_antigo else 'Vazio'
-                            str_novo = str(valor_novo) if valor_novo else 'Vazio'
-                            
-                        valores_novos.append(f"• {nome_campo}: {str_novo}")
-                        valores_antigos.append(f"• {nome_campo}: {str_antigo}")
-
-            mudou_unidade, novas_unidades = False, []
-            if enderecos_ids:
-                lista_ids_historico = list(enderecos_ids)
-                proposta_base = form.save(commit=False)
-                
-                primeiro_endereco_id = enderecos_ids.pop(0) 
-                primeiro_endereco = get_object_or_404(Endereco, pk=primeiro_endereco_id)
-                
-                if endereco_atual != primeiro_endereco:
-                    mudou_unidade = True
-                    valores_antigos.append(f"• Unidade Base: {endereco_atual}")
-                    valores_novos.append(f"• Unidade Base: {primeiro_endereco}")
-                
-                proposta_base.client_address = primeiro_endereco
-                proposta_base.save()
-                if not proposta_base.grupo_proposta_id:
-                    proposta_base.grupo_proposta_id = proposta_base.id
-                if not proposta_base.codigo_proposta:
-                    proposta_base.codigo_proposta = Proposal.montar_codigo_proposta(proposta_base.grupo_proposta_id or proposta_base.id)
-                proposta_base.save(update_fields=['grupo_proposta_id', 'codigo_proposta'])
-
-                for end_id in enderecos_ids:
-                    endereco_extra = get_object_or_404(Endereco, pk=end_id)
-                    clone = Proposal.objects.get(pk=proposta_base.pk)
-                    clone.pk = None
-                    clone.grupo_proposta_id = proposta_base.grupo_proposta_id
-                    clone.codigo_proposta = proposta_base.codigo_proposta
-                    clone.nome_proposta = proposta_base.nome_proposta
-                    clone.client_address = endereco_extra
-                    clone.cliente = endereco_extra.cliente
-                    clone.save()
-                    _registrar_historico_proposta(
-                        clone,
-                        request.user,
-                        (
-                            "Link criado a partir da proposta principal.\n\n"
-                            f"ID da proposta: #{clone.codigo_exibicao}\n"
-                            f"Unidade: {clone.client_address or '--'}"
-                        ),
-                    )
-                    novas_unidades.append(f"- {endereco_extra}")
-            else:
-                proposta_salva = form.save()
-                if not proposta_salva.grupo_proposta_id:
-                    proposta_salva.grupo_proposta_id = proposta_salva.id
-                if not proposta_salva.codigo_proposta:
-                    proposta_salva.codigo_proposta = Proposal.montar_codigo_proposta(proposta_salva.grupo_proposta_id or proposta_salva.id)
-                proposta_salva.save(update_fields=['grupo_proposta_id', 'codigo_proposta'])
-
-            if valores_novos or valores_antigos or novas_unidades:
-                texto_snapshot = "Edição de Proposta/OS realizada.\n\n"
-                if novas_unidades:
-                    texto_snapshot += f"+ {len(novas_unidades)} NOVO(S) LINK(S) ADICIONADO(S):\n" + "\n".join(novas_unidades) + "\n\n"
-                if valores_novos or mudou_unidade:
-                    if not mudou_unidade and endereco_atual:
-                        texto_snapshot += f"REFERÊNCIA: {endereco_atual}\n\n"
-                    texto_snapshot += "Atualizado:\n" + "\n".join(valores_novos) + "\n\n--------------------------------------\n\n"
-                    texto_snapshot += "Antes:\n" + "\n".join(valores_antigos)
-
-                RegistroHistorico.objects.create(
-                    tipo='sistema', 
-                    acao=texto_snapshot.strip(), # CORRIGIDO
-                    usuario=request.user,        # CORRIGIDO
-                    content_type=ContentType.objects.get_for_model(Partner), 
-                    object_id=partner.id
-                )
-
-                _registrar_historico_proposta(
-                    proposal,
-                    request.user,
-                    texto_snapshot.strip(),
-                )
-
+            services.processar_edicao_proposta(request, proposal, partner, form, endereco_atual, enderecos_ids)
             messages.success(request, "Sucesso! Atualizações salvas para a Speed.")
             return redirect('partner_detail', pk=partner.pk)
     else:
         form = ProposalForm(instance=proposal, lock_relationship_fields=is_conversion_completion)
 
-    return render(request, 'partners/proposal_form.html', {
-        'form': form,
-        'proposal': proposal,
-        'partner': partner,
-        'is_conversion_completion': is_conversion_completion,
-        'status_exibicao_conversao': dict(Proposal.STATUS_CHOICES).get(status_pendente, proposal.get_status_display()),
-        'propostas_lote': propostas_lote,
-        'possui_os_lastmile': possui_os_lastmile,
-        'fechar_outras_cotacoes': fechar_outras_cotacoes,
-        'outras_cotacoes_abertas_qtd': len(outras_cotacoes_abertas),
-        'outras_cotacoes_por_endereco': outras_cotacoes_por_endereco,
-        'permite_alterar_os_ixc': permite_alterar_os_ixc,
-    })
+    return render(request, 'partners/proposal_form.html', _contexto_proposal_form(
+        form, proposal, partner, is_conversion_completion, status_pendente, propostas_lote,
+        possui_os_lastmile, fechar_outras_cotacoes, outras_cotacoes_abertas,
+        outras_cotacoes_por_endereco, permite_alterar_os_ixc,
+    ))
 
 @user_passes_test(grupo_Parceiro_required)
 @login_required
@@ -1515,44 +566,13 @@ def proposal_status_update(request, pk):
     partner = proposal.partner
 
     if request.method == 'POST':
-        novo_status = request.POST.get('status')
-        status_validos = {choice[0] for choice in Proposal.STATUS_CHOICES}
-
-        if novo_status not in status_validos:
+        estado, _ = services.atualizar_status_proposal_individual(request, proposal)
+        if estado == 'invalido':
             messages.error(request, "Status de cotação inválido.")
-            return redirect('partner_detail', pk=partner.pk)
-
-        if novo_status == 'ativa':
+        elif estado == 'ativa':
             messages.success(request, "Cotação marcada como viável. Complete agora os dados técnicos e financeiros.")
             return redirect(f"{reverse('proposal_update', args=[proposal.pk])}?modo=convertida&status_pendente=ativa")
-
-        status_antigo = proposal.status
-        if status_antigo != novo_status:
-            proposal.status = novo_status
-            proposal.save(update_fields=['status'])
-            _registrar_auditoria_status_cotacao(
-                request,
-                proposal,
-                status_antigo,
-                novo_status,
-                origem='alteracao_individual',
-                integrou_ixc=False,
-                detalhes=f"Atualizacao individual da cotacao #{proposal.codigo_exibicao}.",
-            )
-
-            RegistroHistorico.objects.create(
-                tipo='sistema',
-                acao=(
-                    "Status da proposta atualizado.\n\n"
-                    f"ID da proposta: #{proposal.codigo_exibicao}\n"
-                    f"Cliente: {proposal.cliente or '--'}\n"
-                    f"De: {dict(Proposal.STATUS_CHOICES).get(status_antigo, status_antigo)}\n"
-                    f"Para: {proposal.get_status_display()}"
-                ),
-                usuario=request.user,
-                content_type=ContentType.objects.get_for_model(Partner),
-                object_id=partner.id
-            )
+        elif estado == 'atualizado':
             messages.success(request, "Status da cotação atualizado com sucesso.")
 
     return redirect('partner_detail', pk=partner.pk)
@@ -1569,8 +589,7 @@ def proposal_delete(request, pk):
 @user_passes_test(grupo_Parceiro_required)
 @login_required
 def proposal_global_list(request):
-    proposals = Proposal.objects.exclude(status__in=['encerrada', 'ativa', 'aguardando_contratacao', 'contratado', 'declinado']).select_related('partner', 'cliente').order_by('-id')
-    total_receita = proposals.aggregate(Sum('valor_mensal'))['valor_mensal__sum'] or 0
+    proposals, total_receita = services.listar_propostas_globais()
     return render(request, 'partners/proposal_global_list.html', {'proposals': proposals, 'total_receita': total_receita})
 
 # ==============================================================================
@@ -1580,7 +599,7 @@ def proposal_global_list(request):
 @login_required
 def address_proposals_list(request, address_id):
     endereco = get_object_or_404(Endereco, pk=address_id)
-    proposals = Proposal.objects.filter(client_address=endereco).exclude(status__in=['encerrada', 'ativa', 'aguardando_contratacao', 'contratado', 'declinado']).select_related('partner', 'cliente')
+    proposals = services.listar_propostas_do_endereco(endereco)
     partners = Partner.objects.all().order_by('nome_fantasia')
     return render(request, 'partners/address_proposals_list.html', {'endereco': endereco, 'proposals': proposals, 'partners': partners})
 
@@ -1588,16 +607,377 @@ def address_proposals_list(request, address_id):
 @login_required
 def partner_clients_list(request, pk):
     partner = get_object_or_404(Partner, pk=pk)
-    proposals = Proposal.objects.filter(partner=partner).exclude(status__in=['encerrada', 'ativa', 'aguardando_contratacao', 'contratado', 'declinado']).select_related('cliente', 'client_address')
-    clientes_agrupados = {}
-    for prop in proposals:
-        cliente = prop.cliente
-        if cliente not in clientes_agrupados:
-            clientes_agrupados[cliente] = []
-        if prop.client_address not in clientes_agrupados[cliente]:
-            clientes_agrupados[cliente].append(prop.client_address)
+    proposals, clientes_agrupados = services.listar_clientes_do_partner(partner)
 
     return render(request, 'partners/partner_clients_list.html', {
         'partner': partner, 'clientes_agrupados': clientes_agrupados, 'total_links': proposals.count()
     })
+
+
+# ==============================================================================
+# RELATORIOS DE GESTAO (movidos de apps.core.views na PO-032 - liam ao dono do
+# dado: Proposal e do app partners, nao de core)
+# ==============================================================================
+
+@user_passes_test(grupo_Gestao_required)
+@login_required
+def gestao_relatorio_login_status(request):
+    busca = (request.GET.get('busca') or '').strip()
+    status = (request.GET.get('status') or '').strip()
+    cliente_param = (request.GET.get('cliente') or '').strip()
+    endereco_param = (request.GET.get('endereco') or '').strip()
+    sort_by, direction = _resolve_sort(
+        request,
+        {'empresa', 'cotacao', 'cliente', 'login', 'status', 'responsavel', 'ultima_interacao'},
+        'empresa',
+    )
+
+    rows, totais_por_status, status_filtrado = services.montar_relatorio_login_status(
+        busca=busca, status=status, cliente=cliente_param, endereco=endereco_param,
+        sort_by=sort_by, direction=direction,
+    )
+
+    if request.GET.get('export') == 'csv':
+        return _csv_response(
+            'relatorio_login_status.csv',
+            ['Parceiro', 'Cotação', 'Cliente', 'Login', 'Status', 'Responsável', 'Última interação'],
+            [
+                [
+                    item['partner_nome'],
+                    item['codigo_exibicao'],
+                    item['cliente_nome'],
+                    item['login_nome'],
+                    item['status_display'],
+                    item['responsavel_nome'],
+                    item['ultima_interacao'].strftime('%d/%m/%Y %H:%M') if item['ultima_interacao'] else '-',
+                ]
+                for item in rows
+            ],
+        )
+
+    paginator = Paginator(rows, 20)
+    page_number = request.GET.get('page')
+    page_obj = paginator.get_page(page_number)
+
+    return render(request, 'core/gestao_relatorio_proposta_status.html', {
+        'page_obj': page_obj,
+        'rows': rows,
+        'busca': busca,
+        'cliente_param': cliente_param,
+        'endereco_param': endereco_param,
+        'status_filtro': status_filtrado,
+        'sort_by': sort_by,
+        'direction': direction,
+        'sort_links': _build_sort_links(
+            {
+                'busca': busca,
+                'status': status_filtrado,
+                'cliente': cliente_param,
+                'endereco': endereco_param,
+            },
+            sort_by,
+            direction,
+            ['empresa', 'cotacao', 'cliente', 'login', 'status', 'responsavel', 'ultima_interacao'],
+        ),
+        'totais_por_status': totais_por_status,
+        'status_choices': _report_status_choices(),
+        'csv_query': urlencode({
+            **{k: v for k, v in {
+                'busca': busca,
+                'status': status_filtrado,
+                'cliente': cliente_param,
+                'endereco': endereco_param,
+                'sort': sort_by,
+                'direction': direction,
+            }.items() if v not in ('', None)},
+            'export': 'csv',
+        }),
+    })
+
+
+@user_passes_test(grupo_Gestao_required)
+@login_required
+def gestao_relatorio_proposta_status(request):
+    busca = (request.GET.get('busca') or '').strip()
+    status = (request.GET.get('status') or '').strip()
+    sort_by, direction = _resolve_sort(
+        request,
+        {'empresa', 'cotacao', 'cliente', 'qtd_logins', 'status'},
+        'empresa',
+    )
+
+    proposals_rows, totais_por_status, status_filtrado = services.montar_relatorio_proposta_status(
+        busca=busca, status=status, sort_by=sort_by, direction=direction,
+    )
+
+    paginator = Paginator(proposals_rows, 20)
+    page_number = request.GET.get('page')
+    page_obj = paginator.get_page(page_number)
+
+    if request.GET.get('export') == 'csv':
+        return _csv_response(
+            'relatorio_status_cotacao.csv',
+            ['Parceiro', 'Cotação', 'Cliente', 'Qtd logins', 'Status'],
+            [
+                [
+                    item['partner_nome'],
+                    item['codigo_exibicao'],
+                    item['cliente_nome'],
+                    item['total_logins'],
+                    item['status_display'],
+                ]
+                for item in proposals_rows
+            ],
+        )
+
+    return render(request, 'core/gestao_relatorio_proposta_status_real.html', {
+        'page_obj': page_obj,
+        'busca': busca,
+        'status_filtro': status_filtrado,
+        'sort_by': sort_by,
+        'direction': direction,
+        'sort_links': _build_sort_links(
+            {'busca': busca, 'status': status_filtrado},
+            sort_by,
+            direction,
+            ['empresa', 'cotacao', 'cliente', 'qtd_logins', 'status'],
+        ),
+        'totais_por_status': totais_por_status,
+        'status_choices': _report_status_choices(),
+        'csv_query': urlencode({
+            **{k: v for k, v in {
+                'busca': busca,
+                'status': status_filtrado,
+                'sort': sort_by,
+                'direction': direction,
+            }.items() if v not in ('', None)},
+            'export': 'csv',
+        }),
+    })
+
+
+@user_passes_test(grupo_Gestao_required)
+@login_required
+def gestao_relatorio_status_cliente(request):
+    busca = (request.GET.get('busca') or '').strip()
+    sort_by, direction = _resolve_sort(
+        request,
+        {'cliente', 'total_cotacoes', 'em_negociacao', 'aguardando_contratacao', 'contratado', 'declinado', 'inviavel'},
+        'cliente',
+    )
+
+    rows, totais_por_status = services.montar_relatorio_status_cliente(
+        busca=busca, sort_by=sort_by, direction=direction,
+    )
+
+    paginator = Paginator(rows, 20)
+    page_number = request.GET.get('page')
+    page_obj = paginator.get_page(page_number)
+
+    if request.GET.get('export') == 'csv':
+        return _csv_response(
+            'relatorio_status_cliente.csv',
+            ['Cliente', 'Total cotações', 'Em negociação', 'Aguardando contratação', 'Contratado', 'Declinado', 'Inviável'],
+            [
+                [
+                    item['cliente_nome'],
+                    item['total_cotacoes'],
+                    item['em_negociacao'],
+                    item['aguardando_contratacao'],
+                    item['contratado'],
+                    item['declinado'],
+                    item['inviavel'],
+                ]
+                for item in rows
+            ],
+        )
+
+    return render(request, 'core/gestao_relatorio_status_cliente.html', {
+        'page_obj': page_obj,
+        'busca': busca,
+        'sort_by': sort_by,
+        'direction': direction,
+        'sort_links': _build_sort_links(
+            {'busca': busca},
+            sort_by,
+            direction,
+            ['cliente', 'total_cotacoes', 'em_negociacao', 'aguardando_contratacao', 'contratado', 'declinado', 'inviavel'],
+        ),
+        'totais_por_status': totais_por_status,
+        'csv_query': urlencode({
+            **{k: v for k, v in {
+                'busca': busca,
+                'sort': sort_by,
+                'direction': direction,
+            }.items() if v not in ('', None)},
+            'export': 'csv',
+        }),
+    })
+
+
+@user_passes_test(grupo_Gestao_required)
+@login_required
+def gestao_relatorio_cotacao_endereco(request):
+    busca = (request.GET.get('busca') or '').strip()
+    sort_by, direction = _resolve_sort(
+        request,
+        {'endereco', 'cliente', 'total_cotacoes', 'em_negociacao', 'aguardando_contratacao', 'contratado', 'declinado', 'inviavel'},
+        'endereco',
+    )
+
+    rows, totais_por_status = services.montar_relatorio_cotacao_endereco(
+        busca=busca, sort_by=sort_by, direction=direction,
+    )
+
+    paginator = Paginator(rows, 20)
+    page_number = request.GET.get('page')
+    page_obj = paginator.get_page(page_number)
+
+    if request.GET.get('export') == 'csv':
+        return _csv_response(
+            'relatorio_cotacao_endereco.csv',
+            ['Endereço', 'Complemento', 'Cliente', 'Total cotações', 'Em negociação', 'Aguardando contratação', 'Contratado', 'Declinado', 'Inviável'],
+            [
+                [
+                    item['endereco_nome'],
+                    item['endereco_complemento'],
+                    item['cliente_nome'],
+                    item['total_cotacoes'],
+                    item['em_negociacao'],
+                    item['aguardando_contratacao'],
+                    item['contratado'],
+                    item['declinado'],
+                    item['inviavel'],
+                ]
+                for item in rows
+            ],
+        )
+
+    return render(request, 'core/gestao_relatorio_cotacao_endereco.html', {
+        'page_obj': page_obj,
+        'busca': busca,
+        'sort_by': sort_by,
+        'direction': direction,
+        'sort_links': _build_sort_links(
+            {'busca': busca},
+            sort_by,
+            direction,
+            ['endereco', 'cliente', 'total_cotacoes', 'em_negociacao', 'aguardando_contratacao', 'contratado', 'declinado', 'inviavel'],
+        ),
+        'totais_por_status': totais_por_status,
+        'csv_query': urlencode({
+            **{k: v for k, v in {
+                'busca': busca,
+                'sort': sort_by,
+                'direction': direction,
+            }.items() if v not in ('', None)},
+            'export': 'csv',
+        }),
+    })
+
+
+@user_passes_test(grupo_Gestao_required)
+@login_required
+def gestao_relatorio_login_usuario(request):
+    User = get_user_model()
+    busca = (request.GET.get('busca') or '').strip()
+    usuario_filtro = (request.GET.get('usuario') or '').strip()
+    sort_by, direction = _resolve_sort(
+        request,
+        {'empresa', 'cotacao', 'cliente', 'login', 'usuario', 'ultimo_comentario', 'status'},
+        'empresa',
+    )
+
+    rows, total_resultados, total_com_responsavel, total_sem_responsavel = services.montar_relatorio_login_usuario(
+        busca=busca, usuario_filtro=usuario_filtro, sort_by=sort_by, direction=direction,
+    )
+
+    if request.GET.get('export') == 'csv':
+        return _csv_response(
+            'relatorio_login_usuario.csv',
+            ['Parceiro', 'Cotação', 'Cliente', 'Endereço', 'Usuário', 'Último comentário', 'Status'],
+            [
+                [
+                    item['partner_nome'],
+                    item['codigo_exibicao'],
+                    item['cliente_nome'],
+                    item['login_nome'],
+                    item['responsavel_nome'],
+                    item['ultima_interacao'].strftime('%d/%m/%Y %H:%M') if item['ultima_interacao'] else '-',
+                    'Vinculado' if item['responsavel_nome'] != '-' else 'Sem responsável',
+                ]
+                for item in rows
+            ],
+        )
+
+    paginator = Paginator(rows, 20)
+    page_number = request.GET.get('page')
+    page_obj = paginator.get_page(page_number)
+
+    usuarios_disponiveis = User.objects.filter(
+        is_active=True,
+    ).exclude(
+        username__iexact='admin',
+    ).order_by('first_name', 'last_name', 'username')
+
+    usuarios_filtro = User.objects.filter(
+        is_active=True,
+    ).order_by('first_name', 'last_name', 'username')
+
+    return render(request, 'core/gestao_relatorio_login_usuario.html', {
+        'page_obj': page_obj,
+        'rows': rows,
+        'busca': busca,
+        'usuario_filtro': usuario_filtro,
+        'sort_by': sort_by,
+        'direction': direction,
+        'sort_links': _build_sort_links(
+            {'busca': busca, 'usuario': usuario_filtro},
+            sort_by,
+            direction,
+            ['empresa', 'cotacao', 'cliente', 'login', 'usuario', 'ultimo_comentario', 'status'],
+        ),
+        'total_resultados': total_resultados,
+        'total_com_responsavel': total_com_responsavel,
+        'total_sem_responsavel': total_sem_responsavel,
+        'usuarios_disponiveis': usuarios_disponiveis,
+        'usuarios_filtro': usuarios_filtro,
+        'csv_query': urlencode({
+            **{k: v for k, v in {
+                'busca': busca,
+                'usuario': usuario_filtro,
+                'sort': sort_by,
+                'direction': direction,
+            }.items() if v not in ('', None)},
+            'export': 'csv',
+        }),
+    })
+
+
+@user_passes_test(grupo_Gestao_required)
+@login_required
+def gestao_relatorio_login_usuario_responsavel(request, pk):
+    User = get_user_model()
+    proposal = get_object_or_404(Proposal.objects.select_related('client_address', 'responsavel'), pk=pk)
+
+    if request.method == 'POST':
+        erro = services.validar_transicao_responsavel_login(proposal)
+        if erro:
+            messages.error(request, erro)
+            return redirect('gestao_relatorio_login_usuario')
+
+        usuario_id = (request.POST.get('responsavel_id') or '').strip()
+        if not usuario_id:
+            messages.error(request, "Selecione um usuario para vincular ao login.")
+            return redirect('gestao_relatorio_login_usuario')
+
+        novo_responsavel = get_object_or_404(
+            User.objects.filter(is_active=True).exclude(username__iexact='admin'),
+            pk=usuario_id,
+        )
+
+        services.atualizar_responsavel_login(proposal, novo_responsavel, request.user)
+        messages.success(request, "Responsável do login atualizado com sucesso.")
+
+    return redirect('gestao_relatorio_login_usuario')
 

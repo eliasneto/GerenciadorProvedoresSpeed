@@ -1,0 +1,81 @@
+{% extends "core/base.html" %}
+
+{% block content %}
+<div class="p-6 md:p-10 max-w-3xl mx-auto">
+    <div class="mb-8">
+        <a href="{% url 'provedores_list' %}" class="page-back-button mb-3">
+            <i data-lucide="arrow-left" class="w-4 h-4"></i> Voltar
+        </a>
+        <p class="text-[10px] text-gray-400 font-black uppercase tracking-[0.2em] mb-2">Projeto / Provedores</p>
+        <h1 class="text-3xl font-black text-gray-900 italic uppercase tracking-tighter">
+            {% if provedor %}Editar <span class="text-ageis-yellow">Provedor</span>{% else %}Novo <span class="text-ageis-yellow">Provedor</span>{% endif %}
+        </h1>
+    </div>
+
+    {% if form.errors %}
+    <div class="bg-red-50 border-l-4 border-red-500 p-6 rounded-2xl mb-8 shadow-sm">
+        <div class="flex items-center gap-3 mb-2">
+            <i data-lucide="alert-circle" class="text-red-500 w-5 h-5"></i>
+            <h3 class="text-red-800 font-black uppercase text-xs italic">Atenção: o formulário não pôde ser salvo</h3>
+        </div>
+        <ul class="text-red-600 text-xs font-bold space-y-1 ml-8 uppercase">
+            {% for field, errors in form.errors.items %}
+                <li>{{ field }}: {{ errors|striptags }}</li>
+            {% endfor %}
+        </ul>
+    </div>
+    {% endif %}
+
+    <div class="bg-white p-8 md:p-12 rounded-[2.5rem] shadow-sm border border-gray-100">
+        <form method="post" class="space-y-6" novalidate>
+            {% csrf_token %}
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div class="md:col-span-2">
+                    <label for="{{ form.razao_social.id_for_label }}" class="text-[10px] font-black uppercase text-gray-400 mb-2 block tracking-widest">Razão Social</label>
+                    {{ form.razao_social }}
+                </div>
+
+                <div class="md:col-span-2">
+                    <label for="{{ form.nome_fantasia.id_for_label }}" class="text-[10px] font-black uppercase text-gray-400 mb-2 block tracking-widest">Nome Fantasia</label>
+                    {{ form.nome_fantasia }}
+                </div>
+
+                <div>
+                    <label for="{{ form.cnpj_cpf.id_for_label }}" class="text-[10px] font-black uppercase text-gray-400 mb-2 block tracking-widest">CNPJ/CPF</label>
+                    {{ form.cnpj_cpf }}
+                </div>
+
+                <div>
+                    <label for="{{ form.status.id_for_label }}" class="text-[10px] font-black uppercase text-gray-400 mb-2 block tracking-widest">Status</label>
+                    {{ form.status }}
+                </div>
+
+                <div>
+                    <label for="{{ form.contato_nome.id_for_label }}" class="text-[10px] font-black uppercase text-gray-400 mb-2 block tracking-widest">Contato Principal</label>
+                    {{ form.contato_nome }}
+                </div>
+
+                <div>
+                    <label for="{{ form.telefone.id_for_label }}" class="text-[10px] font-black uppercase text-gray-400 mb-2 block tracking-widest">Telefone Comercial</label>
+                    {{ form.telefone }}
+                </div>
+
+                <div class="md:col-span-2">
+                    <label for="{{ form.email.id_for_label }}" class="text-[10px] font-black uppercase text-gray-400 mb-2 block tracking-widest">E-mail Corporativo</label>
+                    {{ form.email }}
+                </div>
+            </div>
+
+            <div class="mt-10 pt-8 border-t border-gray-100 flex flex-col md:flex-row gap-4">
+                <button type="submit" class="flex-1 bg-ageis-black text-ageis-yellow font-black italic uppercase tracking-[0.2em] py-5 rounded-2xl hover:bg-gray-800 transition shadow-xl">
+                    <i data-lucide="save" class="w-5 h-5 inline mr-2"></i> {% if provedor %}Salvar Alterações{% else %}Salvar Provedor{% endif %}
+                </button>
+                <a href="{% url 'provedores_list' %}" class="px-10 py-5 text-[10px] font-black uppercase tracking-widest text-gray-400 hover:text-red-500 transition text-center">
+                    Cancelar
+                </a>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
