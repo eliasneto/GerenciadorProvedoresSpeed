@@ -1,0 +1,43 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "01 · Contexto do Sistema - GerenciadorProvedoresSpeed",
+    "subtitle": "Leitura 1 de 7 · Quem usa o sistema e com quais sistemas externos ele fala - porta de entrada do conjunto",
+    "output": "docs/diagrams/contexto-sistema.html",
+    "quality_profile": "standard"
+  },
+  "components": [
+    { "id": "equipe", "type": "external", "label": "Equipe interna", "sublabel": "Backoffice, LastMile, Comercial, Admin", "pos": [40, 210], "size": [200, 64] },
+    { "id": "integradores", "type": "external", "label": "Sistemas integradores", "sublabel": "consumidores da API publica", "pos": [40, 390], "size": [200, 64] },
+
+    { "id": "sistema", "type": "backend", "label": "GerenciadorProvedoresSpeed", "sublabel": "monolito Django modular + MySQL (speed_prod)", "tag": "cotacao, prospeccao, automacoes de provedor", "pos": [420, 140], "size": [260, 340] },
+
+    { "id": "ixc", "type": "external", "label": "IXC", "sublabel": "ERP do provedor - webservice/v1", "pos": [900, 60], "size": [190, 64] },
+    { "id": "ad", "type": "external", "label": "Active Directory", "sublabel": "diretorio corporativo (LDAP)", "pos": [900, 180], "size": [190, 64] },
+    { "id": "email", "type": "external", "label": "Servidor de E-mail", "sublabel": "caixa de cotacao (IMAP/SMTP)", "pos": [900, 300], "size": [190, 64] },
+    { "id": "google", "type": "external", "label": "Google API", "sublabel": "fornecedores lastmile / busca parceiro", "pos": [900, 420], "size": [190, 64] },
+    { "id": "cep", "type": "external", "label": "API de CEP", "sublabel": "Hub do Desenvolvedor", "pos": [900, 540], "size": [190, 64] },
+    { "id": "dashboardeace", "type": "external", "label": "DashboardEACE", "sublabel": "cadastro de Escolas (leitura)", "pos": [900, 660], "size": [190, 64] }
+  ],
+  "boundaries": [
+    { "kind": "region", "label": "Sistemas externos", "wraps": ["ixc", "ad", "email", "google", "cep", "dashboardeace"] }
+  ],
+  "connections": [
+    { "id": "equipe-sistema", "from": "equipe", "to": "sistema", "label": "usa pelo navegador", "variant": "emphasis", "labelAt": [330, 228] },
+    { "id": "integradores-sistema", "from": "integradores", "to": "sistema", "label": "consome /api/v1 (JWT)", "variant": "default", "labelAt": [330, 408] },
+
+    { "id": "sistema-ixc", "from": "sistema", "to": "ixc", "label": "cliente, login, O.S.", "variant": "emphasis", "via": [[740, 310], [740, 92]], "labelAt": [820, 78] },
+    { "id": "sistema-ad", "from": "sistema", "to": "ad", "label": "autentica usuario", "variant": "security", "labelAt": [845, 198] },
+    { "id": "sistema-email", "from": "sistema", "to": "email", "label": "respostas de cotacao", "variant": "default", "labelAt": [845, 318] },
+    { "id": "sistema-google", "from": "sistema", "to": "google", "label": "busca fornecedor", "variant": "default", "labelAt": [845, 438] },
+    { "id": "sistema-cep", "from": "sistema", "to": "cep", "label": "consulta CEP", "variant": "dashed", "via": [[740, 310], [740, 572]], "labelAt": [820, 558] },
+    { "id": "sistema-dashboardeace", "from": "sistema", "to": "dashboardeace", "label": "sincroniza escolas (X-API-Key)", "variant": "default", "via": [[770, 310], [770, 692]], "labelAt": [860, 656] }
+  ],
+  "cards": [
+    { "dot": "cyan", "title": "Sequencia de leitura - voce esta em 01", "items": ["01 · Contexto (este diagrama) - quem usa e com quais sistemas externos falamos", "02 · Ciclo de vida da cotacao - o processo de negocio (do endereco ao desfecho)", "03 · Modelo de dominio - as entidades e como se relacionam", "04 · Arquitetura-alvo - camadas, gateways e estrutura de pastas", "05 · Modulos e dependencias - quais apps existem e quem chama quem", "06 · Arquitetura do Modulo 1 - filas de entrada/saida ao IXC e fechamento de O.S.", "07 · Processos de automacoes e rotinas - o que roda, quando e por qual caminho", "ANEXO A · Integration Hub conceitual - alternativa descartada"] },
+    { "dot": "emerald", "title": "O que o sistema faz", "items": ["Cotacao e proposta com parceiros/provedores (dominio central: Proposal)", "Prospeccao e estruturacao de leads, com apoio de IA", "Automacoes operacionais de Backoffice e LastMile contra o IXC (cadastro, atendimento, O.S.)", "Gestao de Escolas e seus processos internos (Rede Externa/Interna, Setores e Campos personalizados), sincronizada do DashboardEACE (ADR-010, PO-046)", "Exposicao de leitura controlada via API publica v1"] },
+    { "dot": "violet", "title": "Fronteira de integracao", "items": ["Toda comunicacao externa passa por um gateway unico por sistema (ADR-005), em apps/integracoes/ (ADR-007)", "Nao existe Manager/Registry generico - cada servico importa diretamente o gateway de que precisa (item 10 da ADR-006)", "Toda escrita externa e registrada em IntegrationAudit (barramento transversal de auditoria)"] },
+    { "dot": "amber", "title": "Ressalva de fidelidade", "items": ["A consulta de CEP (linha tracejada) ainda nao tem gateway proprio - hoje e chamada direto da view (clientes/views.py::buscar_cep)", "A API chamada nao e a oficial dos Correios, e um intermediario (Hub do Desenvolvedor)", "Integracao de IA aparece embutida na prospeccao de leads, sem gateway isolado nesta fase", "Sincronizacao de cliente/login/endereco com o IXC (rotinas automaticas) foi desativada em 2026-08-07 (ADR-008) - ver diagrama 02; a escrita de cadastro/atendimento/O.S. continua ativa"] }
+  ]
+}

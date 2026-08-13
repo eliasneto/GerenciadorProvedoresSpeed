@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="generator" content="archify 2.12.0">
-  <title>Arquitetura Geral do Sistema Diagram</title>
+  <title>02 · Ciclo de vida da cotacao - o processo de negocio Diagram</title>
   <script>
     // Resolve the theme before first paint so light-preference users don't
     // see a dark flash. The toolbar script below re-applies with UI state.
@@ -4496,9 +4496,9 @@
     <div class="header">
       <div class="header-row">
         <div class="pulse-dot"></div>
-        <h1>Arquitetura Geral do Sistema</h1>
+        <h1>02 · Ciclo de vida da cotacao - o processo de negocio</h1>
       </div>
-      <p class="subtitle">Acesso, entrada (O.S. e cliente/login) e fechamento de O.S. via IXC Gateway</p>
+      <p class="subtitle">Leitura 2 de 7 · Do endereco (login) ate o desfecho da proposta. Status reais do model Proposal; transicoes confirmadas pelo negocio (RN-018), mas ainda nao impostas pelo codigo</p>
     </div>
 
     <script id="archify-guided-views-data" type="application/json">[]</script>
@@ -4544,9 +4544,9 @@
 
     <!-- Main Diagram -->
     <div class="diagram-container" data-detail-level="map">
-      <svg viewBox="0 0 1430 1218" role="img" aria-labelledby="archify-diagram-title archify-diagram-description" data-preset="classic" data-quality-profile="standard">
-        <title id="archify-diagram-title">Arquitetura Geral do Sistema</title>
-        <desc id="archify-diagram-description">Acesso, entrada (O.S. e cliente/login) e fechamento de O.S. via IXC Gateway</desc>
+      <svg viewBox="0 0 980 660" role="img" aria-labelledby="archify-diagram-title archify-diagram-description" data-preset="classic" data-quality-profile="standard">
+        <title id="archify-diagram-title">02 · Ciclo de vida da cotacao - o processo de negocio</title>
+        <desc id="archify-diagram-description">Leitura 2 de 7 · Do endereco (login) ate o desfecho da proposta. Status reais do model Proposal; transicoes confirmadas pelo negocio (RN-018), mas ainda nao impostas pelo codigo</desc>
         <!-- Definitions -->
         <defs>
           <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
@@ -4569,292 +4569,174 @@
         <!-- Background Grid -->
         <rect width="100%" height="100%" fill="url(#grid)" />
 
-        <!-- Boundaries (behind everything) -->
-        <rect data-graph-role="structural-frame" data-composition-frame-kind="region" data-composition-frame-id="0" x="10" y="160" width="1380" height="860" rx="12" class="c-region" stroke-width="1"/>
-        <text x="18" y="178" class="t-cloud" font-size="9" font-weight="600">Sistema (monólito Django) — Módulo 1</text>
+        <!-- Lifecycle bands -->
+        <path d="M 72 112 L 908 112" class="a-default" stroke-width="0.8" stroke-dasharray="3,8"/>
+        <text x="72" y="100" class="t-dim" font-size="10" font-weight="600">01 / Requisitos obrigatorios e fluxo da cotacao</text>
+        <path d="M 72 264 L 908 264" class="a-default" stroke-width="0.8" stroke-dasharray="3,8"/>
+        <text x="72" y="252" class="t-dim" font-size="10" font-weight="600">02 / Interruptions + recovery</text>
+        <path d="M 72 436 L 908 436" class="a-default" stroke-width="0.8" stroke-dasharray="3,8"/>
+        <text x="72" y="424" class="t-dim" font-size="10" font-weight="600">03 / Desfechos (terminais)</text>
 
-        <!-- Connection paths (before components for correct z-order) -->
-        <path data-edge-from="usuario" data-edge-to="frontend" data-edge-label="login" data-edge-key="0" data-edge-id="usuario-frontend" data-composition-points="300,100;300,190" d="M 300 100 L 300 190" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
-        <path data-edge-from="frontend" data-edge-to="modulo1" data-edge-label="acesso" data-edge-key="1" data-edge-id="frontend-modulo1" data-composition-points="300,250;300,340" d="M 300 250 L 300 340" class="a-emphasis" stroke-width="1.8" marker-end="url(#arrowhead-emphasis)"/>
-        <path data-edge-from="frontend" data-edge-to="modulo2" data-edge-label="acesso (se ativo)" data-edge-key="2" data-edge-id="frontend-modulo2" data-composition-points="360,220;640,220" d="M 360 220 L 640 220" class="a-dashed" stroke-width="1.5" marker-end="url(#arrowhead-dashed)"/>
-        <path data-edge-from="rotina_busca" data-edge-to="fila_intermediaria_entrada" data-edge-label="grava pendente" data-edge-key="3" data-edge-id="busca-fila_intermediaria-entrada" data-composition-points="100,550;100,640" d="M 100 550 L 100 640" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
-        <path data-edge-from="fila_intermediaria_entrada" data-edge-to="rotina_consumo" data-edge-label="lê pendentes" data-edge-key="4" data-edge-id="fila_intermediaria-entrada-consumo" data-composition-points="160,670;190,670;190,820;240,820" d="M 160 670 L 182 670 Q 190 670 190 678 L 190 812 Q 190 820 198 820 L 240 820" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
-        <path data-edge-from="rotina_consumo" data-edge-to="modulo1" data-edge-label="aplica regra de domínio" data-edge-key="5" data-edge-id="consumo-modulo1" data-composition-points="300,790;300,400" d="M 300 790 L 300 400" class="a-emphasis" stroke-width="1.8" marker-end="url(#arrowhead-emphasis)"/>
-        <path data-edge-from="rotina_busca" data-edge-to="ixcgateway" data-edge-label="busca O.S. (polling)" data-edge-key="6" data-edge-id="busca-gateway" data-composition-points="160,520;230,520;230,970;440,970" d="M 160 520 L 222 520 Q 230 520 230 528 L 230 962 Q 230 970 238 970 L 440 970" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
-        <path data-edge-from="modulo1" data-edge-to="rotina_fechamento" data-edge-label="fecha O.S. localmente" data-edge-key="7" data-edge-id="modulo1-fechamento" data-composition-points="360,370;600,370;600,513;840,513" d="M 360 370 L 592 370 Q 600 370 600 378 L 600 505 Q 600 513 608 513 L 840 513" class="a-emphasis" stroke-width="1.8" marker-end="url(#arrowhead-emphasis)"/>
-        <path data-edge-from="rotina_fechamento" data-edge-to="ixcgateway" data-edge-label="fast path" data-edge-key="8" data-edge-id="fechamento-gateway" data-composition-points="840,527;700,527;700,963;560,963" d="M 840 527 L 708 527 Q 700 527 700 535 L 700 955 Q 700 963 692 963 L 560 963" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
-        <path data-edge-from="rotina_fechamento" data-edge-to="fila_intermediaria_saida" data-edge-label="fallback se falhar" data-edge-key="9" data-edge-id="fechamento-fila_intermediaria-saida" data-composition-points="900,550;900,640" d="M 900 550 L 900 640" class="a-dashed" stroke-width="1.5" marker-end="url(#arrowhead-dashed)"/>
-        <path data-edge-from="fila_intermediaria_saida" data-edge-to="rotina_envio" data-edge-label="lê pendentes/falha" data-edge-key="10" data-edge-id="fila_intermediaria-saida-envio" data-composition-points="900,700;900,790" d="M 900 700 L 900 790" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
-        <path data-edge-from="rotina_envio" data-edge-to="ixcgateway" data-edge-label="reenvia" data-edge-key="11" data-edge-id="envio-gateway" data-composition-points="840,820;700,820;700,977;560,977" d="M 840 820 L 708 820 Q 700 820 700 828 L 700 969 Q 700 977 692 977 L 560 977" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
-        <path data-edge-from="ixcgateway" data-edge-to="ixc" data-edge-label="API IXC" data-edge-key="12" data-edge-id="gateway-ixc" data-composition-points="500,1000;500,1090" d="M 500 1000 L 500 1090" class="a-emphasis" stroke-width="1.8" marker-end="url(#arrowhead-emphasis)"/>
-        <path data-edge-from="rotina_busca_cliente" data-edge-to="fila_intermediaria_cliente" data-edge-label="grava pendente" data-edge-key="13" data-edge-id="busca-fila_intermediaria-cliente" data-composition-points="1300,550;1300,640" d="M 1300 550 L 1300 640" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
-        <path data-edge-from="fila_intermediaria_cliente" data-edge-to="rotina_consumo_cliente" data-edge-label="lê pendentes" data-edge-key="14" data-edge-id="fila_intermediaria-cliente-consumo" data-composition-points="1240,670;1230,670;1230,820;1160,820" d="M 1240 670 L 1235 670 Q 1230 670 1230 675 L 1230 812 Q 1230 820 1222 820 L 1160 820" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
-        <path data-edge-from="rotina_consumo_cliente" data-edge-to="modulo1" data-edge-label="salva cliente/login" data-edge-key="15" data-edge-id="consumo-cliente-modulo1" data-composition-points="1040,820;1040,390;380,390;360,370" d="M 1040 820 L 1040 398 Q 1040 390 1032 390 L 388 390 Q 380 390 374.34314575050763 384.34314575050763 L 360 370" class="a-emphasis" stroke-width="1.8" marker-end="url(#arrowhead-emphasis)"/>
-        <path data-edge-from="rotina_busca_cliente" data-edge-to="ixcgateway" data-edge-label="busca cliente/login (polling)" data-edge-key="16" data-edge-id="busca-cliente-gateway" data-composition-points="1240,520;1190,520;1190,970;560,970" d="M 1240 520 L 1198 520 Q 1190 520 1190 528 L 1190 962 Q 1190 970 1182 970 L 560 970" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+        <!-- Primary lifecycle rail -->
+        <path d="M 154 157 L 748 157" class="a-emphasis" stroke-width="2.2" marker-end="url(#arrowhead-emphasis)"/>
 
-        <!-- Components -->
-        <g id="node-usuario" data-node-id="usuario" data-node-label="Usuário" tabindex="0" role="button" aria-label="Focus Usuário, navegador, Architecture component" aria-pressed="false" data-node-kind="external" data-node-sublabel="navegador" data-node-context="Architecture component">
-          <title>Usuário · navegador · Architecture component</title>
-          <rect x="240" y="40" width="120" height="60" rx="6" class="c-mask"/>
-          <rect x="240" y="40" width="120" height="60" rx="6" class="c-external" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="external" class="semantic-sigil s-external" transform="translate(246 46) scale(0.6875)">
-            <rect x="2.5" y="5" width="8.5" height="8" rx="1.5"/>
-            <path d="M8 2.5h5.5V8M13.5 2.5 7.5 8.5"/>
+        <!-- Transition paths -->
+        <path data-edge-from="endereco" data-edge-to="analise" data-edge-label="requisito 1 de 2" data-edge-key="0" data-edge-id="endereco-analise" data-composition-points="94,126;94,74;402,74;402,126" d="M 94 126 L 94 84 Q 94 74 104 74 L 392 74 Q 402 74 402 84 L 402 126" class="a-emphasis" stroke-width="2" marker-end="url(#arrowhead-emphasis)"/>
+        <path data-edge-from="provedor" data-edge-to="analise" data-edge-label="abre a medicao" data-edge-key="1" data-edge-id="provedor-analise" data-composition-points="307,157;343,157" d="M 307 157 L 343 157" class="a-emphasis" stroke-width="2" marker-end="url(#arrowhead-emphasis)"/>
+        <path data-edge-from="analise" data-edge-to="viavel" data-edge-label="medicao viavel" data-edge-key="2" data-edge-id="analise-viavel" data-composition-points="461,157;497,157" d="M 461 157 L 497 157" class="a-emphasis" stroke-width="2" marker-end="url(#arrowhead-emphasis)"/>
+        <path data-edge-from="viavel" data-edge-to="aguardando" data-edge-label="proposta enviada" data-edge-key="3" data-edge-id="viavel-aguardando" data-composition-points="615,157;633,157;633,150;651,150" d="M 615 157 L 629.5 157 Q 633 157 633 153.5 L 633 153.5 Q 633 150 636.5 150 L 651 150" class="a-emphasis" stroke-width="2" marker-end="url(#arrowhead-emphasis)"/>
+        <path data-edge-from="analise" data-edge-to="inviavel" data-edge-label="sem viabilidade" data-edge-key="4" data-edge-id="analise-inviavel" data-composition-points="402,188;402,319;402,319;402,450" d="M 402 188 L 402 319 L 402 319 L 402 450" class="a-security" stroke-width="1.1" marker-end="url(#arrowhead-security)"/>
+        <path data-edge-from="aguardando" data-edge-to="contratado" data-edge-label="cliente aceitou" data-edge-key="5" data-edge-id="aguardando-contratado" data-composition-points="710,188;710,319;710,319;710,450" d="M 710 188 L 710 319 L 710 319 L 710 450" class="a-emphasis" stroke-width="2" marker-end="url(#arrowhead-emphasis)"/>
+        <path data-edge-from="aguardando" data-edge-to="declinado" data-edge-label="cliente recusou" data-edge-key="6" data-edge-id="aguardando-declinado" data-composition-points="651,164;651,307;556,307;556,450" d="M 651 164 L 651 297 Q 651 307 641 307 L 566 307 Q 556 307 556 317 L 556 450" class="a-security" stroke-width="1.1" marker-end="url(#arrowhead-security)"/>
+
+        <!-- States -->
+        <g id="node-endereco" data-node-id="endereco" data-node-label="Endereco (login)" tabindex="0" role="button" aria-label="Focus Endereco (login), Requisitos obrigatorios e fluxo da cotacao" aria-pressed="false" data-node-kind="start" data-node-tag="obrigatorio - hoje sem fonte automatica (ADR-008)" data-node-context="Requisitos obrigatorios e fluxo da cotacao">
+          <title>Endereco (login) · Requisitos obrigatorios e fluxo da cotacao · obrigatorio - hoje sem fonte automatica (ADR-008)</title>
+          <rect x="35" y="126" width="118" height="62" rx="7" class="c-mask"/>
+          <rect x="35" y="126" width="118" height="62" rx="7" class="c-frontend" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="start" class="semantic-sigil s-frontend" transform="translate(136 132) scale(0.6875)">
+            <circle cx="8" cy="8" r="5"/>
+            <path d="m7 5.4 3.6 2.6L7 10.6Z" class="sigil-fill"/>
           </g>
-          <text data-detail-anchor x="300" y="68" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Usuário</text>
-        <text data-detail="context" x="300" y="84" class="t-muted" font-size="9" text-anchor="middle">navegador</text>
+        <text data-detail="fine" x="45" y="140" class="t-frontend" font-size="7" font-weight="700">01</text>
+          <text x="94" y="147" class="t-primary" font-size="10" font-weight="600" text-anchor="middle">Endereco (login)</text>
+        <text data-detail="fine" x="94" y="177" class="t-frontend" font-size="7" text-anchor="middle">obrigatorio - hoje sem fonte automatica (ADR-008)</text>
         </g>
 
-        <g id="node-frontend" data-node-id="frontend" data-node-label="Frontend" tabindex="0" role="button" aria-label="Focus Frontend, login, Architecture component" aria-pressed="false" data-node-kind="frontend" data-node-sublabel="login" data-node-context="Architecture component">
-          <title>Frontend · login · Architecture component</title>
-          <rect x="240" y="190" width="120" height="60" rx="6" class="c-mask"/>
-          <rect x="240" y="190" width="120" height="60" rx="6" class="c-frontend" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="frontend" class="semantic-sigil s-frontend" transform="translate(246 196) scale(0.6875)">
-            <rect x="2" y="3" width="12" height="10" rx="2"/>
-            <path d="M2 6.5h12"/>
-            <circle cx="4.1" cy="4.8" r=".7" class="sigil-fill"/>
-            <circle cx="6.3" cy="4.8" r=".7" class="sigil-fill"/>
+        <g id="node-provedor" data-node-id="provedor" data-node-label="Provedor" tabindex="0" role="button" aria-label="Focus Provedor, Requisitos obrigatorios e fluxo da cotacao" aria-pressed="false" data-node-kind="start" data-node-tag="obrigatorio - cadastrado no sistema" data-node-context="Requisitos obrigatorios e fluxo da cotacao">
+          <title>Provedor · Requisitos obrigatorios e fluxo da cotacao · obrigatorio - cadastrado no sistema</title>
+          <rect x="189" y="126" width="118" height="62" rx="7" class="c-mask"/>
+          <rect x="189" y="126" width="118" height="62" rx="7" class="c-frontend" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="start" class="semantic-sigil s-frontend" transform="translate(290 132) scale(0.6875)">
+            <circle cx="8" cy="8" r="5"/>
+            <path d="m7 5.4 3.6 2.6L7 10.6Z" class="sigil-fill"/>
           </g>
-          <text data-detail-anchor x="300" y="218" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Frontend</text>
-        <text data-detail="context" x="300" y="234" class="t-muted" font-size="9" text-anchor="middle">login</text>
+        <text data-detail="fine" x="199" y="140" class="t-frontend" font-size="7" font-weight="700">01</text>
+          <text x="248" y="147" class="t-primary" font-size="10" font-weight="600" text-anchor="middle">Provedor</text>
+        <text data-detail="fine" x="248" y="177" class="t-frontend" font-size="7" text-anchor="middle">obrigatorio - cadastrado no sistema</text>
         </g>
 
-        <g id="node-modulo1" data-node-id="modulo1" data-node-label="Módulo 1" tabindex="0" role="button" aria-label="Focus Módulo 1, sistema atual, Sistema (monólito Django) — Módulo 1" aria-pressed="false" data-node-kind="backend" data-node-sublabel="sistema atual" data-node-context="Sistema (monólito Django) — Módulo 1">
-          <title>Módulo 1 · sistema atual · Sistema (monólito Django) — Módulo 1</title>
-          <rect x="240" y="340" width="120" height="60" rx="6" class="c-mask"/>
-          <rect x="240" y="340" width="120" height="60" rx="6" class="c-backend" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(246 346) scale(0.6875)">
-            <path d="M6 3 3 8l3 5M10 3l3 5-3 5"/>
+        <g id="node-analise" data-node-id="analise" data-node-label="Em Negociacao" tabindex="0" role="button" aria-label="Focus Em Negociacao, Requisitos obrigatorios e fluxo da cotacao" aria-pressed="false" data-node-kind="active" data-node-tag="status: analise (padrao)" data-node-context="Requisitos obrigatorios e fluxo da cotacao">
+          <title>Em Negociacao · Requisitos obrigatorios e fluxo da cotacao · status: analise (padrao)</title>
+          <rect x="343" y="126" width="118" height="62" rx="7" class="c-mask"/>
+          <rect x="343" y="126" width="118" height="62" rx="7" class="c-backend" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="active" class="semantic-sigil s-backend" transform="translate(444 132) scale(0.6875)">
+            <path d="M2 8h3l1.5-3.5L9 12l1.6-4H14"/>
           </g>
-          <text data-detail-anchor x="300" y="368" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Módulo 1</text>
-        <text data-detail="context" x="300" y="384" class="t-muted" font-size="9" text-anchor="middle">sistema atual</text>
+        <text data-detail="fine" x="353" y="140" class="t-backend" font-size="7" font-weight="700">02</text>
+          <text x="402" y="147" class="t-primary" font-size="10" font-weight="600" text-anchor="middle">Em Negociacao</text>
+        <text data-detail="fine" x="402" y="177" class="t-backend" font-size="7" text-anchor="middle">status: analise (padrao)</text>
         </g>
 
-        <g id="node-modulo2" data-node-id="modulo2" data-node-label="Módulo 2" tabindex="0" role="button" aria-label="Focus Módulo 2, kill switch MODULO2_ATIVO, Sistema (monólito Django) — Módulo 1" aria-pressed="false" data-node-kind="backend" data-node-sublabel="kill switch MODULO2_ATIVO" data-node-context="Sistema (monólito Django) — Módulo 1">
-          <title>Módulo 2 · kill switch MODULO2_ATIVO · Sistema (monólito Django) — Módulo 1</title>
-          <rect x="640" y="190" width="120" height="60" rx="6" class="c-mask"/>
-          <rect x="640" y="190" width="120" height="60" rx="6" class="c-backend" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(646 196) scale(0.6875)">
-            <path d="M6 3 3 8l3 5M10 3l3 5-3 5"/>
+        <g id="node-viavel" data-node-id="viavel" data-node-label="Viavel" tabindex="0" role="button" aria-label="Focus Viavel, Requisitos obrigatorios e fluxo da cotacao" aria-pressed="false" data-node-kind="active" data-node-tag="status: ativa" data-node-context="Requisitos obrigatorios e fluxo da cotacao">
+          <title>Viavel · Requisitos obrigatorios e fluxo da cotacao · status: ativa</title>
+          <rect x="497" y="126" width="118" height="62" rx="7" class="c-mask"/>
+          <rect x="497" y="126" width="118" height="62" rx="7" class="c-backend" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="active" class="semantic-sigil s-backend" transform="translate(598 132) scale(0.6875)">
+            <path d="M2 8h3l1.5-3.5L9 12l1.6-4H14"/>
           </g>
-          <text data-detail-anchor x="700" y="218" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Módulo 2</text>
-        <text data-detail="context" x="700" y="234" class="t-muted" font-size="9" text-anchor="middle">kill switch MODULO2_ATIVO</text>
+        <text data-detail="fine" x="507" y="140" class="t-backend" font-size="7" font-weight="700">03</text>
+          <text x="556" y="147" class="t-primary" font-size="10" font-weight="600" text-anchor="middle">Viavel</text>
+        <text data-detail="fine" x="556" y="177" class="t-backend" font-size="7" text-anchor="middle">status: ativa</text>
         </g>
 
-        <g id="node-rotina_busca" data-node-id="rotina_busca" data-node-label="Rotina de Busca" tabindex="0" role="button" aria-label="Focus Rotina de Busca, O.S. — agendada (polling), Sistema (monólito Django) — Módulo 1" aria-pressed="false" data-node-kind="backend" data-node-sublabel="O.S. — agendada (polling)" data-node-context="Sistema (monólito Django) — Módulo 1">
-          <title>Rotina de Busca · O.S. — agendada (polling) · Sistema (monólito Django) — Módulo 1</title>
-          <rect x="40" y="490" width="120" height="60" rx="6" class="c-mask"/>
-          <rect x="40" y="490" width="120" height="60" rx="6" class="c-backend" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(46 496) scale(0.6875)">
-            <path d="M6 3 3 8l3 5M10 3l3 5-3 5"/>
+        <g id="node-aguardando" data-node-id="aguardando" data-node-label="Aguardando" tabindex="0" role="button" aria-label="Focus Aguardando, Requisitos obrigatorios e fluxo da cotacao" aria-pressed="false" data-node-kind="waiting" data-node-tag="status: aguardando_contratacao" data-node-context="Requisitos obrigatorios e fluxo da cotacao">
+          <title>Aguardando · Requisitos obrigatorios e fluxo da cotacao · status: aguardando_contratacao</title>
+          <rect x="651" y="126" width="118" height="62" rx="7" class="c-mask"/>
+          <rect x="651" y="126" width="118" height="62" rx="7" class="c-cloud" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="waiting" class="semantic-sigil s-cloud" transform="translate(752 132) scale(0.6875)">
+            <path d="M4 2.5h8M4 13.5h8M5 3c0 2.8 2 3.2 3 5-1 1.8-3 2.2-3 5M11 3c0 2.8-2 3.2-3 5 1 1.8 3 2.2 3 5"/>
           </g>
-          <text data-detail-anchor x="100" y="518" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Rotina de Busca</text>
-        <text data-detail="context" x="100" y="534" class="t-muted" font-size="9" text-anchor="middle">O.S. — agendada (polling)</text>
+        <text data-detail="fine" x="661" y="140" class="t-cloud" font-size="7" font-weight="700">04</text>
+          <text x="710" y="147" class="t-primary" font-size="10" font-weight="600" text-anchor="middle">Aguardando</text>
+        <text data-detail="fine" x="710" y="177" class="t-cloud" font-size="7" text-anchor="middle">status: aguardando_contratacao</text>
         </g>
 
-        <g id="node-fila_intermediaria_entrada" data-node-id="fila_intermediaria_entrada" data-node-label="Fila Entrada O.S." tabindex="0" role="button" aria-label="Focus Fila Entrada O.S., status: pendente, Sistema (monólito Django) — Módulo 1" aria-pressed="false" data-node-kind="database" data-node-sublabel="status: pendente" data-node-context="Sistema (monólito Django) — Módulo 1">
-          <title>Fila Entrada O.S. · status: pendente · Sistema (monólito Django) — Módulo 1</title>
-          <rect x="40" y="640" width="120" height="60" rx="6" class="c-mask"/>
-          <rect x="40" y="640" width="120" height="60" rx="6" class="c-database" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="database" class="semantic-sigil s-database" transform="translate(46 646) scale(0.6875)">
-            <ellipse cx="8" cy="4" rx="5" ry="2"/>
-            <path d="M3 4v8c0 1.1 2.2 2 5 2s5-.9 5-2V4M3 8c0 1.1 2.2 2 5 2s5-.9 5-2"/>
+        <g id="node-inviavel" data-node-id="inviavel" data-node-label="Inviavel" tabindex="0" role="button" aria-label="Focus Inviavel, Desfechos (terminais)" aria-pressed="false" data-node-kind="failure" data-node-tag="status: encerrada + motivo" data-node-context="Desfechos (terminais)">
+          <title>Inviavel · Desfechos (terminais) · status: encerrada + motivo</title>
+          <rect x="343" y="450" width="118" height="58" rx="7" class="c-mask"/>
+          <rect x="343" y="450" width="118" height="58" rx="7" class="c-security" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="failure" class="semantic-sigil s-security" transform="translate(444 456) scale(0.6875)">
+            <circle cx="8" cy="8" r="5.3"/>
+            <path d="m5.7 5.7 4.6 4.6m0-4.6-4.6 4.6"/>
           </g>
-          <text data-detail-anchor x="100" y="668" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Fila Entrada O.S.</text>
-        <text data-detail="context" x="100" y="684" class="t-muted" font-size="9" text-anchor="middle">status: pendente</text>
+          <text x="402" y="471" class="t-primary" font-size="10" font-weight="600" text-anchor="middle">Inviavel</text>
+        <text data-detail="fine" x="402" y="497" class="t-security" font-size="7" text-anchor="middle">status: encerrada + motivo</text>
         </g>
 
-        <g id="node-rotina_consumo" data-node-id="rotina_consumo" data-node-label="Rotina de Consumo" tabindex="0" role="button" aria-label="Focus Rotina de Consumo, aplica regra de domínio, Sistema (monólito Django) — Módulo 1" aria-pressed="false" data-node-kind="backend" data-node-sublabel="aplica regra de domínio" data-node-context="Sistema (monólito Django) — Módulo 1">
-          <title>Rotina de Consumo · aplica regra de domínio · Sistema (monólito Django) — Módulo 1</title>
-          <rect x="240" y="790" width="120" height="60" rx="6" class="c-mask"/>
-          <rect x="240" y="790" width="120" height="60" rx="6" class="c-backend" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(246 796) scale(0.6875)">
-            <path d="M6 3 3 8l3 5M10 3l3 5-3 5"/>
+        <g id="node-declinado" data-node-id="declinado" data-node-label="Declinado" tabindex="0" role="button" aria-label="Focus Declinado, Desfechos (terminais)" aria-pressed="false" data-node-kind="failure" data-node-tag="status: declinado" data-node-context="Desfechos (terminais)">
+          <title>Declinado · Desfechos (terminais) · status: declinado</title>
+          <rect x="497" y="450" width="118" height="58" rx="7" class="c-mask"/>
+          <rect x="497" y="450" width="118" height="58" rx="7" class="c-security" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="failure" class="semantic-sigil s-security" transform="translate(598 456) scale(0.6875)">
+            <circle cx="8" cy="8" r="5.3"/>
+            <path d="m5.7 5.7 4.6 4.6m0-4.6-4.6 4.6"/>
           </g>
-          <text data-detail-anchor x="300" y="818" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Rotina de Consumo</text>
-        <text data-detail="context" x="300" y="834" class="t-muted" font-size="9" text-anchor="middle">aplica regra de domínio</text>
+          <text x="556" y="471" class="t-primary" font-size="10" font-weight="600" text-anchor="middle">Declinado</text>
+        <text data-detail="fine" x="556" y="497" class="t-security" font-size="7" text-anchor="middle">status: declinado</text>
         </g>
 
-        <g id="node-rotina_fechamento" data-node-id="rotina_fechamento" data-node-label="Fechamento de O.S." tabindex="0" role="button" aria-label="Focus Fechamento de O.S., fast path (timeout curto), Sistema (monólito Django) — Módulo 1" aria-pressed="false" data-node-kind="backend" data-node-sublabel="fast path (timeout curto)" data-node-context="Sistema (monólito Django) — Módulo 1">
-          <title>Fechamento de O.S. · fast path (timeout curto) · Sistema (monólito Django) — Módulo 1</title>
-          <rect x="840" y="490" width="120" height="60" rx="6" class="c-mask"/>
-          <rect x="840" y="490" width="120" height="60" rx="6" class="c-backend" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(846 496) scale(0.6875)">
-            <path d="M6 3 3 8l3 5M10 3l3 5-3 5"/>
+        <g id="node-contratado" data-node-id="contratado" data-node-label="Contratado" tabindex="0" role="button" aria-label="Focus Contratado, Desfechos (terminais)" aria-pressed="false" data-node-kind="success" data-node-tag="status: contratado" data-node-context="Desfechos (terminais)">
+          <title>Contratado · Desfechos (terminais) · status: contratado</title>
+          <rect x="651" y="450" width="118" height="58" rx="7" class="c-mask"/>
+          <rect x="651" y="450" width="118" height="58" rx="7" class="c-database" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="success" class="semantic-sigil s-database" transform="translate(752 456) scale(0.6875)">
+            <circle cx="8" cy="8" r="5.3"/>
+            <path d="m5.2 8 1.8 1.8 3.8-4"/>
           </g>
-          <text data-detail-anchor x="900" y="518" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Fechamento de O.S.</text>
-        <text data-detail="context" x="900" y="534" class="t-muted" font-size="9" text-anchor="middle">fast path (timeout curto)</text>
+          <text x="710" y="471" class="t-primary" font-size="10" font-weight="600" text-anchor="middle">Contratado</text>
+        <text data-detail="fine" x="710" y="497" class="t-database" font-size="7" text-anchor="middle">status: contratado</text>
         </g>
 
-        <g id="node-fila_intermediaria_saida" data-node-id="fila_intermediaria_saida" data-node-label="Fila Saída O.S." tabindex="0" role="button" aria-label="Focus Fila Saída O.S., status: pendente/falha, Sistema (monólito Django) — Módulo 1" aria-pressed="false" data-node-kind="database" data-node-sublabel="status: pendente/falha" data-node-context="Sistema (monólito Django) — Módulo 1">
-          <title>Fila Saída O.S. · status: pendente/falha · Sistema (monólito Django) — Módulo 1</title>
-          <rect x="840" y="640" width="120" height="60" rx="6" class="c-mask"/>
-          <rect x="840" y="640" width="120" height="60" rx="6" class="c-database" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="database" class="semantic-sigil s-database" transform="translate(846 646) scale(0.6875)">
-            <ellipse cx="8" cy="4" rx="5" ry="2"/>
-            <path d="M3 4v8c0 1.1 2.2 2 5 2s5-.9 5-2V4M3 8c0 1.1 2.2 2 5 2s5-.9 5-2"/>
-          </g>
-          <text data-detail-anchor x="900" y="668" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Fila Saída O.S.</text>
-        <text data-detail="context" x="900" y="684" class="t-muted" font-size="9" text-anchor="middle">status: pendente/falha</text>
+        <!-- Transition labels -->
+        <g data-detail="context" data-edge-from="endereco" data-edge-to="analise" data-edge-label="requisito 1 de 2" data-edge-key="0" data-edge-id="endereco-analise">
+          <rect x="104.8" y="53" width="90.4" height="16" rx="4" class="c-mask"/>
+          <text x="150" y="64" class="t-backend" font-size="8" text-anchor="middle">requisito 1 de 2</text>
         </g>
-
-        <g id="node-rotina_envio" data-node-id="rotina_envio" data-node-label="Rotina de Envio" tabindex="0" role="button" aria-label="Focus Rotina de Envio, reprocessa pendentes, Sistema (monólito Django) — Módulo 1" aria-pressed="false" data-node-kind="backend" data-node-sublabel="reprocessa pendentes" data-node-context="Sistema (monólito Django) — Módulo 1">
-          <title>Rotina de Envio · reprocessa pendentes · Sistema (monólito Django) — Módulo 1</title>
-          <rect x="840" y="790" width="120" height="60" rx="6" class="c-mask"/>
-          <rect x="840" y="790" width="120" height="60" rx="6" class="c-backend" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(846 796) scale(0.6875)">
-            <path d="M6 3 3 8l3 5M10 3l3 5-3 5"/>
-          </g>
-          <text data-detail-anchor x="900" y="818" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Rotina de Envio</text>
-        <text data-detail="context" x="900" y="834" class="t-muted" font-size="9" text-anchor="middle">reprocessa pendentes</text>
+        <g data-detail="context" data-edge-from="provedor" data-edge-to="analise" data-edge-label="abre a medicao" data-edge-key="1" data-edge-id="provedor-analise">
+          <rect x="284.7" y="111" width="80.60000000000001" height="16" rx="4" class="c-mask"/>
+          <text x="325" y="122" class="t-backend" font-size="8" text-anchor="middle">abre a medicao</text>
         </g>
-
-        <g id="node-ixcgateway" data-node-id="ixcgateway" data-node-label="IXC Gateway" tabindex="0" role="button" aria-label="Focus IXC Gateway, adaptador único (ADR-005), Sistema (monólito Django) — Módulo 1" aria-pressed="false" data-node-kind="backend" data-node-sublabel="adaptador único (ADR-005)" data-node-context="Sistema (monólito Django) — Módulo 1">
-          <title>IXC Gateway · adaptador único (ADR-005) · Sistema (monólito Django) — Módulo 1</title>
-          <rect x="440" y="940" width="120" height="60" rx="6" class="c-mask"/>
-          <rect x="440" y="940" width="120" height="60" rx="6" class="c-backend" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(446 946) scale(0.6875)">
-            <path d="M6 3 3 8l3 5M10 3l3 5-3 5"/>
-          </g>
-          <text data-detail-anchor x="500" y="968" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">IXC Gateway</text>
-        <text data-detail="context" x="500" y="984" class="t-muted" font-size="9" text-anchor="middle">adaptador único (ADR-005)</text>
+        <g data-detail="context" data-edge-from="analise" data-edge-to="viavel" data-edge-label="medicao viavel" data-edge-key="2" data-edge-id="analise-viavel">
+          <rect x="438.7" y="111" width="80.60000000000001" height="16" rx="4" class="c-mask"/>
+          <text x="479" y="122" class="t-backend" font-size="8" text-anchor="middle">medicao viavel</text>
         </g>
-
-        <g id="node-ixc" data-node-id="ixc" data-node-label="IXC" tabindex="0" role="button" aria-label="Focus IXC, sistema externo, Architecture component" aria-pressed="false" data-node-kind="external" data-node-sublabel="sistema externo" data-node-context="Architecture component">
-          <title>IXC · sistema externo · Architecture component</title>
-          <rect x="440" y="1090" width="120" height="60" rx="6" class="c-mask"/>
-          <rect x="440" y="1090" width="120" height="60" rx="6" class="c-external" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="external" class="semantic-sigil s-external" transform="translate(446 1096) scale(0.6875)">
-            <rect x="2.5" y="5" width="8.5" height="8" rx="1.5"/>
-            <path d="M8 2.5h5.5V8M13.5 2.5 7.5 8.5"/>
-          </g>
-          <text data-detail-anchor x="500" y="1118" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">IXC</text>
-        <text data-detail="context" x="500" y="1134" class="t-muted" font-size="9" text-anchor="middle">sistema externo</text>
+        <g data-detail="context" data-edge-from="viavel" data-edge-to="aguardando" data-edge-label="proposta enviada" data-edge-key="3" data-edge-id="viavel-aguardando">
+          <rect x="587.8" y="107.5" width="90.4" height="16" rx="4" class="c-mask"/>
+          <text x="633" y="118.5" class="t-backend" font-size="8" text-anchor="middle">proposta enviada</text>
         </g>
-
-        <g id="node-rotina_busca_cliente" data-node-id="rotina_busca_cliente" data-node-label="Rotina de Busca" tabindex="0" role="button" aria-label="Focus Rotina de Busca, cliente/login — polling, Sistema (monólito Django) — Módulo 1" aria-pressed="false" data-node-kind="backend" data-node-sublabel="cliente/login — polling" data-node-context="Sistema (monólito Django) — Módulo 1">
-          <title>Rotina de Busca · cliente/login — polling · Sistema (monólito Django) — Módulo 1</title>
-          <rect x="1240" y="490" width="120" height="60" rx="6" class="c-mask"/>
-          <rect x="1240" y="490" width="120" height="60" rx="6" class="c-backend" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(1246 496) scale(0.6875)">
-            <path d="M6 3 3 8l3 5M10 3l3 5-3 5"/>
-          </g>
-          <text data-detail-anchor x="1300" y="518" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Rotina de Busca</text>
-        <text data-detail="context" x="1300" y="534" class="t-muted" font-size="9" text-anchor="middle">cliente/login — polling</text>
+        <g data-detail="context" data-edge-from="analise" data-edge-to="inviavel" data-edge-label="sem viabilidade" data-edge-key="4" data-edge-id="analise-inviavel">
+          <rect x="359.25" y="298" width="85.5" height="16" rx="4" class="c-mask"/>
+          <text x="402" y="309" class="t-security" font-size="8" text-anchor="middle">sem viabilidade</text>
         </g>
-
-        <g id="node-fila_intermediaria_cliente" data-node-id="fila_intermediaria_cliente" data-node-label="Fila Cliente" tabindex="0" role="button" aria-label="Focus Fila Cliente, login — status: pendente, Sistema (monólito Django) — Módulo 1" aria-pressed="false" data-node-kind="database" data-node-sublabel="login — status: pendente" data-node-context="Sistema (monólito Django) — Módulo 1">
-          <title>Fila Cliente · login — status: pendente · Sistema (monólito Django) — Módulo 1</title>
-          <rect x="1240" y="640" width="120" height="60" rx="6" class="c-mask"/>
-          <rect x="1240" y="640" width="120" height="60" rx="6" class="c-database" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="database" class="semantic-sigil s-database" transform="translate(1246 646) scale(0.6875)">
-            <ellipse cx="8" cy="4" rx="5" ry="2"/>
-            <path d="M3 4v8c0 1.1 2.2 2 5 2s5-.9 5-2V4M3 8c0 1.1 2.2 2 5 2s5-.9 5-2"/>
-          </g>
-          <text data-detail-anchor x="1300" y="668" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Fila Cliente</text>
-        <text data-detail="context" x="1300" y="684" class="t-muted" font-size="9" text-anchor="middle">login — status: pendente</text>
+        <g data-detail="context" data-edge-from="aguardando" data-edge-to="contratado" data-edge-label="cliente aceitou" data-edge-key="5" data-edge-id="aguardando-contratado">
+          <rect x="667.25" y="298" width="85.5" height="16" rx="4" class="c-mask"/>
+          <text x="710" y="309" class="t-backend" font-size="8" text-anchor="middle">cliente aceitou</text>
         </g>
-
-        <g id="node-rotina_consumo_cliente" data-node-id="rotina_consumo_cliente" data-node-label="Rotina de Consumo" tabindex="0" role="button" aria-label="Focus Rotina de Consumo, salvar_clientes_no_django, Sistema (monólito Django) — Módulo 1" aria-pressed="false" data-node-kind="backend" data-node-sublabel="salvar_clientes_no_django" data-node-context="Sistema (monólito Django) — Módulo 1">
-          <title>Rotina de Consumo · salvar_clientes_no_django · Sistema (monólito Django) — Módulo 1</title>
-          <rect x="1040" y="790" width="120" height="60" rx="6" class="c-mask"/>
-          <rect x="1040" y="790" width="120" height="60" rx="6" class="c-backend" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(1046 796) scale(0.6875)">
-            <path d="M6 3 3 8l3 5M10 3l3 5-3 5"/>
-          </g>
-          <text data-detail-anchor x="1100" y="818" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Rotina de Consumo</text>
-        <text data-detail="context" x="1100" y="834" class="t-muted" font-size="9" text-anchor="middle">salvar_clientes_no_django</text>
-        </g>
-
-        <!-- Connection labels -->
-        <g data-detail="context" data-edge-from="usuario" data-edge-to="frontend" data-edge-label="login" data-edge-key="0" data-edge-id="usuario-frontend">
-          <rect x="283" y="104" width="34" height="14" rx="3" class="c-mask"/>
-          <text x="300" y="114" class="t-muted" font-size="8" text-anchor="middle">login</text>
-        </g>
-        <g data-detail="context" data-edge-from="frontend" data-edge-to="modulo1" data-edge-label="acesso" data-edge-key="1" data-edge-id="frontend-modulo1">
-          <rect x="280.6" y="254" width="38.8" height="14" rx="3" class="c-mask"/>
-          <text x="300" y="264" class="t-backend" font-size="8" text-anchor="middle">acesso</text>
-        </g>
-        <g data-detail="context" data-edge-from="frontend" data-edge-to="modulo2" data-edge-label="acesso (se ativo)" data-edge-key="2" data-edge-id="frontend-modulo2">
-          <rect x="454.2" y="200" width="91.6" height="14" rx="3" class="c-mask"/>
-          <text x="500" y="210" class="t-messagebus" font-size="8" text-anchor="middle">acesso (se ativo)</text>
-        </g>
-        <g data-detail="context" data-edge-from="rotina_busca" data-edge-to="fila_intermediaria_entrada" data-edge-label="grava pendente" data-edge-key="3" data-edge-id="busca-fila_intermediaria-entrada">
-          <rect x="61.4" y="554" width="77.2" height="14" rx="3" class="c-mask"/>
-          <text x="100" y="564" class="t-muted" font-size="8" text-anchor="middle">grava pendente</text>
-        </g>
-        <g data-detail="context" data-edge-from="fila_intermediaria_entrada" data-edge-to="rotina_consumo" data-edge-label="lê pendentes" data-edge-key="4" data-edge-id="fila_intermediaria-entrada-consumo">
-          <rect x="156.2" y="749" width="67.6" height="14" rx="3" class="c-mask"/>
-          <text x="190" y="759" class="t-muted" font-size="8" text-anchor="middle">lê pendentes</text>
-        </g>
-        <g data-detail="context" data-edge-from="rotina_consumo" data-edge-to="modulo1" data-edge-label="aplica regra de domínio" data-edge-key="5" data-edge-id="consumo-modulo1">
-          <rect x="239.8" y="770" width="120.39999999999999" height="14" rx="3" class="c-mask"/>
-          <text x="300" y="780" class="t-backend" font-size="8" text-anchor="middle">aplica regra de domínio</text>
-        </g>
-        <g data-detail="context" data-edge-from="rotina_busca" data-edge-to="ixcgateway" data-edge-label="busca O.S. (polling)" data-edge-key="6" data-edge-id="busca-gateway">
-          <rect x="177" y="725" width="106" height="14" rx="3" class="c-mask"/>
-          <text x="230" y="735" class="t-muted" font-size="8" text-anchor="middle">busca O.S. (polling)</text>
-        </g>
-        <g data-detail="context" data-edge-from="modulo1" data-edge-to="rotina_fechamento" data-edge-label="fecha O.S. localmente" data-edge-key="7" data-edge-id="modulo1-fechamento">
-          <rect x="544.6" y="421.5" width="110.8" height="14" rx="3" class="c-mask"/>
-          <text x="600" y="431.5" class="t-backend" font-size="8" text-anchor="middle">fecha O.S. localmente</text>
-        </g>
-        <g data-detail="context" data-edge-from="rotina_fechamento" data-edge-to="ixcgateway" data-edge-label="fast path" data-edge-key="8" data-edge-id="fechamento-gateway">
-          <rect x="673.4" y="725" width="53.199999999999996" height="14" rx="3" class="c-mask"/>
-          <text x="700" y="735" class="t-muted" font-size="8" text-anchor="middle">fast path</text>
-        </g>
-        <g data-detail="context" data-edge-from="rotina_fechamento" data-edge-to="fila_intermediaria_saida" data-edge-label="fallback se falhar" data-edge-key="9" data-edge-id="fechamento-fila_intermediaria-saida">
-          <rect x="851.8" y="554" width="96.39999999999999" height="14" rx="3" class="c-mask"/>
-          <text x="900" y="564" class="t-messagebus" font-size="8" text-anchor="middle">fallback se falhar</text>
-        </g>
-        <g data-detail="context" data-edge-from="fila_intermediaria_saida" data-edge-to="rotina_envio" data-edge-label="lê pendentes/falha" data-edge-key="10" data-edge-id="fila_intermediaria-saida-envio">
-          <rect x="851.8" y="704" width="96.39999999999999" height="14" rx="3" class="c-mask"/>
-          <text x="900" y="714" class="t-muted" font-size="8" text-anchor="middle">lê pendentes/falha</text>
-        </g>
-        <g data-detail="context" data-edge-from="rotina_envio" data-edge-to="ixcgateway" data-edge-label="reenvia" data-edge-key="11" data-edge-id="envio-gateway">
-          <rect x="748.2" y="800" width="43.6" height="14" rx="3" class="c-mask"/>
-          <text x="770" y="810" class="t-muted" font-size="8" text-anchor="middle">reenvia</text>
-        </g>
-        <g data-detail="context" data-edge-from="ixcgateway" data-edge-to="ixc" data-edge-label="API IXC" data-edge-key="12" data-edge-id="gateway-ixc">
-          <rect x="478.2" y="1004" width="43.6" height="14" rx="3" class="c-mask"/>
-          <text x="500" y="1014" class="t-backend" font-size="8" text-anchor="middle">API IXC</text>
-        </g>
-        <g data-detail="context" data-edge-from="rotina_busca_cliente" data-edge-to="fila_intermediaria_cliente" data-edge-label="grava pendente" data-edge-key="13" data-edge-id="busca-fila_intermediaria-cliente">
-          <rect x="1261.4" y="554" width="77.2" height="14" rx="3" class="c-mask"/>
-          <text x="1300" y="564" class="t-muted" font-size="8" text-anchor="middle">grava pendente</text>
-        </g>
-        <g data-detail="context" data-edge-from="fila_intermediaria_cliente" data-edge-to="rotina_consumo_cliente" data-edge-label="lê pendentes" data-edge-key="14" data-edge-id="fila_intermediaria-cliente-consumo">
-          <rect x="1196.2" y="749" width="67.6" height="14" rx="3" class="c-mask"/>
-          <text x="1230" y="759" class="t-muted" font-size="8" text-anchor="middle">lê pendentes</text>
-        </g>
-        <g data-detail="context" data-edge-from="rotina_consumo_cliente" data-edge-to="modulo1" data-edge-label="salva cliente/login" data-edge-key="15" data-edge-id="consumo-cliente-modulo1">
-          <rect x="659.4" y="370" width="101.2" height="14" rx="3" class="c-mask"/>
-          <text x="710" y="380" class="t-backend" font-size="8" text-anchor="middle">salva cliente/login</text>
-        </g>
-        <g data-detail="context" data-edge-from="rotina_busca_cliente" data-edge-to="ixcgateway" data-edge-label="busca cliente/login (polling)" data-edge-key="16" data-edge-id="busca-cliente-gateway">
-          <rect x="1115.4" y="725" width="149.2" height="14" rx="3" class="c-mask"/>
-          <text x="1190" y="735" class="t-muted" font-size="8" text-anchor="middle">busca cliente/login (polling)</text>
+        <g data-detail="context" data-edge-from="aguardando" data-edge-to="declinado" data-edge-label="cliente recusou" data-edge-key="6" data-edge-id="aguardando-declinado">
+          <rect x="560.75" y="286" width="85.5" height="16" rx="4" class="c-mask"/>
+          <text x="603.5" y="297" class="t-security" font-size="8" text-anchor="middle">cliente recusou</text>
         </g>
 
         <!-- Legend -->
         <g data-legend-bridge>
-          <text x="40" y="1189" class="t-primary" font-size="9" font-weight="600">Legend</text>
-          <g data-legend-kind="external">
-            <rect x="40" y="1194" width="14" height="9" rx="2" class="c-external" stroke-width="1"/>
-            <text x="60" y="1202" class="t-muted" font-size="8">External</text>
-          </g>
-          <g data-legend-kind="frontend">
-            <rect x="144" y="1194" width="14" height="9" rx="2" class="c-frontend" stroke-width="1"/>
-            <text x="164" y="1202" class="t-muted" font-size="8">Frontend</text>
-          </g>
-          <g data-legend-kind="backend">
-            <rect x="248" y="1194" width="14" height="9" rx="2" class="c-backend" stroke-width="1"/>
-            <text x="268" y="1202" class="t-muted" font-size="8">Backend</text>
-          </g>
-          <g data-legend-kind="database">
-            <rect x="347" y="1194" width="14" height="9" rx="2" class="c-database" stroke-width="1"/>
-            <text x="367" y="1202" class="t-muted" font-size="8">Database</text>
-          </g>
+          <text x="220" y="542" class="t-primary" font-size="10" font-weight="600">Legend</text>
+        <g data-legend-kind="active">
+          <rect x="220" y="554" width="14" height="9" rx="2" class="c-backend" stroke-width="1"/>
+          <text x="240" y="562" class="t-muted" font-size="7">active state</text>
+        </g>
+        <g data-legend-kind="waiting">
+          <rect x="325" y="554" width="14" height="9" rx="2" class="c-cloud" stroke-width="1"/>
+          <text x="345" y="562" class="t-muted" font-size="7">waiting</text>
+        </g>
+        <g data-legend-kind="success">
+          <rect x="415" y="554" width="14" height="9" rx="2" class="c-database" stroke-width="1"/>
+          <text x="435" y="562" class="t-muted" font-size="7">terminal success</text>
+        </g>
+        <g data-legend-kind="failure">
+          <rect x="560" y="554" width="14" height="9" rx="2" class="c-security" stroke-width="1"/>
+          <text x="580" y="562" class="t-muted" font-size="7">failure / exit</text>
+        </g>
         </g>
       </svg>
       <p class="intent-trace-status no-print" id="intent-trace-status" role="status" aria-live="polite" aria-atomic="true"></p>
@@ -5042,31 +4924,91 @@
       <div class="card">
         <div class="card-header">
           <div class="card-dot cyan"></div>
-          <h3>Formato comum (item 9, ADR-006)</h3>
+          <h3>Sequencia de leitura - voce esta em 02</h3>
         </div>
         <ul>
-          <li>&bull; status: pendente / processando / concluído / erro</li>
-          <li>&bull; mensagem_erro + tentativas por item, na própria linha</li>
-          <li>&bull; Sem tabela de log separada nesta fase</li>
+          <li>&bull; 01 · Contexto - quem usa e com quais sistemas externos falamos</li>
+          <li>&bull; 02 · Ciclo de vida da cotacao (este diagrama) - o processo de negocio (do endereco ao desfecho)</li>
+          <li>&bull; 03 · Modelo de dominio - as entidades e como se relacionam</li>
+          <li>&bull; 04 · Arquitetura-alvo - camadas, gateways e estrutura de pastas</li>
+          <li>&bull; 05 · Modulos e dependencias - quais apps existem e quem chama quem</li>
+          <li>&bull; 06 · Arquitetura do Modulo 1 - filas de entrada/saida ao IXC e fechamento de O.S.</li>
+          <li>&bull; 07 · Processos de automacoes e rotinas - o que roda, quando e por qual caminho</li>
+          <li>&bull; ANEXO A · Integration Hub conceitual - alternativa descartada</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <div class="card-dot emerald"></div>
+          <h3>Dois requisitos obrigatorios para abrir a medicao (RN-017)</h3>
+        </div>
+        <ul>
+          <li>&bull; Endereco (login): historicamente vinha sincronizado do IXC (app clientes) - as 4 rotinas automaticas foram desativadas em 2026-08-07 (ADR-008)</li>
+          <li>&bull; Hoje nao ha fonte automatica alimentando Cliente/Endereco (nem IXC, nem o DashboardEACE - que alimenta a tabela separada Escola, ADR-010)</li>
+          <li>&bull; Provedor (Partner): cadastrado dentro do sistema, com seu plano (PartnerPlan)</li>
+          <li>&bull; A cotacao so nasce quando os dois existem e sao vinculados - falta qualquer um e nao ha medicao</li>
+          <li>&bull; Por isso os dois aparecem como ponto de partida, e nao um depois do outro: sao paralelos, nao sequenciais</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <div class="card-dot amber"></div>
+          <h3>Fluxo confirmado pelo negocio, mas NAO imposto pelo codigo (RN-018)</h3>
+        </div>
+        <ul>
+          <li>&bull; Confirmado pelo dono do negocio em 2026-07-29: as setas deste diagrama sao as unicas transicoes validas</li>
+          <li>&bull; Em Negociacao so pode virar Viavel ou Inviavel | Declinar so e possivel depois de Viavel, a partir de Aguardando Contratacao | Inviavel e terminal, nao reabre no momento</li>
+          <li>&bull; PORÉM: as views validam apenas se o status pertence a lista (status_validos = {choice[0] for choice in Proposal.STATUS_CHOICES}) - nenhuma transicao e bloqueada</li>
+          <li>&bull; Na pratica hoje qualquer status pode ir para qualquer outro, inclusive pular etapas ou sair de um terminal. Implementar a validacao e uma feature ainda nao aberta</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <div class="card-dot violet"></div>
+          <h3>Armadilha: chave do status nao bate com o rotulo</h3>
+        </div>
+        <ul>
+          <li>&bull; &#39;ativa&#39; significa Viavel (nao &#39;ativo/em uso&#39;)</li>
+          <li>&bull; &#39;encerrada&#39; significa Inviavel (nao &#39;finalizada com sucesso&#39;)</li>
+          <li>&bull; &#39;analise&#39; significa Em Negociacao</li>
+          <li>&bull; Quem le status=&#39;ativa&#39; no codigo tende a entender o oposto do que o negocio quer dizer - vale considerar renomear as chaves numa migration</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <div class="card-dot emerald"></div>
+          <h3>Os 6 status reais do model Proposal</h3>
+        </div>
+        <ul>
+          <li>&bull; analise = Em Negociacao (valor padrao ao criar)</li>
+          <li>&bull; ativa = Viavel | encerrada = Inviavel</li>
+          <li>&bull; aguardando_contratacao = Aguardando Contratacao</li>
+          <li>&bull; contratado = Contratado | declinado = Declinado</li>
+          <li>&bull; Verificados em apps/partners/models.py (Proposal.STATUS_CHOICES)</li>
         </ul>
       </div>
 
       <div class="card">
         <div class="card-header">
           <div class="card-dot slate"></div>
-          <h3>Fora desta fase</h3>
+          <h3>De onde vem cada peca</h3>
         </div>
         <ul>
-          <li>&bull; Message broker (Celery/Redis) — descartado na ADR-005/006</li>
-          <li>&bull; Webhook do IXC — confirmado inexistente para atendimento/O.S./cliente</li>
-          <li>&bull; Demais automações de Backoffice/Módulo 2</li>
+          <li>&bull; Endereco/login: rotinas automaticas do IXC desativadas em 2026-08-07 (ADR-008) - o codigo permanece intacto (so os disparos foram comentados), ver diagramas 06 e 07; hoje sem fonte automatica definida</li>
+          <li>&bull; Provedor: Partner + PartnerPlan, cadastrados e mantidos dentro do sistema</li>
+          <li>&bull; Inviavel exige motivo: FK para ProposalMotivoInviavel, gravado junto com observacao_inviavel</li>
+          <li>&bull; Leads prospectados (app leads, com apoio de IA) alimentam o funil e tem lista de status propria: novo, negociacao, andamento, ativo, inviavel</li>
         </ul>
       </div>
     </div>
 
     <!-- Footer -->
     <p class="footer">
-      Architecture diagram &bull; Built with Archify<span class="no-print"> &bull; <a class="artifact-start-link" href="https://tt-a1i.github.io/archify/start.html?type=architecture" target="_blank" rel="noopener noreferrer">Create yours &nearr;</a> &bull; Hover to trace &bull; <kbd>R</kbd> route &bull; Click to focus &bull; <kbd>+</kbd>/<kbd>&minus;</kbd> zoom &bull; <kbd>M</kbd> radar &bull; <kbd>T</kbd> theme &bull; <kbd>E</kbd> export</span>
+      Lifecycle diagram &bull; Built with Archify<span class="no-print"> &bull; <a class="artifact-start-link" href="https://tt-a1i.github.io/archify/start.html?type=lifecycle" target="_blank" rel="noopener noreferrer">Create yours &nearr;</a> &bull; Hover to trace &bull; <kbd>R</kbd> route &bull; Click to focus &bull; <kbd>+</kbd>/<kbd>&minus;</kbd> zoom &bull; <kbd>M</kbd> radar &bull; <kbd>T</kbd> theme &bull; <kbd>E</kbd> export</span>
     </p>
   </div>
 

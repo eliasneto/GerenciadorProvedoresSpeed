@@ -1,0 +1,115 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "03 · Modelo de dominio - as entidades e como se relacionam",
+    "subtitle": "Leitura 3 de 7 · O centro do sistema segundo a ADR-005: o dominio persistido no MySQL. Chaves estrangeiras reais, levantadas dos models em 2026-07-29, ampliado em 2026-08-11 com o dominio Escola/RE-RI (apps.escolas, Epic 14/15)",
+    "output": "docs/diagrams/modelo-dominio.html",
+    "quality_profile": "standard",
+    "views": [
+      {
+        "id": "centro",
+        "label": "Proposal como centro",
+        "focus": ["proposal", "partner", "cliente", "endereco", "lead", "lead_endereco", "motivo", "user"],
+        "note": "Proposal guarda 7 chaves estrangeiras - e a entidade que amarra todo o resto."
+      },
+      {
+        "id": "origem-ixc",
+        "label": "Origem: cliente real do IXC",
+        "focus": ["cliente", "endereco", "proposal"],
+        "note": "Cliente e Endereco chegam sincronizados do IXC; a cotacao aponta para a unidade de instalacao."
+      },
+      {
+        "id": "origem-lead",
+        "label": "Origem: prospeccao",
+        "focus": ["lead", "lead_empresa", "lead_endereco", "proposal"],
+        "note": "Caminho paralelo: lead prospectado, estruturado por IA em LeadEmpresa/LeadEndereco."
+      },
+      {
+        "id": "dominio-escolas",
+        "label": "Dominio Escola/RE-RI",
+        "focus": ["escola", "rede_externa", "rede_interna", "processo_escolas", "setor", "setor_status"],
+        "note": "Escola e independente de Cliente/Endereco/Proposal (ADR-010) - sem relacao com a cotacao, exceto o Parceiro compartilhado com RE/RI."
+      }
+    ]
+  },
+  "layout": { "mode": "grid", "cols": 3, "origin": [40, 900], "gapX": 40, "gapY": 90, "cellW": 210, "cellH": 60 },
+  "components": [
+    { "id": "cliente", "type": "database", "label": "Cliente", "sublabel": "sincronizado do IXC", "pos": [40, 60], "size": [210, 60] },
+    { "id": "endereco", "type": "database", "label": "Endereco", "sublabel": "unidade de instalacao (login)", "pos": [40, 180], "size": [210, 60] },
+
+    { "id": "lead_empresa", "type": "database", "label": "LeadEmpresa", "sublabel": "empresa estruturada", "pos": [40, 340], "size": [210, 60] },
+    { "id": "lead_endereco", "type": "database", "label": "LeadEndereco", "sublabel": "endereco estruturado", "pos": [40, 460], "size": [210, 60] },
+    { "id": "lead", "type": "database", "label": "Lead", "sublabel": "prospeccao bruta", "tag": "legado - estruturado por IA", "pos": [40, 580], "size": [210, 60] },
+
+    { "id": "proposal", "type": "backend", "label": "Proposal", "sublabel": "a cotacao - entidade central", "tag": "7 chaves estrangeiras", "pos": [470, 200], "size": [260, 110] },
+
+    { "id": "partner", "type": "security", "label": "Partner", "sublabel": "provedor / parceiro", "tag": "unico FK obrigatorio", "pos": [900, 60], "size": [210, 60] },
+    { "id": "plano", "type": "database", "label": "PartnerPlan", "sublabel": "plano do provedor", "pos": [900, 180], "size": [210, 60] },
+    { "id": "motivo", "type": "database", "label": "ProposalMotivoInviavel", "sublabel": "catalogo de motivos", "pos": [900, 340], "size": [210, 60] },
+
+    { "id": "user", "type": "security", "label": "User", "sublabel": "responsavel pela cotacao", "pos": [300, 700], "size": [210, 60] },
+    { "id": "audit", "type": "cloud", "label": "IntegrationAudit", "sublabel": "+ IntegrationAuditItem por linha", "pos": [600, 700], "size": [210, 60] },
+    { "id": "historico", "type": "cloud", "label": "RegistroHistorico", "sublabel": "GenericForeignKey - qualquer entidade", "pos": [900, 700], "size": [210, 60] },
+
+    { "id": "escola", "type": "database", "label": "Escola", "sublabel": "sincronizada do DashboardEACE", "tag": "jira_key unico", "row": 0, "col": 0, "size": [210, 60] },
+    { "id": "rede_externa", "type": "database", "label": "RedeExterna (RE)", "sublabel": "processo 1:1 com Escola", "row": 0, "col": 1, "size": [210, 60] },
+    { "id": "rede_interna", "type": "database", "label": "RedeInterna (RI)", "sublabel": "processo 1:1 com Escola", "row": 0, "col": 2, "size": [210, 60] },
+    { "id": "processo_escolas", "type": "database", "label": "Processo", "sublabel": "catalogo (RE ou RI, generico)", "row": 1, "col": 0, "size": [210, 60] },
+    { "id": "setor", "type": "database", "label": "Setor", "sublabel": "compoe um Processo", "row": 1, "col": 1, "size": [210, 60] },
+    { "id": "setor_status", "type": "database", "label": "SetorStatus", "sublabel": "compoe um Setor", "row": 1, "col": 2, "size": [210, 60] },
+    { "id": "campo", "type": "database", "label": "Campo", "sublabel": "campo personalizado", "tag": "setor_nome: texto, nao FK", "row": 2, "col": 0, "size": [210, 60] },
+    { "id": "campo_valor", "type": "database", "label": "CampoValor", "sublabel": "valor por instancia", "tag": "GenericForeignKey - RE, RI ou Escola", "row": 2, "col": 1, "size": [210, 60] },
+    { "id": "setor_escopo", "type": "database", "label": "SetorEscopo", "sublabel": "escopo Escola vs Sub-atividades", "tag": "pendente de rework - PO-062 (ADR-023)", "row": 2, "col": 2, "size": [210, 60] }
+  ],
+  "boundaries": [
+    { "kind": "region", "label": "clientes - chega do IXC", "wraps": ["cliente", "endereco"] },
+    { "kind": "region", "label": "leads - prospeccao", "wraps": ["lead_empresa", "lead_endereco", "lead"] },
+    { "kind": "security-group", "label": "partners - dominio central da cotacao", "wraps": ["proposal", "partner", "plano", "motivo"] },
+    { "kind": "region", "label": "core - transversal", "wraps": ["user", "audit", "historico"] },
+    { "kind": "region", "label": "apps.escolas - Escola, RE/RI e catalogo (Epic 14/15, 2026-08-07 a 2026-08-11)", "wraps": ["escola", "rede_externa", "rede_interna", "processo_escolas", "setor", "setor_status", "campo", "campo_valor", "setor_escopo"] }
+  ],
+  "connections": [
+    { "id": "endereco-cliente", "from": "endereco", "to": "cliente", "label": "pertence a", "variant": "default", "fromSide": "top", "toSide": "bottom" },
+    { "id": "leadendereco-leadempresa", "from": "lead_endereco", "to": "lead_empresa", "label": "pertence a", "variant": "default", "fromSide": "top", "toSide": "bottom" },
+    { "id": "lead-leadendereco", "from": "lead", "to": "lead_endereco", "label": "estruturado em", "variant": "dashed", "fromSide": "top", "toSide": "bottom" },
+    { "id": "lead-leadempresa", "from": "lead", "to": "lead_empresa", "label": "estruturado em", "variant": "dashed", "fromSide": "left", "toSide": "left", "via": [[16, 610], [16, 370]], "labelAt": [16, 660] },
+    { "id": "plano-partner", "from": "plano", "to": "partner", "label": "pertence a", "variant": "default", "fromSide": "top", "toSide": "bottom" },
+
+    { "id": "proposal-partner", "from": "proposal", "to": "partner", "label": "partner (NOT NULL)", "variant": "emphasis", "fromSide": "right", "toSide": "left", "via": [[800, 255], [800, 90]] },
+    { "id": "proposal-motivo", "from": "proposal", "to": "motivo", "label": "motivo_inviavel", "variant": "default", "fromSide": "right", "toSide": "left", "via": [[840, 255], [840, 370]] },
+
+    { "id": "proposal-cliente", "from": "proposal", "to": "cliente", "label": "cliente", "variant": "emphasis", "fromSide": "left", "toSide": "right", "via": [[380, 255], [380, 90]] },
+    { "id": "proposal-endereco", "from": "proposal", "to": "endereco", "label": "client_address", "variant": "emphasis", "fromSide": "left", "toSide": "right", "via": [[320, 255], [320, 210]] },
+    { "id": "proposal-leadendereco", "from": "proposal", "to": "lead_endereco", "label": "lead_endereco", "variant": "default", "fromSide": "left", "toSide": "right", "via": [[340, 255], [340, 490]] },
+    { "id": "proposal-lead", "from": "proposal", "to": "lead", "label": "lead", "variant": "default", "fromSide": "left", "toSide": "right", "via": [[400, 255], [400, 610]] },
+
+    { "id": "proposal-user", "from": "proposal", "to": "user", "label": "responsavel", "variant": "default", "fromSide": "bottom", "toSide": "top", "via": [[600, 650], [405, 650]] },
+    { "id": "audit-user", "from": "audit", "to": "user", "label": "usuario", "variant": "default", "fromSide": "left", "toSide": "right" },
+    { "id": "historico-user", "from": "historico", "to": "user", "label": "usuario", "variant": "default", "fromSide": "bottom", "toSide": "bottom", "via": [[1005, 810], [405, 810]] },
+
+    { "id": "redeexterna-escola", "from": "rede_externa", "to": "escola", "label": "escola (1:1)", "variant": "emphasis", "fromSide": "left", "toSide": "right", "labelAt": [270, 896] },
+    { "id": "redeinterna-escola", "from": "rede_interna", "to": "escola", "label": "escola (1:1)", "variant": "emphasis", "fromSide": "top", "toSide": "top", "via": [[645, 880], [145, 880]], "labelAt": [500, 880] },
+    { "id": "redeexterna-processo", "from": "rede_externa", "to": "processo_escolas", "label": "processo", "variant": "default", "fromSide": "left", "toSide": "top", "via": [[290, 972], [130, 972]], "labelAt": [200, 972] },
+    { "id": "redeinterna-processo", "from": "rede_interna", "to": "processo_escolas", "label": "processo", "variant": "default", "fromSide": "bottom", "toSide": "top", "via": [[645, 996], [160, 996]], "labelAt": [220, 996] },
+    { "id": "setor-processo", "from": "setor", "to": "processo_escolas", "label": "processo", "variant": "default", "fromSide": "left", "toSide": "right", "labelAt": [270, 1034] },
+    { "id": "setorstatus-setor", "from": "setor_status", "to": "setor", "label": "setor", "variant": "default", "fromSide": "left", "toSide": "right" },
+    { "id": "redeexterna-setor", "from": "rede_externa", "to": "setor", "label": "setor (FK)", "variant": "default", "fromSide": "bottom", "toSide": "top", "labelAt": [395, 1018] },
+    { "id": "redeinterna-setor", "from": "rede_interna", "to": "setor", "label": "setor (FK)", "variant": "default", "fromSide": "bottom", "toSide": "top", "via": [[645, 1030], [440, 1030]], "labelAt": [560, 1034] },
+    { "id": "redeexterna-partner", "from": "rede_externa", "to": "partner", "label": "parceiro (FK)", "variant": "default", "fromSide": "top", "toSide": "right", "via": [[290, 860], [1250, 860], [1250, 90]], "labelAt": [750, 864] },
+    { "id": "redeinterna-partner", "from": "rede_interna", "to": "partner", "label": "parceiro (FK)", "variant": "default", "fromSide": "top", "toSide": "right", "via": [[645, 840], [1280, 840], [1280, 105]], "labelAt": [980, 826] },
+    { "id": "campovalor-campo", "from": "campo_valor", "to": "campo", "label": "campo", "variant": "default", "fromSide": "left", "toSide": "right" }
+  ],
+  "cards": [
+    { "dot": "cyan", "title": "Sequencia de leitura - voce esta em 03", "items": ["01 · Contexto - quem usa e com quais sistemas externos falamos", "02 · Ciclo de vida da cotacao - o processo de negocio (do endereco ao desfecho)", "03 · Modelo de dominio (este diagrama) - as entidades e como se relacionam", "04 · Arquitetura-alvo - camadas, gateways e estrutura de pastas", "05 · Modulos e dependencias - quais apps existem e quem chama quem", "06 · Arquitetura do Modulo 1 - filas de entrada/saida ao IXC e fechamento de O.S.", "07 · Processos de automacoes e rotinas - o que roda, quando e por qual caminho", "ANEXO A · Integration Hub conceitual - alternativa descartada"] },
+    { "dot": "slate", "title": "Legenda", "items": ["A seta aponta de quem GUARDA a chave estrangeira para a entidade apontada (child -> parent)", "Verde = vinculo que sustenta a cotacao | Cinza = vinculo secundario | Tracejado = estruturacao por IA", "Cada rotulo e o nome real do campo no model, nao um apelido"] },
+    { "dot": "amber", "title": "ACHADO: a RN-017 nao e imposta pelo banco", "items": ["A RN-017 diz que abrir a medicao exige endereco (do IXC) E provedor - os dois obrigatorios", "No schema, so partner e NOT NULL. Os campos cliente e client_address sao null=True, blank=True", "Ou seja: o banco aceita hoje uma Proposal sem cliente e sem endereco de instalacao", "Verificar se o formulario/servico impede isso; se nao impedir, a regra existe so no procedimento da equipe", "Nada foi alterado - achado de diagnostico"] },
+    { "dot": "emerald", "title": "Proposal e o centro: 7 chaves estrangeiras", "items": ["partner (NOT NULL) e motivo_inviavel -> app partners", "cliente e client_address -> app clientes (dados vindos do IXC)", "lead e lead_endereco -> app leads (prospeccao)", "responsavel -> core.User", "Nenhuma outra entidade do sistema concentra tantos vinculos - confirma a ADR-005 sobre o dominio ser o centro"] },
+    { "dot": "violet", "title": "Duas origens paralelas para a mesma cotacao", "items": ["Caminho A (cliente real): Cliente -> Endereco, ambos sincronizados do IXC. E o caminho da RN-017", "Caminho B (prospeccao): Lead bruto -> estruturado por IA em LeadEmpresa/LeadEndereco", "Os dois desembocam em Proposal, e os quatro campos sao opcionais no schema - uma cotacao pode citar so um dos caminhos, os dois, ou nenhum", "Vale confirmar com o negocio se as duas origens sao mesmo mutuamente independentes"] },
+    { "dot": "rose", "title": "Fora deste desenho (secundarias)", "items": ["Lixeira: ClienteExcluido, EnderecoExcluido | Rastro de sync: HistoricoSincronizacao, LogAlteracaoIXC (ver diagrama 07)", "E-mail de cotacao: EmailCotacaoRespostaSync, EmailCotacaoRespostaImportacao (esta aponta para Proposal)", "Configuracao (app core_admin): AutomacaoMenu, AcessoBancoDados, ConfiguracaoEmailEnvio, TesteConexaoIXC - nao sao dominio", "Auditoria: LoginAuditoria, RestoreBackupAuditoria, CotacaoStatusAuditoria (aponta para Proposal), mais 10 models proxy de leitura", "RegistroHistorico usa GenericForeignKey: pendura em QUALQUER entidade via ContentType, por isso nao tem seta para cada uma", "CampoValor tambem usa GenericForeignKey (RE, RI ou Escola) - mesmo motivo, sem seta para cada alvo; RedeExterna/RedeInterna/Escola tambem geram RegistroHistorico (RN-029/040/042) e ha um EmailEscolaRespostaImportacao dedicado (apps.core), fora deste desenho"] },
+    { "dot": "orange", "title": "Dominio Escola/RE-RI (apps.escolas, Epic 14/15, ADR-010/012/014)", "items": ["Escola e um model novo e independente (ADR-010): NAO tem relacao com Cliente/Endereco/Proposal - dados vem do DashboardEACE, guardados tambem em bruto (JSONField dados_api)", "RedeExterna (RE) e RedeInterna (RI) sao dois processos 1:1 com Escola (ADR-012) - cada um com seu proprio Setor/Status/Parceiro, podendo divergir entre si", "Parceiro de RE/RI e o mesmo catalogo partners.Partner ja usado pela cotacao (unica ponte real entre os dois dominios)", "Processo/Setor/SetorStatus formam um catalogo generico (ADR-014): o mesmo Setor existe tanto no Processo de RE quanto no de RI, por nome"] },
+    { "dot": "slate", "title": "Vinculo por nome (texto), nao por chave estrangeira", "items": ["Campo.setor_nome e SetorEscopo.setor_nome sao CharField comparados por texto ao nome de Setor (RN-025/031) - decisao deliberada (ADR-019) para o mesmo Campo valer tanto para RE quanto para RI, sem exigir uma linha especifica de Setor de um Processo", "Por isso nao ha seta desenhada de Campo/SetorEscopo para Setor - seria uma FK que nao existe no banco"] },
+    { "dot": "amber", "title": "SetorEscopo: implementacao pendente de rework (PO-062)", "items": ["SetorEscopo existe hoje no banco (migration ja aplicada em speed_prod), mas e a versao da ADR-022 - corrigida pela ADR-023 apos o usuario apontar entendimento errado do pedido original", "PO-062 (Planejada) ainda precisa remover/substituir este model pelos corretos SetorInformativo/CampoInformativo (ADR-023) - nao feito nesta auditoria de diagramas"] },
+    { "dot": "rose", "title": "ADR-025 (2026-08-11): generalizacao de subatividades adiada", "items": ["Usuario avaliou transformar RE/RI num catalogo administravel de tipos de subatividade (criado pelo usuario no Admin, sem Dev) e decidiu adiar - novas subatividades continuam sendo criadas em codigo, no mesmo molde de RE/RI, ate nova decisao", "Tambem avaliado e adiado: suportar mais de uma atividade principal alem de Escola", "Este diagrama reflete somente o que existe hoje (RE e RI) - nenhuma extensao em andamento e desenhada aqui enquanto nao estiver concluida e validada"] }
+  ]
+}

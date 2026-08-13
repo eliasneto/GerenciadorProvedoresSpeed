@@ -1,0 +1,77 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "05 · Modulos e dependencias - quem chama quem",
+    "subtitle": "Leitura 5 de 7 · Apps Django do monolito e o grafo de importacao entre eles - levantado em 2026-07-29 (producao, sem testes), atualizado em 2026-08-03 apos PO-032/PO-036 e em 2026-08-11 com apps.escolas",
+    "output": "docs/diagrams/modulos-dependencias.html",
+    "quality_profile": "standard",
+    "views": [
+      {
+        "id": "todos",
+        "label": "Todos os modulos",
+        "focus": ["integracoes_api", "core_admin", "backoffice", "leads", "partners", "auditoria", "core", "clientes", "escolas"],
+        "note": "Nove apps Django no mesmo monolito. clientes e o unico que nao importa nenhum outro."
+      },
+      {
+        "id": "ciclos",
+        "label": "Ciclos resolvidos (historico)",
+        "focus": ["core", "core_admin", "backoffice", "leads", "partners", "auditoria"],
+        "note": "6 apps estavam em 5 ciclos (2026-07-29). PO-032 (concluida) e PO-036 (aguardando QA) eliminaram os 5 - ordem de camada na ADR-007 item 7."
+      },
+      {
+        "id": "base",
+        "label": "Camada base hoje",
+        "focus": ["clientes", "core", "partners", "leads"],
+        "note": "clientes e core sao as folhas limpas da camada 0/1 - core deixou de importar leads/partners/core_admin (PO-032, QA aprovou em 2026-07-30)."
+      }
+    ]
+  },
+  "components": [
+    { "id": "integracoes_api", "type": "frontend", "label": "integracoes_api", "sublabel": "API publica v1 (JWT) - sem models", "tag": "camada 3 - entrada", "pos": [40, 160], "size": [200, 64] },
+    { "id": "leads", "type": "backend", "label": "leads", "sublabel": "LeadEmpresa, LeadEndereco, Lead", "tag": "camada 1 - dominio", "pos": [280, 160], "size": [200, 64] },
+    { "id": "partners", "type": "backend", "label": "partners", "sublabel": "Partner, PartnerPlan, Proposal", "tag": "camada 1 - dominio", "pos": [520, 160], "size": [200, 64] },
+    { "id": "auditoria", "type": "backend", "label": "auditoria", "sublabel": "proxies de leitura sobre core/clientes", "tag": "camada 2 - aplicacao", "pos": [760, 160], "size": [200, 64] },
+    { "id": "backoffice", "type": "backend", "label": "backoffice", "sublabel": "automacoes IXC - sem models", "tag": "camada 2 - aplicacao", "pos": [1000, 160], "size": [200, 64] },
+    { "id": "core_admin", "type": "backend", "label": "core_admin", "sublabel": "configuracao e telas de automacao", "tag": "camada 2 - aplicacao", "pos": [1240, 160], "size": [200, 64] },
+
+    { "id": "core", "type": "security", "label": "core", "sublabel": "User, RegistroHistorico, IntegrationAudit", "tag": "camada 0 - base (5 ciclos resolvidos: PO-032/036)", "pos": [380, 520], "size": [240, 64] },
+    { "id": "clientes", "type": "database", "label": "clientes", "sublabel": "Cliente, Endereco, HistoricoSincronizacao", "tag": "camada 1 - app-folha limpo", "pos": [900, 520], "size": [240, 64] },
+
+    { "id": "escolas", "type": "backend", "label": "escolas", "sublabel": "Escola, RedeExterna/Interna, Processo/Setor/Campo", "tag": "camada 1 - dominio (novo, Epic 14/15)", "pos": [40, 680], "size": [280, 64] }
+  ],
+  "boundaries": [
+    { "kind": "region", "label": "Monolito Django - todos no mesmo deploy", "wraps": ["integracoes_api", "core_admin", "backoffice", "leads", "partners", "auditoria", "core", "clientes", "escolas"] }
+  ],
+  "connections": [
+    { "id": "leads-partners", "from": "leads", "to": "partners", "variant": "default", "fromSide": "right", "toSide": "left" },
+
+    { "id": "leads-escolas", "from": "leads", "to": "escolas", "label": "grid/telas de RE-RI", "variant": "default", "fromSide": "left", "toSide": "top", "via": [[260, 192], [260, 650], [180, 650]], "labelAt": [140, 600] },
+    { "id": "coreadmin-escolas", "from": "core_admin", "to": "escolas", "label": "Processos/Campos/Setor", "variant": "default", "fromSide": "bottom", "toSide": "right", "via": [[1380, 224], [1380, 750], [320, 750]], "labelAt": [1000, 750] },
+    { "id": "escolas-partners", "from": "escolas", "to": "partners", "label": "parceiro (RE/RI)", "variant": "default", "fromSide": "right", "toSide": "left", "via": [[260, 712], [260, 100], [520, 100]], "labelAt": [470, 105] },
+
+    { "id": "coreadmin-leads", "from": "core_admin", "to": "leads", "variant": "default", "fromSide": "top", "toSide": "top", "via": [[1340, 20], [380, 20]] },
+    { "id": "api-partners", "from": "integracoes_api", "to": "partners", "variant": "default", "fromSide": "top", "toSide": "top", "via": [[140, 100], [620, 100]] },
+
+    { "id": "leads-core", "from": "leads", "to": "core", "variant": "default", "fromSide": "bottom", "toSide": "top", "via": [[380, 250], [500, 250]] },
+    { "id": "partners-core", "from": "partners", "to": "core", "variant": "default", "fromSide": "bottom", "toSide": "top", "via": [[620, 270], [500, 270]] },
+    { "id": "coreadmin-core", "from": "core_admin", "to": "core", "variant": "default", "fromSide": "bottom", "toSide": "top", "via": [[1340, 400], [500, 400]] },
+    { "id": "backoffice-core", "from": "backoffice", "to": "core", "variant": "default", "fromSide": "bottom", "toSide": "top", "via": [[1100, 440], [500, 440]] },
+    { "id": "auditoria-core", "from": "auditoria", "to": "core", "variant": "default", "fromSide": "bottom", "toSide": "top", "via": [[860, 470], [500, 470]] },
+
+    { "id": "api-clientes", "from": "integracoes_api", "to": "clientes", "variant": "default", "fromSide": "bottom", "toSide": "top", "via": [[140, 320], [1020, 320]] },
+    { "id": "leads-clientes", "from": "leads", "to": "clientes", "variant": "default", "fromSide": "bottom", "toSide": "top", "via": [[380, 360], [1020, 360]] },
+    { "id": "partners-clientes", "from": "partners", "to": "clientes", "variant": "default", "fromSide": "bottom", "toSide": "top", "via": [[620, 380], [1020, 380]] },
+    { "id": "auditoria-clientes", "from": "auditoria", "to": "clientes", "variant": "default", "fromSide": "bottom", "toSide": "top", "via": [[860, 420], [1020, 420]] },
+    { "id": "backoffice-clientes", "from": "backoffice", "to": "clientes", "variant": "default", "fromSide": "bottom", "toSide": "top", "via": [[1100, 490], [1020, 490]] }
+  ],
+  "cards": [
+    { "dot": "cyan", "title": "Sequencia de leitura - voce esta em 05", "items": ["01 · Contexto - quem usa e com quais sistemas externos falamos", "02 · Ciclo de vida da cotacao - o processo de negocio (do endereco ao desfecho)", "03 · Modelo de dominio - as entidades e como se relacionam", "04 · Arquitetura-alvo - camadas, gateways e estrutura de pastas", "05 · Modulos e dependencias (este diagrama) - quais apps existem e quem chama quem", "06 · Arquitetura do Modulo 1 - filas de entrada/saida ao IXC e fechamento de O.S.", "07 · Processos de automacoes e rotinas - o que roda, quando e por qual caminho", "ANEXO A · Integration Hub conceitual - alternativa descartada"] },
+    { "dot": "rose", "title": "Legenda", "items": ["Cinza solido = importacao em uma direcao so, dentro da ordem de camada aprovada", "A seta aponta de quem importa para quem e importado", "Setas vermelhas de ciclo foram removidas deste grafo - ver historico abaixo"] },
+    { "dot": "emerald", "title": "Estado atual (2026-08-03) - ciclos resolvidos", "items": ["PO-032 (Concluida, aprovada pelo QA em 2026-07-30): eliminou os 3 ciclos que nasciam de apps/core/views.py (core<->leads, core<->partners, core<->core_admin) - views migraram para o app dono do dado", "PO-036 (Aguardando QA): elimina os 2 ciclos restantes (core_admin<->backoffice e core_admin->auditoria->backoffice->core_admin) e a divergencia partners->auditoria, movendo AutomacaoMenu/automacoes_registry/integracoes_ixc e 2 models de auditoria para apps/core", "Criterio de aceite da PO-036: nenhum ciclo de importacao restante entre os 8 apps atuais"] },
+    { "dot": "rose", "title": "Ciclos encontrados em 2026-07-29 (historico - ja resolvidos)", "items": ["core <-> core_admin | core <-> leads | core <-> partners", "core_admin <-> backoffice | core_admin -> auditoria -> backoffice -> core_admin", "Tres deles nasciam de um unico arquivo: apps/core/views.py linhas 27-29, onde o app base importava de leads, partners e core_admin", "Todos eram imports de nivel de modulo (nao imports tardios dentro de funcao) - verificado por indentacao"] },
+    { "dot": "violet", "title": "Ordem de camada registrada (ADR-007 item 7)", "items": ["Emenda de 2026-07-29, confirmada pelo usuario: passa a valer como criterio de reprovacao em code review", "Camada 0 (base): core, integracoes/* | Camada 1 (dominio): clientes, partners, leads | Camada 2 (aplicacao): backoffice, core_admin, auditoria | Camada 3 (entrada): integracoes_api | Camada 4 (expansao): modulo2/<setor>", "Unica excecao de mesma camada aprovada: leads -> partners", "Verificacao manual em code review nesta fase; import-linter no CI so se o volume de apps crescer"] },
+    { "dot": "slate", "title": "Fora do grafo (mas acoplado)", "items": ["scripts/ importa de clientes(14), core(12), core_admin(2), partners(1) e backoffice(1) - nao aparece como no por nao ser app Django", "E mais um argumento para a ADR-007: codigo de producao em scripts/ acopla sem aparecer em nenhuma fronteira de modulo", "apps/integracoes/ (novo, PO-033, aguardando QA) e importado por core, backoffice, core_admin, leads e agora tambem escolas (dashboard_eace/) - camada 0 da ADR-007 item 7; tambem nao aparece como no por nao ser app Django (sem models nem AppConfig)", "O Modulo 2 ainda nao existe - quando existir, a ADR-006 exige que ele importe dos apps atuais e nunca o contrario"] },
+    { "dot": "orange", "title": "escolas: app novo (2026-08-11) - ADR-010, gatilho da ADR-010 cumprido", "items": ["Escola, RedeExterna/RedeInterna e o catalogo Processo/Setor/SetorStatus/Campo (Epic 14/15, PO-044 a PO-067), sem relacao com Cliente/Endereco/Proposal", "Importado por leads (grid/telas de Enderecos Lastmile, reaproveitando RN-023/026) e por core_admin (telas de Administracao: Processos, Campos, Setor)", "Importa partners (parceiro de RE/RI) e apps/integracoes/dashboard_eace (sincronizacao) - mesma direcao de camada da ADR-007 item 7, sem ciclo novo introduzido", "A ADR-010 condicionava atualizar este diagrama a credenciais confirmadas da API do DashboardEACE - cumprido desde a PO-046 (2622 escolas sincronizadas)"] }
+  ]
+}

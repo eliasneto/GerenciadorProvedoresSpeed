@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="generator" content="archify 2.12.0">
-  <title>Arquitetura Sistema Cotação MODULO 1 Diagram</title>
+  <title>06 · Arquitetura do Modulo 1 - filas de entrada/saida e fechamento de O.S. Diagram</title>
   <script>
     // Resolve the theme before first paint so light-preference users don't
     // see a dark flash. The toolbar script below re-applies with UI state.
@@ -2876,25 +2876,25 @@
       top: 1rem;
       right: 1rem;
       display: flex;
-      gap: 0.35rem;
+      gap: 0.5rem;
       z-index: 100;
     }
     .toolbar button {
       background: var(--toolbar-bg);
       color: var(--toolbar-text);
       border: 1px solid var(--toolbar-border);
-      padding: 0.32rem 0.55rem;
-      border-radius: 0.4rem;
+      padding: 0.5rem 0.875rem;
+      border-radius: 0.5rem;
       font-family: inherit;
-      font-size: 0.66rem;
+      font-size: 0.75rem;
       font-weight: 500;
       cursor: pointer;
       backdrop-filter: blur(8px);
       transition: background 0.15s, border-color 0.15s;
       display: inline-flex;
       align-items: center;
-      gap: 0.3rem;
-      min-height: 2.05rem;
+      gap: 0.375rem;
+      min-height: 2.75rem;
     }
     .toolbar button:hover {
       background: var(--toolbar-hover);
@@ -2905,10 +2905,10 @@
       outline-offset: 2px;
     }
     .toolbar #btn-motion[hidden] { display: none !important; }
-    .toolbar #btn-motion { min-width: 3.5rem; }
+    .toolbar #btn-motion { min-width: 4.4rem; }
     .toolbar #btn-motion:disabled { cursor: default; opacity: 0.58; }
     .toolbar .preset-wrap { position: relative; }
-    .toolbar #btn-preset { min-width: 4.3rem; }
+    .toolbar #btn-preset { min-width: 5.4rem; }
     .preset-control-mark {
       width: 0.58rem;
       height: 0.58rem;
@@ -4496,12 +4496,12 @@
     <div class="header">
       <div class="header-row">
         <div class="pulse-dot"></div>
-        <h1>Arquitetura Sistema Cotação MODULO 1</h1>
+        <h1>06 · Arquitetura do Modulo 1 - filas de entrada/saida e fechamento de O.S.</h1>
       </div>
-      <p class="subtitle">Modulo 2 isolado com kill switch, tres tabelas de fila intermediaria e fechamento de O.S. sincrono com fallback (ADR-006)</p>
+      <p class="subtitle">Leitura 6 de 7 · Sistema atual (Modulo 1) com as tres filas intermediarias e o fechamento de O.S. sincrono com fallback (ADR-006). O Modulo 2 aparece so como espaco reservado - ainda sera desenhado</p>
     </div>
 
-    <script id="archify-guided-views-data" type="application/json">[{"id":"isolamento-modulo2","label":"Isolamento do Modulo 2","focus":["entrada","servicos","modulo2_apps","kill_switch"],"note":"Modulo 2 depende do sistema atual; o sistema atual nunca depende do Modulo 2 (itens 2, 3 e 4)."},{"id":"entrada-os","label":"Entrada de O.S. (item 7)","focus":["ixc","ixc_gateway","tabela_entrada_os","consumo_os","servicos"],"note":"IXCGateway busca no IXC e grava na fila intermediaria; hoje sem agendamento real (so manual) - proposto 4h."},{"id":"entrada-cliente","label":"Entrada de cliente/login (item 7 ampliado)","focus":["ixc","ixc_gateway","tabela_entrada_cliente","consumo_cliente","servicos"],"note":"Mesmo padrao da entrada de O.S., ja agendado hoje (real) a cada 4h via docker-compose."},{"id":"fechamento-os","label":"Fechamento de O.S. (item 8)","focus":["servicos","ixc_gateway","ixc","tabela_saida_os","rotina_envio"],"note":"Fast path sincrono; falha ou timeout cai na fila intermediaria de saida sem reverter o fechamento local."}]</script>
+    <script id="archify-guided-views-data" type="application/json">[{"id":"isolamento-modulo2","label":"Isolamento do Modulo 2","focus":["entrada","servicos","modulo2_apps","kill_switch"],"note":"Modulo 2 depende do sistema atual; o sistema atual nunca depende do Modulo 2 (itens 2, 3 e 4)."},{"id":"entrada-os","label":"Entrada de O.S. (item 7)","focus":["busca_os","ixc_gateway","ixc","tabela_entrada_os","consumo_os","servicos"],"note":"Busca le o IXC pelo gateway e grava na fila; o consumo e rotina separada. Sem agendamento real hoje (so manual) - proposto 4h."},{"id":"entrada-cliente","label":"Entrada de cliente/login (item 7 ampliado)","focus":["busca_cliente","ixc_gateway","ixc","tabela_entrada_cliente","consumo_cliente","servicos"],"note":"Mesmo padrao da entrada de O.S. - busca e consumo separados pela fila. Ja agendado hoje (real) a cada 4h via docker-compose."},{"id":"fechamento-os","label":"Fechamento de O.S. (item 8)","focus":["servicos","ixc_gateway","ixc","tabela_saida_os","rotina_envio"],"note":"Fast path sincrono; falha ou timeout cai na fila intermediaria de saida sem reverter o fechamento local."}]</script>
 
     <div class="guided-views no-print" id="guided-views" hidden aria-label="Guided diagram views">
       <button id="guided-view-prev" type="button" aria-label="Previous guided view" title="Previous guided view ([)">&#8592;</button>
@@ -4545,8 +4545,8 @@
     <!-- Main Diagram -->
     <div class="diagram-container" data-detail-level="map">
       <svg viewBox="0 0 1560 1002" role="img" aria-labelledby="archify-diagram-title archify-diagram-description" data-preset="classic" data-quality-profile="standard">
-        <title id="archify-diagram-title">Arquitetura Sistema Cotação MODULO 1</title>
-        <desc id="archify-diagram-description">Modulo 2 isolado com kill switch, tres tabelas de fila intermediaria e fechamento de O.S. sincrono com fallback (ADR-006)</desc>
+        <title id="archify-diagram-title">06 · Arquitetura do Modulo 1 - filas de entrada/saida e fechamento de O.S.</title>
+        <desc id="archify-diagram-description">Leitura 6 de 7 · Sistema atual (Modulo 1) com as tres filas intermediarias e o fechamento de O.S. sincrono com fallback (ADR-006). O Modulo 2 aparece so como espaco reservado - ainda sera desenhado</desc>
         <!-- Definitions -->
         <defs>
           <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
@@ -4577,20 +4577,22 @@
         <path data-edge-from="usuarios" data-edge-to="entrada" data-edge-label="acessa" data-edge-key="0" data-edge-id="usuarios-entrada" data-composition-points="180,532;250,532" d="M 180 532 L 250 532" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
         <path data-edge-from="entrada" data-edge-to="servicos" data-edge-label="chama" data-edge-key="1" data-edge-id="entrada-servicos" data-composition-points="400,532;480,532" d="M 400 532 L 480 532" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
         <path data-edge-from="tabela_entrada_os" data-edge-to="consumo_os" data-edge-label="le pendentes" data-edge-key="2" data-edge-id="tabelaos-consumoos" data-composition-points="900,132;675,132" d="M 900 132 L 675 132" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
-        <path data-edge-from="ixc_gateway" data-edge-to="tabela_entrada_os" data-edge-label="grava pendente (O.S. lastmile)" data-edge-key="3" data-edge-id="gateway-tabelaos" data-composition-points="1000,500;1000,164" d="M 1000 500 L 1000 164" class="a-emphasis" stroke-width="1.8" marker-end="url(#arrowhead-emphasis)"/>
-        <path data-edge-from="consumo_os" data-edge-to="servicos" data-edge-label="chama - aplica regra" data-edge-key="4" data-edge-id="consumoos-servicos" data-composition-points="575,164;575,500" d="M 575 164 L 575 500" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
-        <path data-edge-from="tabela_entrada_cliente" data-edge-to="consumo_cliente" data-edge-label="le pendentes" data-edge-key="5" data-edge-id="tabelacliente-consumocliente" data-composition-points="650,282;520,282" d="M 650 282 L 520 282" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
-        <path data-edge-from="ixc_gateway" data-edge-to="tabela_entrada_cliente" data-edge-label="grava pendente (clientes/login)" data-edge-key="6" data-edge-id="gateway-tabelacliente" data-composition-points="900,532;900,282;850,282" d="M 900 532 L 900 290 Q 900 282 892 282 L 850 282" class="a-emphasis" stroke-width="1.8" marker-end="url(#arrowhead-emphasis)"/>
-        <path data-edge-from="consumo_cliente" data-edge-to="servicos" data-edge-label="chama - grava no dominio" data-edge-key="7" data-edge-id="consumocliente-servicos" data-composition-points="420,314;420,532;480,532" d="M 420 314 L 420 524 Q 420 532 428 532 L 480 532" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
-        <path data-edge-from="servicos" data-edge-to="ixc_gateway" data-edge-label="chama - fast path sincrono" data-edge-key="8" data-edge-id="servicos-gateway" data-composition-points="670,532;900,532" d="M 670 532 L 900 532" class="a-emphasis" stroke-width="1.8" marker-end="url(#arrowhead-emphasis)"/>
-        <path data-edge-from="ixc_gateway" data-edge-to="ixc" data-edge-label="GET - clientes/login" data-edge-key="9" data-edge-id="gwixc-get-cliente" data-composition-points="1100,518;1350,518" d="M 1100 518 L 1350 518" class="a-emphasis" stroke-width="1.8" marker-end="url(#arrowhead-emphasis)"/>
-        <path data-edge-from="ixc_gateway" data-edge-to="ixc" data-edge-label="GET - O.S. lastmile" data-edge-key="10" data-edge-id="gwixc-get-os" data-composition-points="1100,532;1350,532" d="M 1100 532 L 1350 532" class="a-emphasis" stroke-width="1.8" marker-end="url(#arrowhead-emphasis)"/>
-        <path data-edge-from="ixc_gateway" data-edge-to="ixc" data-edge-label="POST - fecha O.S." data-edge-key="11" data-edge-id="gwixc-post-fecha" data-composition-points="1100,546;1350,546" d="M 1100 546 L 1350 546" class="a-emphasis" stroke-width="1.8" marker-end="url(#arrowhead-emphasis)"/>
-        <path data-edge-from="servicos" data-edge-to="tabela_saida_os" data-edge-label="falha/timeout: grava pendente" data-edge-key="12" data-edge-id="servicos-tabelasaida" data-composition-points="575,564;575,712;650,712" d="M 575 564 L 575 704 Q 575 712 583 712 L 650 712" class="a-security" stroke-width="1.5" marker-end="url(#arrowhead-security)"/>
-        <path data-edge-from="tabela_saida_os" data-edge-to="rotina_envio" data-edge-label="le pendente/erro" data-edge-key="13" data-edge-id="tabelasaida-rotinaenvio" data-composition-points="850,712;900,712" d="M 850 712 L 900 712" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
-        <path data-edge-from="rotina_envio" data-edge-to="ixc_gateway" data-edge-label="chama - reprocessa (POST)" data-edge-key="14" data-edge-id="rotinaenvio-gateway" data-composition-points="1000,680;1000,564" d="M 1000 680 L 1000 564" class="a-emphasis" stroke-width="1.8" marker-end="url(#arrowhead-emphasis)"/>
-        <path data-edge-from="kill_switch" data-edge-to="modulo2_apps" data-edge-label="libera/bloqueia UI + jobs" data-edge-key="15" data-edge-id="killswitch-modulo2" data-composition-points="400,882;480,882" d="M 400 882 L 480 882" class="a-security" stroke-width="1.5" marker-end="url(#arrowhead-security)"/>
-        <path data-edge-from="modulo2_apps" data-edge-to="servicos" data-edge-label="chama - via unica" data-edge-key="16" data-edge-id="modulo2-servicos" data-composition-points="575,850;575,564" d="M 575 850 L 575 564" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+        <path data-edge-from="busca_os" data-edge-to="tabela_entrada_os" data-edge-label="grava pendente" data-edge-key="3" data-edge-id="buscaos-tabelaos" data-composition-points="1250,132;1100,132" d="M 1250 132 L 1100 132" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+        <path data-edge-from="busca_os" data-edge-to="ixc_gateway" data-edge-label="le O.S. via gateway (polling)" data-edge-key="4" data-edge-id="buscaos-gateway" data-composition-points="1350,164;1350,332;1000,332;1000,500" d="M 1350 164 L 1350 324 Q 1350 332 1342 332 L 1008 332 Q 1000 332 1000 340 L 1000 500" class="a-emphasis" stroke-width="1.8" marker-end="url(#arrowhead-emphasis)"/>
+        <path data-edge-from="consumo_os" data-edge-to="servicos" data-edge-label="chama - aplica regra" data-edge-key="5" data-edge-id="consumoos-servicos" data-composition-points="575,164;575,500" d="M 575 164 L 575 500" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+        <path data-edge-from="tabela_entrada_cliente" data-edge-to="consumo_cliente" data-edge-label="le pendentes" data-edge-key="6" data-edge-id="tabelacliente-consumocliente" data-composition-points="650,282;520,282" d="M 650 282 L 520 282" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+        <path data-edge-from="busca_cliente" data-edge-to="tabela_entrada_cliente" data-edge-label="grava pendente" data-edge-key="7" data-edge-id="buscacliente-tabelacliente" data-composition-points="980,282;850,282" d="M 980 282 L 850 282" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+        <path data-edge-from="busca_cliente" data-edge-to="ixc_gateway" data-edge-label="le cliente/login (polling)" data-edge-key="8" data-edge-id="buscacliente-gateway" data-composition-points="1080,314;1040,314;1040,500;1000,500" d="M 1080 314 L 1048 314 Q 1040 314 1040 322 L 1040 492 Q 1040 500 1032 500 L 1000 500" class="a-emphasis" stroke-width="1.8" marker-end="url(#arrowhead-emphasis)"/>
+        <path data-edge-from="consumo_cliente" data-edge-to="servicos" data-edge-label="chama - grava no dominio" data-edge-key="9" data-edge-id="consumocliente-servicos" data-composition-points="420,314;420,532;480,532" d="M 420 314 L 420 524 Q 420 532 428 532 L 480 532" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+        <path data-edge-from="servicos" data-edge-to="ixc_gateway" data-edge-label="chama - fast path sincrono" data-edge-key="10" data-edge-id="servicos-gateway" data-composition-points="670,532;900,532" d="M 670 532 L 900 532" class="a-emphasis" stroke-width="1.8" marker-end="url(#arrowhead-emphasis)"/>
+        <path data-edge-from="ixc_gateway" data-edge-to="ixc" data-edge-label="GET - clientes/login" data-edge-key="11" data-edge-id="gwixc-get-cliente" data-composition-points="1100,518;1350,518" d="M 1100 518 L 1350 518" class="a-emphasis" stroke-width="1.8" marker-end="url(#arrowhead-emphasis)"/>
+        <path data-edge-from="ixc_gateway" data-edge-to="ixc" data-edge-label="GET - O.S. lastmile" data-edge-key="12" data-edge-id="gwixc-get-os" data-composition-points="1100,532;1350,532" d="M 1100 532 L 1350 532" class="a-emphasis" stroke-width="1.8" marker-end="url(#arrowhead-emphasis)"/>
+        <path data-edge-from="ixc_gateway" data-edge-to="ixc" data-edge-label="POST - fecha O.S." data-edge-key="13" data-edge-id="gwixc-post-fecha" data-composition-points="1100,546;1350,546" d="M 1100 546 L 1350 546" class="a-emphasis" stroke-width="1.8" marker-end="url(#arrowhead-emphasis)"/>
+        <path data-edge-from="servicos" data-edge-to="tabela_saida_os" data-edge-label="falha/timeout: grava pendente" data-edge-key="14" data-edge-id="servicos-tabelasaida" data-composition-points="575,564;575,712;650,712" d="M 575 564 L 575 704 Q 575 712 583 712 L 650 712" class="a-security" stroke-width="1.5" marker-end="url(#arrowhead-security)"/>
+        <path data-edge-from="tabela_saida_os" data-edge-to="rotina_envio" data-edge-label="le pendente/erro" data-edge-key="15" data-edge-id="tabelasaida-rotinaenvio" data-composition-points="850,712;900,712" d="M 850 712 L 900 712" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+        <path data-edge-from="rotina_envio" data-edge-to="ixc_gateway" data-edge-label="chama - reprocessa (POST)" data-edge-key="16" data-edge-id="rotinaenvio-gateway" data-composition-points="1000,680;1000,564" d="M 1000 680 L 1000 564" class="a-emphasis" stroke-width="1.8" marker-end="url(#arrowhead-emphasis)"/>
+        <path data-edge-from="kill_switch" data-edge-to="modulo2_apps" data-edge-label="libera/bloqueia UI + jobs" data-edge-key="17" data-edge-id="killswitch-modulo2" data-composition-points="400,882;480,882" d="M 400 882 L 480 882" class="a-security" stroke-width="1.5" marker-end="url(#arrowhead-security)"/>
+        <path data-edge-from="modulo2_apps" data-edge-to="servicos" data-edge-label="chama - via unica" data-edge-key="18" data-edge-id="modulo2-servicos" data-composition-points="575,850;575,564" d="M 575 850 L 575 564" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
 
         <!-- Components -->
         <g id="node-consumo_os" data-node-id="consumo_os" data-node-label="Consumo de O.S." tabindex="0" role="button" aria-label="Focus Consumo de O.S., rotina agendada - aplica regra de dominio, Architecture component" aria-pressed="false" data-node-kind="backend" data-node-sublabel="rotina agendada - aplica regra de dominio" data-node-tag="entrada O.S." data-node-context="Architecture component">
@@ -4605,8 +4607,8 @@
         <text data-detail="fine" x="575" y="156" class="t-backend" font-size="7" text-anchor="middle">entrada O.S.</text>
         </g>
 
-        <g id="node-tabela_entrada_os" data-node-id="tabela_entrada_os" data-node-label="Fila interm. entrada O.S." tabindex="0" role="button" aria-label="Focus Fila interm. entrada O.S., fila - sem agendamento hoje (so manual), Architecture component" aria-pressed="false" data-node-kind="database" data-node-sublabel="fila - sem agendamento hoje (so manual)" data-node-tag="entrada O.S. - proposto: 4h" data-node-context="Architecture component">
-          <title>Fila interm. entrada O.S. · fila - sem agendamento hoje (so manual) · Architecture component · entrada O.S. - proposto: 4h</title>
+        <g id="node-tabela_entrada_os" data-node-id="tabela_entrada_os" data-node-label="Fila interm. entrada O.S." tabindex="0" role="button" aria-label="Focus Fila interm. entrada O.S., fila - status: pendente, Architecture component" aria-pressed="false" data-node-kind="database" data-node-sublabel="fila - status: pendente" data-node-tag="entrada O.S." data-node-context="Architecture component">
+          <title>Fila interm. entrada O.S. · fila - status: pendente · Architecture component · entrada O.S.</title>
           <rect x="900" y="100" width="200" height="64" rx="6" class="c-mask"/>
           <rect x="900" y="100" width="200" height="64" rx="6" class="c-database" stroke-width="1.5"/>
           <g aria-hidden="true" data-semantic-sigil="database" class="semantic-sigil s-database" transform="translate(906 106) scale(0.6875)">
@@ -4614,8 +4616,20 @@
             <path d="M3 4v8c0 1.1 2.2 2 5 2s5-.9 5-2V4M3 8c0 1.1 2.2 2 5 2s5-.9 5-2"/>
           </g>
           <text data-detail-anchor x="1000" y="130" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Fila interm. entrada O.S.</text>
-        <text data-detail="context" x="1000" y="146" class="t-muted" font-size="9" text-anchor="middle">fila - sem agendamento hoje (so manual)</text>
-        <text data-detail="fine" x="1000" y="156" class="t-database" font-size="7" text-anchor="middle">entrada O.S. - proposto: 4h</text>
+        <text data-detail="context" x="1000" y="146" class="t-muted" font-size="9" text-anchor="middle">fila - status: pendente</text>
+        <text data-detail="fine" x="1000" y="156" class="t-database" font-size="7" text-anchor="middle">entrada O.S.</text>
+        </g>
+
+        <g id="node-busca_os" data-node-id="busca_os" data-node-label="Busca de O.S." tabindex="0" role="button" aria-label="Focus Busca de O.S., polling - ixc_primeira_os.py, Architecture component" aria-pressed="false" data-node-kind="backend" data-node-sublabel="polling - ixc_primeira_os.py" data-node-tag="sem agendamento hoje - proposto: 4h" data-node-context="Architecture component">
+          <title>Busca de O.S. · polling - ixc_primeira_os.py · Architecture component · sem agendamento hoje - proposto: 4h</title>
+          <rect x="1250" y="100" width="200" height="64" rx="6" class="c-mask"/>
+          <rect x="1250" y="100" width="200" height="64" rx="6" class="c-backend" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(1256 106) scale(0.6875)">
+            <path d="M6 3 3 8l3 5M10 3l3 5-3 5"/>
+          </g>
+          <text data-detail-anchor x="1350" y="130" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Busca de O.S.</text>
+        <text data-detail="context" x="1350" y="146" class="t-muted" font-size="9" text-anchor="middle">polling - ixc_primeira_os.py</text>
+        <text data-detail="fine" x="1350" y="156" class="t-backend" font-size="7" text-anchor="middle">sem agendamento hoje - proposto: 4h</text>
         </g>
 
         <g id="node-consumo_cliente" data-node-id="consumo_cliente" data-node-label="Consumo cliente/login" tabindex="0" role="button" aria-label="Focus Consumo cliente/login, rotina agendada - salvar_clientes_no_django, Architecture component" aria-pressed="false" data-node-kind="backend" data-node-sublabel="rotina agendada - salvar_clientes_no_django" data-node-tag="entrada cliente/login" data-node-context="Architecture component">
@@ -4630,8 +4644,8 @@
         <text data-detail="fine" x="420" y="306" class="t-backend" font-size="7" text-anchor="middle">entrada cliente/login</text>
         </g>
 
-        <g id="node-tabela_entrada_cliente" data-node-id="tabela_entrada_cliente" data-node-label="Fila interm. cliente/login" tabindex="0" role="button" aria-label="Focus Fila interm. cliente/login, fila - agendado hoje a cada 4h (real), Architecture component" aria-pressed="false" data-node-kind="database" data-node-sublabel="fila - agendado hoje a cada 4h (real)" data-node-tag="entrada cliente/login" data-node-context="Architecture component">
-          <title>Fila interm. cliente/login · fila - agendado hoje a cada 4h (real) · Architecture component · entrada cliente/login</title>
+        <g id="node-tabela_entrada_cliente" data-node-id="tabela_entrada_cliente" data-node-label="Fila interm. cliente/login" tabindex="0" role="button" aria-label="Focus Fila interm. cliente/login, fila - status: pendente, Architecture component" aria-pressed="false" data-node-kind="database" data-node-sublabel="fila - status: pendente" data-node-tag="entrada cliente/login" data-node-context="Architecture component">
+          <title>Fila interm. cliente/login · fila - status: pendente · Architecture component · entrada cliente/login</title>
           <rect x="650" y="250" width="200" height="64" rx="6" class="c-mask"/>
           <rect x="650" y="250" width="200" height="64" rx="6" class="c-database" stroke-width="1.5"/>
           <g aria-hidden="true" data-semantic-sigil="database" class="semantic-sigil s-database" transform="translate(656 256) scale(0.6875)">
@@ -4639,8 +4653,20 @@
             <path d="M3 4v8c0 1.1 2.2 2 5 2s5-.9 5-2V4M3 8c0 1.1 2.2 2 5 2s5-.9 5-2"/>
           </g>
           <text data-detail-anchor x="750" y="280" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Fila interm. cliente/login</text>
-        <text data-detail="context" x="750" y="296" class="t-muted" font-size="9" text-anchor="middle">fila - agendado hoje a cada 4h (real)</text>
+        <text data-detail="context" x="750" y="296" class="t-muted" font-size="9" text-anchor="middle">fila - status: pendente</text>
         <text data-detail="fine" x="750" y="306" class="t-database" font-size="7" text-anchor="middle">entrada cliente/login</text>
+        </g>
+
+        <g id="node-busca_cliente" data-node-id="busca_cliente" data-node-label="Busca cliente/login" tabindex="0" role="button" aria-label="Focus Busca cliente/login, polling - ixc_api_incremental.py, Architecture component" aria-pressed="false" data-node-kind="backend" data-node-sublabel="polling - ixc_api_incremental.py" data-node-tag="agendado hoje: 4h (real)" data-node-context="Architecture component">
+          <title>Busca cliente/login · polling - ixc_api_incremental.py · Architecture component · agendado hoje: 4h (real)</title>
+          <rect x="980" y="250" width="200" height="64" rx="6" class="c-mask"/>
+          <rect x="980" y="250" width="200" height="64" rx="6" class="c-backend" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(986 256) scale(0.6875)">
+            <path d="M6 3 3 8l3 5M10 3l3 5-3 5"/>
+          </g>
+          <text data-detail-anchor x="1080" y="280" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Busca cliente/login</text>
+        <text data-detail="context" x="1080" y="296" class="t-muted" font-size="9" text-anchor="middle">polling - ixc_api_incremental.py</text>
+        <text data-detail="fine" x="1080" y="306" class="t-backend" font-size="7" text-anchor="middle">agendado hoje: 4h (real)</text>
         </g>
 
         <g id="node-usuarios" data-node-id="usuarios" data-node-label="Usuarios" tabindex="0" role="button" aria-label="Focus Usuarios, acesso web interno, Architecture component" aria-pressed="false" data-node-kind="external" data-node-sublabel="acesso web interno" data-node-context="Architecture component">
@@ -4680,16 +4706,16 @@
         <text data-detail="context" x="575" y="546" class="t-muted" font-size="9" text-anchor="middle">regra de negocio - por app</text>
         </g>
 
-        <g id="node-ixc_gateway" data-node-id="ixc_gateway" data-node-label="IXCGateway" tabindex="0" role="button" aria-label="Focus IXCGateway, IXCClient - apps/core, Architecture component" aria-pressed="false" data-node-kind="backend" data-node-sublabel="IXCClient - apps/core" data-node-tag="gateway unico" data-node-context="Architecture component">
-          <title>IXCGateway · IXCClient - apps/core · Architecture component · gateway unico</title>
+        <g id="node-ixc_gateway" data-node-id="ixc_gateway" data-node-label="IXCGateway" tabindex="0" role="button" aria-label="Focus IXCGateway, IXCClient - apps/integracoes/ixc/, Architecture component" aria-pressed="false" data-node-kind="backend" data-node-sublabel="IXCClient - apps/integracoes/ixc/" data-node-tag="gateway unico - PO-033: aguardando QA" data-node-context="Architecture component">
+          <title>IXCGateway · IXCClient - apps/integracoes/ixc/ · Architecture component · gateway unico - PO-033: aguardando QA</title>
           <rect x="900" y="500" width="200" height="64" rx="6" class="c-mask"/>
           <rect x="900" y="500" width="200" height="64" rx="6" class="c-backend" stroke-width="1.5"/>
           <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(906 506) scale(0.6875)">
             <path d="M6 3 3 8l3 5M10 3l3 5-3 5"/>
           </g>
           <text data-detail-anchor x="1000" y="530" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">IXCGateway</text>
-        <text data-detail="context" x="1000" y="546" class="t-muted" font-size="9" text-anchor="middle">IXCClient - apps/core</text>
-        <text data-detail="fine" x="1000" y="556" class="t-backend" font-size="7" text-anchor="middle">gateway unico</text>
+        <text data-detail="context" x="1000" y="546" class="t-muted" font-size="9" text-anchor="middle">IXCClient - apps/integracoes/ixc/</text>
+        <text data-detail="fine" x="1000" y="556" class="t-backend" font-size="7" text-anchor="middle">gateway unico - PO-033: aguardando QA</text>
         </g>
 
         <g id="node-ixc" data-node-id="ixc" data-node-label="IXC" tabindex="0" role="button" aria-label="Focus IXC, webservice/v1 - sem webhook, Architecture component" aria-pressed="false" data-node-kind="external" data-node-sublabel="webservice/v1 - sem webhook" data-node-context="Architecture component">
@@ -4765,59 +4791,67 @@
           <rect x="816.2" y="106" width="67.6" height="14" rx="3" class="c-mask"/>
           <text x="850" y="116" class="t-muted" font-size="8" text-anchor="middle">le pendentes</text>
         </g>
-        <g data-detail="context" data-edge-from="ixc_gateway" data-edge-to="tabela_entrada_os" data-edge-label="grava pendente (O.S. lastmile)" data-edge-key="3" data-edge-id="gateway-tabelaos">
-          <rect x="998" y="340" width="154" height="14" rx="3" class="c-mask"/>
-          <text x="1075" y="350" class="t-backend" font-size="8" text-anchor="middle">grava pendente (O.S. lastmile)</text>
+        <g data-detail="context" data-edge-from="busca_os" data-edge-to="tabela_entrada_os" data-edge-label="grava pendente" data-edge-key="3" data-edge-id="buscaos-tabelaos">
+          <rect x="1136.4" y="106" width="77.2" height="14" rx="3" class="c-mask"/>
+          <text x="1175" y="116" class="t-muted" font-size="8" text-anchor="middle">grava pendente</text>
         </g>
-        <g data-detail="context" data-edge-from="consumo_os" data-edge-to="servicos" data-edge-label="chama - aplica regra" data-edge-key="4" data-edge-id="consumoos-servicos">
+        <g data-detail="context" data-edge-from="busca_os" data-edge-to="ixc_gateway" data-edge-label="le O.S. via gateway (polling)" data-edge-key="4" data-edge-id="buscaos-gateway">
+          <rect x="1100.4" y="312" width="149.2" height="14" rx="3" class="c-mask"/>
+          <text x="1175" y="322" class="t-backend" font-size="8" text-anchor="middle">le O.S. via gateway (polling)</text>
+        </g>
+        <g data-detail="context" data-edge-from="consumo_os" data-edge-to="servicos" data-edge-label="chama - aplica regra" data-edge-key="5" data-edge-id="consumoos-servicos">
           <rect x="517" y="318" width="106" height="14" rx="3" class="c-mask"/>
           <text x="570" y="328" class="t-muted" font-size="8" text-anchor="middle">chama - aplica regra</text>
         </g>
-        <g data-detail="context" data-edge-from="tabela_entrada_cliente" data-edge-to="consumo_cliente" data-edge-label="le pendentes" data-edge-key="5" data-edge-id="tabelacliente-consumocliente">
+        <g data-detail="context" data-edge-from="tabela_entrada_cliente" data-edge-to="consumo_cliente" data-edge-label="le pendentes" data-edge-key="6" data-edge-id="tabelacliente-consumocliente">
           <rect x="476.2" y="318" width="67.6" height="14" rx="3" class="c-mask"/>
           <text x="510" y="328" class="t-muted" font-size="8" text-anchor="middle">le pendentes</text>
         </g>
-        <g data-detail="context" data-edge-from="ixc_gateway" data-edge-to="tabela_entrada_cliente" data-edge-label="grava pendente (clientes/login)" data-edge-key="6" data-edge-id="gateway-tabelacliente">
-          <rect x="720.6" y="318" width="158.79999999999998" height="14" rx="3" class="c-mask"/>
-          <text x="800" y="328" class="t-backend" font-size="8" text-anchor="middle">grava pendente (clientes/login)</text>
+        <g data-detail="context" data-edge-from="busca_cliente" data-edge-to="tabela_entrada_cliente" data-edge-label="grava pendente" data-edge-key="7" data-edge-id="buscacliente-tabelacliente">
+          <rect x="876.4" y="256" width="77.2" height="14" rx="3" class="c-mask"/>
+          <text x="915" y="266" class="t-muted" font-size="8" text-anchor="middle">grava pendente</text>
         </g>
-        <g data-detail="context" data-edge-from="consumo_cliente" data-edge-to="servicos" data-edge-label="chama - grava no dominio" data-edge-key="7" data-edge-id="consumocliente-servicos">
+        <g data-detail="context" data-edge-from="busca_cliente" data-edge-to="ixc_gateway" data-edge-label="le cliente/login (polling)" data-edge-key="8" data-edge-id="buscacliente-gateway">
+          <rect x="1092.6" y="390" width="134.8" height="14" rx="3" class="c-mask"/>
+          <text x="1160" y="400" class="t-backend" font-size="8" text-anchor="middle">le cliente/login (polling)</text>
+        </g>
+        <g data-detail="context" data-edge-from="consumo_cliente" data-edge-to="servicos" data-edge-label="chama - grava no dominio" data-edge-key="9" data-edge-id="consumocliente-servicos">
           <rect x="307.4" y="460" width="125.19999999999999" height="14" rx="3" class="c-mask"/>
           <text x="370" y="470" class="t-muted" font-size="8" text-anchor="middle">chama - grava no dominio</text>
         </g>
-        <g data-detail="context" data-edge-from="servicos" data-edge-to="ixc_gateway" data-edge-label="chama - fast path sincrono" data-edge-key="8" data-edge-id="servicos-gateway">
+        <g data-detail="context" data-edge-from="servicos" data-edge-to="ixc_gateway" data-edge-label="chama - fast path sincrono" data-edge-key="10" data-edge-id="servicos-gateway">
           <rect x="717.6" y="492" width="134.8" height="14" rx="3" class="c-mask"/>
           <text x="785" y="502" class="t-backend" font-size="8" text-anchor="middle">chama - fast path sincrono</text>
         </g>
-        <g data-detail="context" data-edge-from="ixc_gateway" data-edge-to="ixc" data-edge-label="GET - clientes/login" data-edge-key="9" data-edge-id="gwixc-get-cliente">
+        <g data-detail="context" data-edge-from="ixc_gateway" data-edge-to="ixc" data-edge-label="GET - clientes/login" data-edge-key="11" data-edge-id="gwixc-get-cliente">
           <rect x="1097" y="468" width="106" height="14" rx="3" class="c-mask"/>
           <text x="1150" y="478" class="t-backend" font-size="8" text-anchor="middle">GET - clientes/login</text>
         </g>
-        <g data-detail="context" data-edge-from="ixc_gateway" data-edge-to="ixc" data-edge-label="GET - O.S. lastmile" data-edge-key="10" data-edge-id="gwixc-get-os">
+        <g data-detail="context" data-edge-from="ixc_gateway" data-edge-to="ixc" data-edge-label="GET - O.S. lastmile" data-edge-key="12" data-edge-id="gwixc-get-os">
           <rect x="1174.4" y="552" width="101.2" height="14" rx="3" class="c-mask"/>
           <text x="1225" y="562" class="t-backend" font-size="8" text-anchor="middle">GET - O.S. lastmile</text>
         </g>
-        <g data-detail="context" data-edge-from="ixc_gateway" data-edge-to="ixc" data-edge-label="POST - fecha O.S." data-edge-key="11" data-edge-id="gwixc-post-fecha">
+        <g data-detail="context" data-edge-from="ixc_gateway" data-edge-to="ixc" data-edge-label="POST - fecha O.S." data-edge-key="13" data-edge-id="gwixc-post-fecha">
           <rect x="1254.2" y="556" width="91.6" height="14" rx="3" class="c-mask"/>
           <text x="1300" y="566" class="t-backend" font-size="8" text-anchor="middle">POST - fecha O.S.</text>
         </g>
-        <g data-detail="context" data-edge-from="servicos" data-edge-to="tabela_saida_os" data-edge-label="falha/timeout: grava pendente" data-edge-key="12" data-edge-id="servicos-tabelasaida">
+        <g data-detail="context" data-edge-from="servicos" data-edge-to="tabela_saida_os" data-edge-label="falha/timeout: grava pendente" data-edge-key="14" data-edge-id="servicos-tabelasaida">
           <rect x="355.4" y="650" width="149.2" height="14" rx="3" class="c-mask"/>
           <text x="430" y="660" class="t-security" font-size="8" text-anchor="middle">falha/timeout: grava pendente</text>
         </g>
-        <g data-detail="context" data-edge-from="tabela_saida_os" data-edge-to="rotina_envio" data-edge-label="le pendente/erro" data-edge-key="13" data-edge-id="tabelasaida-rotinaenvio">
+        <g data-detail="context" data-edge-from="tabela_saida_os" data-edge-to="rotina_envio" data-edge-label="le pendente/erro" data-edge-key="15" data-edge-id="tabelasaida-rotinaenvio">
           <rect x="831.6" y="748" width="86.8" height="14" rx="3" class="c-mask"/>
           <text x="875" y="758" class="t-muted" font-size="8" text-anchor="middle">le pendente/erro</text>
         </g>
-        <g data-detail="context" data-edge-from="rotina_envio" data-edge-to="ixc_gateway" data-edge-label="chama - reprocessa (POST)" data-edge-key="14" data-edge-id="rotinaenvio-gateway">
+        <g data-detail="context" data-edge-from="rotina_envio" data-edge-to="ixc_gateway" data-edge-label="chama - reprocessa (POST)" data-edge-key="16" data-edge-id="rotinaenvio-gateway">
           <rect x="935" y="660" width="130" height="14" rx="3" class="c-mask"/>
           <text x="1000" y="670" class="t-backend" font-size="8" text-anchor="middle">chama - reprocessa (POST)</text>
         </g>
-        <g data-detail="context" data-edge-from="kill_switch" data-edge-to="modulo2_apps" data-edge-label="libera/bloqueia UI + jobs" data-edge-key="15" data-edge-id="killswitch-modulo2">
+        <g data-detail="context" data-edge-from="kill_switch" data-edge-to="modulo2_apps" data-edge-label="libera/bloqueia UI + jobs" data-edge-key="17" data-edge-id="killswitch-modulo2">
           <rect x="355" y="918" width="130" height="14" rx="3" class="c-mask"/>
           <text x="420" y="928" class="t-security" font-size="8" text-anchor="middle">libera/bloqueia UI + jobs</text>
         </g>
-        <g data-detail="context" data-edge-from="modulo2_apps" data-edge-to="servicos" data-edge-label="chama - via unica" data-edge-key="16" data-edge-id="modulo2-servicos">
+        <g data-detail="context" data-edge-from="modulo2_apps" data-edge-to="servicos" data-edge-label="chama - via unica" data-edge-key="18" data-edge-id="modulo2-servicos">
           <rect x="529.2" y="830" width="91.6" height="14" rx="3" class="c-mask"/>
           <text x="575" y="840" class="t-muted" font-size="8" text-anchor="middle">chama - via unica</text>
         </g>
@@ -5031,6 +5065,23 @@
     <div class="cards">
       <div class="card">
         <div class="card-header">
+          <div class="card-dot cyan"></div>
+          <h3>Sequencia de leitura - voce esta em 06</h3>
+        </div>
+        <ul>
+          <li>&bull; 01 · Contexto - quem usa e com quais sistemas externos falamos</li>
+          <li>&bull; 02 · Ciclo de vida da cotacao - o processo de negocio (do endereco ao desfecho)</li>
+          <li>&bull; 03 · Modelo de dominio - as entidades e como se relacionam</li>
+          <li>&bull; 04 · Arquitetura-alvo - camadas, gateways e estrutura de pastas</li>
+          <li>&bull; 05 · Modulos e dependencias - quais apps existem e quem chama quem</li>
+          <li>&bull; 06 · Arquitetura do Modulo 1 (este diagrama) - filas de entrada/saida ao IXC e fechamento de O.S.</li>
+          <li>&bull; 07 · Processos de automacoes e rotinas - o que roda, quando e por qual caminho</li>
+          <li>&bull; ANEXO A · Integration Hub conceitual - alternativa descartada</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
           <div class="card-dot emerald"></div>
           <h3>Legenda das setas</h3>
         </div>
@@ -5069,11 +5120,12 @@
       <div class="card">
         <div class="card-header">
           <div class="card-dot violet"></div>
-          <h3>Formato comum das tres tabelas (item 9)</h3>
+          <h3>Formato comum das tres tabelas (itens 9 e 10)</h3>
         </div>
         <ul>
           <li>&bull; status: pendente | processando | concluido | erro; mensagem_erro so quando status = erro</li>
           <li>&bull; tentativas, criado_em e atualizado_em completam o formato compartilhado</li>
+          <li>&bull; correlation_id (opcional, item 10): liga a linha ao IntegrationAudit ou requisicao de origem</li>
           <li>&bull; Campos comuns em classe abstrata Django (StagingBase, abstract = True); tres tabelas fisicas separadas</li>
           <li>&bull; Erro fica na propria linha da fila intermediaria - sem tabela de log de tentativas nesta fase</li>
         </ul>
@@ -5126,6 +5178,9 @@
         <ul>
           <li>&bull; Este diagrama documenta a decisao registrada em docs/adr/ADR-006_EXPANSAO_MODULAR_MODULO_2.md</li>
           <li>&bull; Consultar o ADR-006 para o contexto completo da decisao, alternativas consideradas e consequencias</li>
+          <li>&bull; Estrutura de pastas e padrao interno dos apps (incluindo o do Modulo 2): ADR-007 - namespace unico apps.*, services/ por app, gateways em apps/integracoes/</li>
+          <li>&bull; Este diagrama absorveu o antigo &#39;arquitetura-geral&#39; (2026-07-29), que cobria o mesmo assunto de forma menos completa - as rotinas de busca vieram de la</li>
+          <li>&bull; Ordem de leitura do conjunto: 1) contexto-sistema, 2) gerenciador-provedores, 3) este diagrama</li>
         </ul>
       </div>
     </div>

@@ -1,0 +1,43 @@
+{
+  "schema_version": 1,
+  "diagram_type": "lifecycle",
+  "meta": {
+    "title": "02 · Ciclo de vida da cotacao - o processo de negocio",
+    "subtitle": "Leitura 2 de 7 · Do endereco (login) ate o desfecho da proposta. Status reais do model Proposal; transicoes confirmadas pelo negocio (RN-018), mas ainda nao impostas pelo codigo",
+    "output": "docs/diagrams/ciclo-vida-cotacao.html",
+    "quality_profile": "standard"
+  },
+  "lanes": [
+    { "id": "main", "label": "Requisitos obrigatorios e fluxo da cotacao" },
+    { "id": "terminal", "label": "Desfechos (terminais)" }
+  ],
+  "states": [
+    { "id": "endereco", "type": "start", "label": "Endereco (login)", "lane": "main", "col": 0, "step": "01", "tag": "obrigatorio - hoje sem fonte automatica (ADR-008)" },
+    { "id": "provedor", "type": "start", "label": "Provedor", "lane": "main", "col": 1, "step": "01", "tag": "obrigatorio - cadastrado no sistema" },
+    { "id": "analise", "type": "active", "label": "Em Negociacao", "lane": "main", "col": 2, "step": "02", "tag": "status: analise (padrao)" },
+    { "id": "viavel", "type": "active", "label": "Viavel", "lane": "main", "col": 3, "step": "03", "tag": "status: ativa" },
+    { "id": "aguardando", "type": "waiting", "label": "Aguardando", "lane": "main", "col": 4, "step": "04", "tag": "status: aguardando_contratacao" },
+
+    { "id": "inviavel", "type": "failure", "label": "Inviavel", "lane": "terminal", "col": 0, "tag": "status: encerrada + motivo" },
+    { "id": "declinado", "type": "failure", "label": "Declinado", "lane": "terminal", "col": 1, "tag": "status: declinado" },
+    { "id": "contratado", "type": "success", "label": "Contratado", "lane": "terminal", "col": 2, "tag": "status: contratado" }
+  ],
+  "transitions": [
+    { "id": "endereco-analise", "from": "endereco", "to": "analise", "label": "requisito 1 de 2", "variant": "emphasis", "fromSide": "top", "toSide": "top", "via": [[94, 74], [402, 74]], "labelAt": [150, 64] },
+    { "id": "provedor-analise", "from": "provedor", "to": "analise", "label": "abre a medicao", "variant": "emphasis", "labelDy": -25 },
+    { "id": "analise-viavel", "from": "analise", "to": "viavel", "label": "medicao viavel", "variant": "emphasis", "labelDy": -25 },
+    { "id": "viavel-aguardando", "from": "viavel", "to": "aguardando", "label": "proposta enviada", "variant": "emphasis", "labelDy": -25 },
+
+    { "id": "analise-inviavel", "from": "analise", "to": "inviavel", "label": "sem viabilidade", "variant": "security", "fromSide": "bottom", "toSide": "top" },
+    { "id": "aguardando-contratado", "from": "aguardando", "to": "contratado", "label": "cliente aceitou", "variant": "emphasis", "fromSide": "bottom", "toSide": "top" },
+    { "id": "aguardando-declinado", "from": "aguardando", "to": "declinado", "label": "cliente recusou", "variant": "security", "fromSide": "left", "toSide": "top" }
+  ],
+  "cards": [
+    { "dot": "cyan", "title": "Sequencia de leitura - voce esta em 02", "items": ["01 · Contexto - quem usa e com quais sistemas externos falamos", "02 · Ciclo de vida da cotacao (este diagrama) - o processo de negocio (do endereco ao desfecho)", "03 · Modelo de dominio - as entidades e como se relacionam", "04 · Arquitetura-alvo - camadas, gateways e estrutura de pastas", "05 · Modulos e dependencias - quais apps existem e quem chama quem", "06 · Arquitetura do Modulo 1 - filas de entrada/saida ao IXC e fechamento de O.S.", "07 · Processos de automacoes e rotinas - o que roda, quando e por qual caminho", "ANEXO A · Integration Hub conceitual - alternativa descartada"] },
+    { "dot": "emerald", "title": "Dois requisitos obrigatorios para abrir a medicao (RN-017)", "items": ["Endereco (login): historicamente vinha sincronizado do IXC (app clientes) - as 4 rotinas automaticas foram desativadas em 2026-08-07 (ADR-008)", "Hoje nao ha fonte automatica alimentando Cliente/Endereco (nem IXC, nem o DashboardEACE - que alimenta a tabela separada Escola, ADR-010)", "Provedor (Partner): cadastrado dentro do sistema, com seu plano (PartnerPlan)", "A cotacao so nasce quando os dois existem e sao vinculados - falta qualquer um e nao ha medicao", "Por isso os dois aparecem como ponto de partida, e nao um depois do outro: sao paralelos, nao sequenciais"] },
+    { "dot": "amber", "title": "Fluxo confirmado pelo negocio, mas NAO imposto pelo codigo (RN-018)", "items": ["Confirmado pelo dono do negocio em 2026-07-29: as setas deste diagrama sao as unicas transicoes validas", "Em Negociacao so pode virar Viavel ou Inviavel | Declinar so e possivel depois de Viavel, a partir de Aguardando Contratacao | Inviavel e terminal, nao reabre no momento", "PORÉM: as views validam apenas se o status pertence a lista (status_validos = {choice[0] for choice in Proposal.STATUS_CHOICES}) - nenhuma transicao e bloqueada", "Na pratica hoje qualquer status pode ir para qualquer outro, inclusive pular etapas ou sair de um terminal. Implementar a validacao e uma feature ainda nao aberta"] },
+    { "dot": "violet", "title": "Armadilha: chave do status nao bate com o rotulo", "items": ["'ativa' significa Viavel (nao 'ativo/em uso')", "'encerrada' significa Inviavel (nao 'finalizada com sucesso')", "'analise' significa Em Negociacao", "Quem le status='ativa' no codigo tende a entender o oposto do que o negocio quer dizer - vale considerar renomear as chaves numa migration"] },
+    { "dot": "emerald", "title": "Os 6 status reais do model Proposal", "items": ["analise = Em Negociacao (valor padrao ao criar)", "ativa = Viavel | encerrada = Inviavel", "aguardando_contratacao = Aguardando Contratacao", "contratado = Contratado | declinado = Declinado", "Verificados em apps/partners/models.py (Proposal.STATUS_CHOICES)"] },
+    { "dot": "slate", "title": "De onde vem cada peca", "items": ["Endereco/login: rotinas automaticas do IXC desativadas em 2026-08-07 (ADR-008) - o codigo permanece intacto (so os disparos foram comentados), ver diagramas 06 e 07; hoje sem fonte automatica definida", "Provedor: Partner + PartnerPlan, cadastrados e mantidos dentro do sistema", "Inviavel exige motivo: FK para ProposalMotivoInviavel, gravado junto com observacao_inviavel", "Leads prospectados (app leads, com apoio de IA) alimentam o funil e tem lista de status propria: novo, negociacao, andamento, ativo, inviavel"] }
+  ]
+}

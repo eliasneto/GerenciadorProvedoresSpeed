@@ -2,8 +2,8 @@
   "schema_version": 1,
   "diagram_type": "architecture",
   "meta": {
-    "title": "Arquitetura Sistema Cotação MODULO 1",
-    "subtitle": "Modulo 2 isolado com kill switch, tres tabelas de fila intermediaria e fechamento de O.S. sincrono com fallback (ADR-006)",
+    "title": "06 · Arquitetura do Modulo 1 - filas de entrada/saida e fechamento de O.S.",
+    "subtitle": "Leitura 6 de 7 · Sistema atual (Modulo 1) com as tres filas intermediarias e o fechamento de O.S. sincrono com fallback (ADR-006). O Modulo 2 aparece so como espaco reservado - ainda sera desenhado",
     "output": "docs/diagrams/adr-006-expansao-modular.html",
     "quality_profile": "standard",
     "views": [
@@ -16,14 +16,14 @@
       {
         "id": "entrada-os",
         "label": "Entrada de O.S. (item 7)",
-        "focus": ["ixc", "ixc_gateway", "tabela_entrada_os", "consumo_os", "servicos"],
-        "note": "IXCGateway busca no IXC e grava na fila intermediaria; hoje sem agendamento real (so manual) - proposto 4h."
+        "focus": ["busca_os", "ixc_gateway", "ixc", "tabela_entrada_os", "consumo_os", "servicos"],
+        "note": "Busca le o IXC pelo gateway e grava na fila; o consumo e rotina separada. Sem agendamento real hoje (so manual) - proposto 4h."
       },
       {
         "id": "entrada-cliente",
         "label": "Entrada de cliente/login (item 7 ampliado)",
-        "focus": ["ixc", "ixc_gateway", "tabela_entrada_cliente", "consumo_cliente", "servicos"],
-        "note": "Mesmo padrao da entrada de O.S., ja agendado hoje (real) a cada 4h via docker-compose."
+        "focus": ["busca_cliente", "ixc_gateway", "ixc", "tabela_entrada_cliente", "consumo_cliente", "servicos"],
+        "note": "Mesmo padrao da entrada de O.S. - busca e consumo separados pela fila. Ja agendado hoje (real) a cada 4h via docker-compose."
       },
       {
         "id": "fechamento-os",
@@ -35,15 +35,17 @@
   },
   "components": [
     { "id": "consumo_os", "type": "backend", "label": "Consumo de O.S.", "sublabel": "rotina agendada - aplica regra de dominio", "tag": "entrada O.S.", "pos": [475, 100], "size": [200, 64] },
-    { "id": "tabela_entrada_os", "type": "database", "label": "Fila interm. entrada O.S.", "sublabel": "fila - sem agendamento hoje (so manual)", "tag": "entrada O.S. - proposto: 4h", "pos": [900, 100], "size": [200, 64] },
+    { "id": "tabela_entrada_os", "type": "database", "label": "Fila interm. entrada O.S.", "sublabel": "fila - status: pendente", "tag": "entrada O.S.", "pos": [900, 100], "size": [200, 64] },
+    { "id": "busca_os", "type": "backend", "label": "Busca de O.S.", "sublabel": "polling - ixc_primeira_os.py", "tag": "sem agendamento hoje - proposto: 4h", "pos": [1250, 100], "size": [200, 64] },
 
     { "id": "consumo_cliente", "type": "backend", "label": "Consumo cliente/login", "sublabel": "rotina agendada - salvar_clientes_no_django", "tag": "entrada cliente/login", "pos": [320, 250], "size": [200, 64] },
-    { "id": "tabela_entrada_cliente", "type": "database", "label": "Fila interm. cliente/login", "sublabel": "fila - agendado hoje a cada 4h (real)", "tag": "entrada cliente/login", "pos": [650, 250], "size": [200, 64] },
+    { "id": "tabela_entrada_cliente", "type": "database", "label": "Fila interm. cliente/login", "sublabel": "fila - status: pendente", "tag": "entrada cliente/login", "pos": [650, 250], "size": [200, 64] },
+    { "id": "busca_cliente", "type": "backend", "label": "Busca cliente/login", "sublabel": "polling - ixc_api_incremental.py", "tag": "agendado hoje: 4h (real)", "pos": [980, 250], "size": [200, 64] },
 
     { "id": "usuarios", "type": "external", "label": "Usuarios", "sublabel": "acesso web interno", "pos": [40, 500], "size": [140, 64] },
     { "id": "entrada", "type": "frontend", "label": "Entrada", "sublabel": "views finas + API REST", "pos": [250, 500], "size": [150, 64] },
     { "id": "servicos", "type": "backend", "label": "Servicos / Dominio", "sublabel": "regra de negocio - por app", "pos": [480, 500], "size": [190, 64] },
-    { "id": "ixc_gateway", "type": "backend", "label": "IXCGateway", "sublabel": "IXCClient - apps/core", "tag": "gateway unico", "pos": [900, 500], "size": [200, 64] },
+    { "id": "ixc_gateway", "type": "backend", "label": "IXCGateway", "sublabel": "IXCClient - apps/integracoes/ixc/", "tag": "gateway unico - PO-033: aguardando QA", "pos": [900, 500], "size": [200, 64] },
     { "id": "ixc", "type": "external", "label": "IXC", "sublabel": "webservice/v1 - sem webhook", "pos": [1350, 500], "size": [170, 64] },
 
     { "id": "tabela_saida_os", "type": "database", "label": "Fila interm. saida O.S.", "sublabel": "fila - ainda nao construida (proposto)", "tag": "saida ao IXC - proposto: 5-10min", "pos": [650, 680], "size": [200, 64] },
@@ -60,11 +62,13 @@
     { "id": "entrada-servicos", "from": "entrada", "to": "servicos", "label": "chama", "variant": "default", "labelDy": -24 },
 
     { "id": "tabelaos-consumoos", "from": "tabela_entrada_os", "to": "consumo_os", "label": "le pendentes", "variant": "default", "labelAt": [850, 116] },
-    { "id": "gateway-tabelaos", "from": "ixc_gateway", "to": "tabela_entrada_os", "label": "grava pendente (O.S. lastmile)", "variant": "emphasis", "fromSide": "top", "toSide": "bottom", "labelAt": [1075, 350] },
+    { "id": "buscaos-tabelaos", "from": "busca_os", "to": "tabela_entrada_os", "label": "grava pendente", "variant": "default", "fromSide": "left", "toSide": "right", "labelAt": [1175, 116] },
+    { "id": "buscaos-gateway", "from": "busca_os", "to": "ixc_gateway", "label": "le O.S. via gateway (polling)", "variant": "emphasis", "fromSide": "bottom", "toSide": "top" },
     { "id": "consumoos-servicos", "from": "consumo_os", "to": "servicos", "label": "chama - aplica regra", "variant": "default", "fromSide": "bottom", "toSide": "top", "labelAt": [570, 328] },
 
     { "id": "tabelacliente-consumocliente", "from": "tabela_entrada_cliente", "to": "consumo_cliente", "label": "le pendentes", "variant": "default", "labelAt": [510, 328] },
-    { "id": "gateway-tabelacliente", "from": "ixc_gateway", "to": "tabela_entrada_cliente", "label": "grava pendente (clientes/login)", "variant": "emphasis", "fromSide": "left", "toSide": "right", "via": [[900, 282]], "labelAt": [800, 328] },
+    { "id": "buscacliente-tabelacliente", "from": "busca_cliente", "to": "tabela_entrada_cliente", "label": "grava pendente", "variant": "default", "fromSide": "left", "toSide": "right", "labelAt": [915, 266] },
+    { "id": "buscacliente-gateway", "from": "busca_cliente", "to": "ixc_gateway", "label": "le cliente/login (polling)", "variant": "emphasis", "fromSide": "bottom", "toSide": "top", "labelAt": [1160, 400] },
     { "id": "consumocliente-servicos", "from": "consumo_cliente", "to": "servicos", "label": "chama - grava no dominio", "variant": "default", "fromSide": "bottom", "toSide": "left", "via": [[420, 532]], "labelAt": [370, 470] },
 
     { "id": "servicos-gateway", "from": "servicos", "to": "ixc_gateway", "label": "chama - fast path sincrono", "variant": "emphasis", "labelDy": -20 },
@@ -80,13 +84,14 @@
     { "id": "modulo2-servicos", "from": "modulo2_apps", "to": "servicos", "label": "chama - via unica", "variant": "default", "fromSide": "top", "toSide": "bottom" }
   ],
   "cards": [
+    { "dot": "cyan", "title": "Sequencia de leitura - voce esta em 06", "items": ["01 · Contexto - quem usa e com quais sistemas externos falamos", "02 · Ciclo de vida da cotacao - o processo de negocio (do endereco ao desfecho)", "03 · Modelo de dominio - as entidades e como se relacionam", "04 · Arquitetura-alvo - camadas, gateways e estrutura de pastas", "05 · Modulos e dependencias - quais apps existem e quem chama quem", "06 · Arquitetura do Modulo 1 (este diagrama) - filas de entrada/saida ao IXC e fechamento de O.S.", "07 · Processos de automacoes e rotinas - o que roda, quando e por qual caminho", "ANEXO A · Integration Hub conceitual - alternativa descartada"] },
     { "dot": "emerald", "title": "Legenda das setas", "items": ["Verde solido = toca o IXC (atravessa a fronteira externa via IXCGateway)", "Cinza solido = chamada interna, fica dentro do proprio sistema, nunca sai para o IXC", "Vermelho tracejado = nao e uma chamada normal - e caminho de falha/fallback ou uma relacao de controle/gate (kill switch)"] },
     { "dot": "cyan", "title": "Dependencia em uma via so (item 3)", "items": ["apps/modulo2/<setor> pode importar core, core_admin, backoffice, partners, leads e integracoes_api", "Nenhum app do sistema atual importa apps/modulo2 - garante que o modulo 2 pode ser removido sem quebrar o sistema", "Verificacao manual em code review nesta fase; import-linter no CI so se o volume de apps crescer"] },
     { "dot": "amber", "title": "Kill switch do Modulo 2 (item 4)", "items": ["MODULO2_ATIVO em variavel de ambiente lida no settings.py, independente de AutomacaoMenu.ativo", "Com a flag desligada, menus e URLs do modulo 2 nao sao registrados", "Toda rotina de fundo do modulo 2 checa a flag no inicio e encerra com log do motivo", "O sistema atual nao le a flag - continua funcionando com o modulo 2 desligado"] },
-    { "dot": "violet", "title": "Formato comum das tres tabelas (item 9)", "items": ["status: pendente | processando | concluido | erro; mensagem_erro so quando status = erro", "tentativas, criado_em e atualizado_em completam o formato compartilhado", "Campos comuns em classe abstrata Django (StagingBase, abstract = True); tres tabelas fisicas separadas", "Erro fica na propria linha da fila intermediaria - sem tabela de log de tentativas nesta fase"] },
+    { "dot": "violet", "title": "Formato comum das tres tabelas (itens 9 e 10)", "items": ["status: pendente | processando | concluido | erro; mensagem_erro so quando status = erro", "tentativas, criado_em e atualizado_em completam o formato compartilhado", "correlation_id (opcional, item 10): liga a linha ao IntegrationAudit ou requisicao de origem", "Campos comuns em classe abstrata Django (StagingBase, abstract = True); tres tabelas fisicas separadas", "Erro fica na propria linha da fila intermediaria - sem tabela de log de tentativas nesta fase"] },
     { "dot": "emerald", "title": "Fechamento de O.S. (item 8)", "items": ["Fast path: chamada sincrona ao IXCGateway com timeout curto - percebido como instantaneo", "Falha ou IXC fora do ar grava na fila intermediaria de saida, sem bloquear nem reverter o fechamento local", "Chave estavel de idempotencia (ex.: ID da O.S.) impede fechamento duplicado no reprocessamento", "O.S. local expoe status de sincronizacao (sincronizado / pendente / falha) consultavel"] },
     { "dot": "orange", "title": "Origem da chamada e agendamento (real vs proposto)", "items": ["Todas as linhas verdes tocam o IXC (via IXCGateway); linhas cinzas ficam internas ao sistema", "Real hoje: entrada de cliente/login agendada a cada 4h + carga total 23h (docker-compose, servico speed_sincronizador)", "Sem agendamento real hoje: entrada de O.S. (so manual) e fechamento de O.S. (automacao ainda nao construida)", "Proposto (valor-alvo, a confirmar quando a automacao for construida): entrada de O.S. a cada 4h; reenvio de O.S. a cada 5-10min"] },
     { "dot": "rose", "title": "Fora desta fase", "items": ["Webhook do IXC descartado (item 6): confirmado em documentacao publica, teste de leitura na API e painel da conta", "Sem Celery/RQ/Redis ou message broker; sem retry automatico com backoff; sem fan-out concorrente", "Escopo confirmado: entrada de O.S., entrada de cliente/login e fechamento de O.S. - nenhuma outra automacao", "Nomes e campos especificos de cada tabela ficam para quando cada automacao concreta for desenhada"] },
-    { "dot": "slate", "title": "Referencia arquitetural", "items": ["Este diagrama documenta a decisao registrada em docs/adr/ADR-006_EXPANSAO_MODULAR_MODULO_2.md", "Consultar o ADR-006 para o contexto completo da decisao, alternativas consideradas e consequencias"] }
+    { "dot": "slate", "title": "Referencia arquitetural", "items": ["Este diagrama documenta a decisao registrada em docs/adr/ADR-006_EXPANSAO_MODULAR_MODULO_2.md", "Consultar o ADR-006 para o contexto completo da decisao, alternativas consideradas e consequencias", "Estrutura de pastas e padrao interno dos apps (incluindo o do Modulo 2): ADR-007 - namespace unico apps.*, services/ por app, gateways em apps/integracoes/", "Este diagrama absorveu o antigo 'arquitetura-geral' (2026-07-29), que cobria o mesmo assunto de forma menos completa - as rotinas de busca vieram de la", "Ordem de leitura do conjunto: 1) contexto-sistema, 2) gerenciador-provedores, 3) este diagrama"] }
   ]
 }

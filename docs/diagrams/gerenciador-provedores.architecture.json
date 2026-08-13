@@ -2,45 +2,59 @@
   "schema_version": 1,
   "diagram_type": "architecture",
   "meta": {
-    "title": "Arquitetura-alvo — GerenciadorProvedoresSpeed",
-    "subtitle": "Monólito modular em camadas (ADR-005): entrada · serviços · domínio · integração",
+    "title": "04 · Arquitetura-alvo - camadas, gateways e estrutura de pastas",
+    "subtitle": "Leitura 4 de 7 · Monólito modular em camadas (ADR-005) com a estrutura de pastas da ADR-007: entrada · serviços · domínio · integração. Ampliado em 2026-08-11 com apps/escolas e apps/integracoes/dashboard_eace",
     "output": "gerenciador-provedores.architecture.html",
     "quality_profile": "standard"
   },
   "components": [
-    { "id": "views", "type": "frontend", "label": "Views Django", "sublabel": "backoffice, leads, partners", "pos": [40, 110], "size": [150, 60] },
-    { "id": "api", "type": "backend", "label": "API REST", "sublabel": "integracoes_api /api/v1", "pos": [40, 220], "size": [150, 60] },
-    { "id": "servicos", "type": "backend", "label": "Camada de Serviços", "sublabel": "regra de negócio por app", "tag": "views e API ficam finas", "pos": [280, 150], "size": [160, 90] },
-    { "id": "dominio", "type": "database", "label": "Domínio · MySQL", "sublabel": "Partner · Proposal · Lead", "tag": "speed_prod (hub do sistema)", "pos": [285, 330], "size": [150, 84] },
+    { "id": "views", "type": "frontend", "label": "Views Django", "sublabel": "apps/<app>/views.py — finas", "pos": [40, 110], "size": [150, 60] },
+    { "id": "api", "type": "backend", "label": "API REST", "sublabel": "apps/integracoes_api — /api/v1", "pos": [40, 220], "size": [150, 60] },
+    { "id": "servicos", "type": "backend", "label": "Camada de Serviços", "sublabel": "apps/<app>/services/", "tag": "hoje: só backoffice (1 de 8)", "pos": [280, 150], "size": [160, 90] },
+    { "id": "dominio", "type": "database", "label": "Domínio · MySQL", "sublabel": "Partner · Proposal · Lead · Escola", "tag": "speed_prod (hub do sistema)", "pos": [285, 330], "size": [150, 84] },
     { "id": "audit", "type": "database", "label": "IntegrationAudit", "sublabel": "auditoria transversal", "pos": [40, 340], "size": [150, 64] },
-    { "id": "g_ixc", "type": "security", "label": "IXCGateway", "sublabel": "IXCClient (HTTP único)", "tag": "PO-022: unificar", "pos": [560, 60], "size": [160, 60] },
-    { "id": "g_ad", "type": "security", "label": "ADGateway", "sublabel": "Active Directory / LDAP", "pos": [560, 150], "size": [160, 60] },
-    { "id": "g_email", "type": "messagebus", "label": "EmailGateway", "sublabel": "cotação (IMAP/SMTP)", "pos": [560, 240], "size": [160, 60] },
-    { "id": "g_google", "type": "backend", "label": "GoogleGateway", "sublabel": "lastmile / busca parceiro", "pos": [560, 330], "size": [160, 60] },
+    { "id": "g_ixc", "type": "security", "label": "IXCGateway", "sublabel": "apps/integracoes/ixc/", "tag": "PO-033: aguardando QA", "pos": [560, 60], "size": [160, 60] },
+    { "id": "g_ad", "type": "security", "label": "ADGateway", "sublabel": "apps/integracoes/ad/", "tag": "PO-033: aguardando QA", "pos": [560, 150], "size": [160, 60] },
+    { "id": "g_email", "type": "messagebus", "label": "EmailGateway", "sublabel": "apps/integracoes/email/", "tag": "PO-033: aguardando QA", "pos": [560, 240], "size": [160, 60] },
+    { "id": "g_google", "type": "backend", "label": "GoogleGateway", "sublabel": "apps/integracoes/google/", "tag": "PO-033: aguardando QA", "pos": [560, 330], "size": [160, 60] },
+    { "id": "g_correios", "type": "security", "label": "CorreiosGateway", "sublabel": "apps/integracoes/correios/", "tag": "hoje: inline em clientes/views.py", "pos": [560, 420], "size": [160, 60] },
+    { "id": "g_dashboardeace", "type": "backend", "label": "DashboardEACEClient", "sublabel": "apps/integracoes/dashboard_eace/", "tag": "PO-045/046: real, credenciado", "pos": [560, 510], "size": [160, 60] },
     { "id": "e_ixc", "type": "external", "label": "IXC", "sublabel": "ERP do provedor", "pos": [820, 60], "size": [150, 60] },
     { "id": "e_ad", "type": "external", "label": "Active Directory", "sublabel": "diretório corporativo", "pos": [820, 150], "size": [150, 60] },
     { "id": "e_email", "type": "external", "label": "Servidor de E-mail", "sublabel": "caixa de cotação", "pos": [820, 240], "size": [150, 60] },
-    { "id": "e_google", "type": "external", "label": "Google API", "sublabel": "fornecedores lastmile", "pos": [820, 330], "size": [150, 60] }
+    { "id": "e_google", "type": "external", "label": "Google API", "sublabel": "fornecedores lastmile", "pos": [820, 330], "size": [150, 60] },
+    { "id": "e_correios", "type": "external", "label": "API de CEP", "sublabel": "Hub do Desenvolvedor (não é a API oficial dos Correios)", "pos": [820, 420], "size": [150, 60] },
+    { "id": "e_dashboardeace", "type": "external", "label": "DashboardEACE", "sublabel": "cadastro de Escolas", "pos": [820, 510], "size": [150, 60] }
   ],
   "boundaries": [
     { "kind": "region", "label": "Entrada (fina)", "wraps": ["views", "api"] },
     { "kind": "region", "label": "Serviços / Domínio", "wraps": ["servicos", "dominio"] },
-    { "kind": "security-group", "label": "Camada de Integração (1 gateway por sistema)", "wraps": ["g_ixc", "g_ad", "g_email", "g_google"] },
-    { "kind": "region", "label": "Sistemas externos", "wraps": ["e_ixc", "e_ad", "e_email", "e_google"] }
+    { "kind": "security-group", "label": "apps/integracoes/ — 1 gateway por sistema, import direto (ADR-007)", "wraps": ["g_ixc", "g_ad", "g_email", "g_google", "g_correios", "g_dashboardeace"] },
+    { "kind": "region", "label": "Sistemas externos", "wraps": ["e_ixc", "e_ad", "e_email", "e_google", "e_correios", "e_dashboardeace"] }
   ],
   "connections": [
     { "id": "views-servicos", "from": "views", "to": "servicos", "label": "chama serviço", "variant": "emphasis" },
     { "id": "api-servicos", "from": "api", "to": "servicos", "variant": "emphasis" },
     { "id": "servicos-dominio", "from": "servicos", "to": "dominio", "label": "ORM", "variant": "emphasis", "labelDy": 24 },
     { "id": "servicos-audit", "from": "servicos", "to": "audit", "label": "registra execução", "variant": "dashed" },
-    { "id": "servicos-gixc", "from": "servicos", "to": "g_ixc", "variant": "default" },
-    { "id": "servicos-gad", "from": "servicos", "to": "g_ad", "variant": "default" },
-    { "id": "servicos-gemail", "from": "servicos", "to": "g_email", "variant": "default" },
-    { "id": "servicos-ggoogle", "from": "servicos", "to": "g_google", "variant": "default" },
+    { "id": "servicos-gixc", "from": "servicos", "to": "g_ixc", "variant": "default", "route": "orthogonal-h" },
+    { "id": "servicos-gad", "from": "servicos", "to": "g_ad", "variant": "default", "route": "orthogonal-h" },
+    { "id": "servicos-gemail", "from": "servicos", "to": "g_email", "variant": "default", "route": "orthogonal-h" },
+    { "id": "servicos-ggoogle", "from": "servicos", "to": "g_google", "variant": "default", "route": "orthogonal-h" },
+    { "id": "servicos-gcorreios", "from": "servicos", "to": "g_correios", "variant": "dashed", "route": "orthogonal-h" },
+    { "id": "servicos-gdashboardeace", "from": "servicos", "to": "g_dashboardeace", "variant": "default", "route": "orthogonal-h" },
     { "id": "gixc-eixc", "from": "g_ixc", "to": "e_ixc", "label": "HTTP", "variant": "emphasis" },
     { "id": "gad-ead", "from": "g_ad", "to": "e_ad", "label": "LDAP", "variant": "security" },
     { "id": "gemail-eemail", "from": "g_email", "to": "e_email", "label": "IMAP/SMTP", "variant": "default" },
-    { "id": "ggoogle-egoogle", "from": "g_google", "to": "e_google", "label": "API", "variant": "default" }
+    { "id": "ggoogle-egoogle", "from": "g_google", "to": "e_google", "label": "API", "variant": "default" },
+    { "id": "gcorreios-ecorreios", "from": "g_correios", "to": "e_correios", "label": "HTTP (GET CEP)", "variant": "dashed" },
+    { "id": "gdashboardeace-edashboardeace", "from": "g_dashboardeace", "to": "e_dashboardeace", "label": "HTTPS (X-API-Key)", "variant": "default" }
   ],
-  "cards": []
+  "cards": [
+    { "dot": "cyan", "title": "Sequência de leitura — você está em 04", "items": ["01 · Contexto - quem usa e com quais sistemas externos falamos", "02 · Ciclo de vida da cotacao - o processo de negocio (do endereco ao desfecho)", "03 · Modelo de dominio - as entidades e como se relacionam", "04 · Arquitetura-alvo (este diagrama) - camadas, gateways e estrutura de pastas", "05 · Modulos e dependencias - quais apps existem e quem chama quem", "06 · Arquitetura do Modulo 1 - filas de entrada/saida ao IXC e fechamento de O.S.", "07 · Processos de automacoes e rotinas - o que roda, quando e por qual caminho", "ANEXO A · Integration Hub conceitual - alternativa descartada"] },
+    { "dot": "slate", "title": "Como ler este diagrama", "items": ["Sublabel = onde a peça deve morar na estrutura-alvo (ADR-007)", "Tag = onde ela está hoje, quando difere do alvo", "Nenhuma migração foi autorizada: ADR-007 é desenho, não execução"] },
+    { "dot": "violet", "title": "Estrutura-alvo (ADR-007)", "items": ["Namespace único apps.* — apps/ vira pacote real e sai o sys.path.insert de settings.py:34", "Hoje cada app é importável como core E como apps.core (76 imports vs 49) - defeito latente de duplo carregamento de models", "Caminho obrigatório: view -> service -> gateway. View nunca chama integração direto", "scripts/ deixa de ter produção: rotina agendada vira management command do app dono; infra vai para ops/", "PO-033 (2026-08-03, aguardando QA): IXCGateway, ADGateway, EmailGateway e GoogleGateway já saíram de apps/core/ e scripts/ para apps/integracoes/ — só CorreiosGateway segue como gap"] },
+    { "dot": "cyan", "title": "apps/escolas e DashboardEACEClient já reais (2026-08-07 a 2026-08-11)", "items": ["apps/escolas (Epic 14/15, PO-044 a PO-067) já segue o padrão-alvo: domínio próprio (Escola, RedeExterna/RedeInterna, Processo/Setor/Campo) fora de scripts/", "DashboardEACEClient (apps/integracoes/dashboard_eace/) já nasceu dentro de apps/integracoes/, sem passar por apps/core/ como os demais gateways precisaram (PO-045)", "Autenticação por X-API-Key confirmada contra a API real (API_EXTERNA.md); PO-046 sincronizou 2622 escolas de forma idempotente"] },
+    { "dot": "amber", "title": "CorreiosGateway ainda não existe isolado", "items": ["Hoje a consulta de CEP é feita direto na view (clientes/views.py::buscar_cep), sem client/gateway próprio", "Chama uma API terceirizada (Hub do Desenvolvedor) - não é a API oficial dos Correios", "Linha tracejada = gap: mesmo padrão dos demais gateways (timeout/erro/log), mas ainda não construído - sem feature aberta para isso"] }
+  ]
 }

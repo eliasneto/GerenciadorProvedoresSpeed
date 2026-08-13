@@ -1,0 +1,49 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "ANEXO A · Integration Hub (conceitual) - alternativa descartada",
+    "subtitle": "Fora da sequencia de leitura · Como ficaria SE o Integration Hub generico fosse adotado - nao e a arquitetura aprovada (ver ADR-006, item 10)",
+    "output": "docs/diagrams/integration-hub-conceitual.html",
+    "quality_profile": "standard"
+  },
+  "components": [
+    { "id": "servicos", "type": "backend", "label": "Servicos / Dominio", "sublabel": "cotacao, comercial, backoffice, automacoes", "pos": [370, 40], "size": [260, 64] },
+
+    { "id": "hub", "type": "messagebus", "label": "Integration Hub", "sublabel": "ponto unico de entrada (conceitual)", "tag": "nao construido - ver card", "pos": [370, 200], "size": [260, 64] },
+
+    { "id": "provider_ixc", "type": "security", "label": "IXC Provider", "sublabel": "client + services + mapper", "tag": "real hoje (IXCGateway)", "pos": [40, 380], "size": [220, 64] },
+    { "id": "provider_correios", "type": "security", "label": "Correios Provider", "sublabel": "consulta CEP", "tag": "gap: hoje sem provider isolado", "pos": [300, 380], "size": [220, 64] },
+    { "id": "provider_email", "type": "security", "label": "Email Provider", "sublabel": "cotacao (IMAP/SMTP)", "tag": "real hoje (EmailGateway)", "pos": [560, 380], "size": [220, 64] },
+    { "id": "provider_google", "type": "security", "label": "Google Provider", "sublabel": "lastmile / busca parceiro", "tag": "real hoje (GoogleGateway)", "pos": [820, 380], "size": [220, 64] },
+
+    { "id": "ext_ixc", "type": "external", "label": "IXC", "sublabel": "webservice/v1", "pos": [40, 560], "size": [220, 60] },
+    { "id": "ext_correios", "type": "external", "label": "API de CEP", "sublabel": "Hub do Desenvolvedor - nao e a API oficial dos Correios", "pos": [300, 560], "size": [220, 60] },
+    { "id": "ext_email", "type": "external", "label": "Servidor de E-mail", "sublabel": "caixa de cotacao", "pos": [560, 560], "size": [220, 60] },
+    { "id": "ext_google", "type": "external", "label": "Google API", "sublabel": "Maps / fornecedores lastmile", "pos": [820, 560], "size": [220, 60] }
+  ],
+  "boundaries": [
+    { "kind": "security-group", "label": "Providers (1 por sistema externo)", "wraps": ["provider_ixc", "provider_correios", "provider_email", "provider_google"] }
+  ],
+  "connections": [
+    { "id": "servicos-hub", "from": "servicos", "to": "hub", "label": "chama - ponto unico (conceitual)", "variant": "emphasis", "labelAt": [500, 118] },
+
+    { "id": "hub-ixc", "from": "hub", "to": "provider_ixc", "label": "execute(provider=ixc)", "variant": "emphasis", "fromSide": "bottom", "toSide": "top" },
+    { "id": "hub-correios", "from": "hub", "to": "provider_correios", "label": "execute(provider=correios)", "variant": "default", "fromSide": "bottom", "toSide": "top", "labelAt": [340, 350] },
+    { "id": "hub-email", "from": "hub", "to": "provider_email", "label": "execute(provider=email)", "variant": "default", "fromSide": "bottom", "toSide": "top" },
+    { "id": "hub-google", "from": "hub", "to": "provider_google", "label": "execute(provider=google)", "variant": "default", "fromSide": "bottom", "toSide": "top" },
+
+    { "id": "ixc-ext", "from": "provider_ixc", "to": "ext_ixc", "label": "HTTP - webservice/v1", "variant": "emphasis", "labelAt": [150, 458] },
+    { "id": "correios-ext", "from": "provider_correios", "to": "ext_correios", "label": "GET - consulta CEP", "variant": "default", "labelAt": [410, 458] },
+    { "id": "email-ext", "from": "provider_email", "to": "ext_email", "label": "IMAP/SMTP", "variant": "default", "labelAt": [670, 458] },
+    { "id": "google-ext", "from": "provider_google", "to": "ext_google", "label": "API", "variant": "default", "labelAt": [930, 458] }
+  ],
+  "cards": [
+    { "dot": "cyan", "title": "Sequencia de leitura - este e um ANEXO", "items": ["01 · Contexto - quem usa e com quais sistemas externos falamos", "02 · Ciclo de vida da cotacao - o processo de negocio (do endereco ao desfecho)", "03 · Modelo de dominio - as entidades e como se relacionam", "04 · Arquitetura-alvo - camadas, gateways e estrutura de pastas", "05 · Modulos e dependencias - quais apps existem e quem chama quem", "06 · Arquitetura do Modulo 1 - filas de entrada/saida ao IXC e fechamento de O.S.", "07 · Processos de automacoes e rotinas - o que roda, quando e por qual caminho", "ANEXO A · Integration Hub conceitual - alternativa descartada"] },
+    { "dot": "rose", "title": "Status: exploratorio, nao aprovado", "items": ["Este diagrama mostra como ficaria SE o Integration Hub generico (Manager + Registry) de melhorias_arquitetura.md fosse adotado", "Decisao real (2026-07-29): NAO adotar Manager/Registry generico agora - ver ADR-006, item 10 (docs/adr/ADR-006_EXPANSAO_MODULAR_MODULO_2.md)", "A arquitetura aprovada e mais simples: cada modulo importa diretamente o gateway do sistema que precisa, sem indirecao dinamica por nome"] },
+    { "dot": "slate", "title": "Arquitetura real hoje (aprovada)", "items": ["Ver docs/diagrams/gerenciador-provedores.architecture.json / .html - 1 gateway direto por sistema externo (IXCGateway, ADGateway, EmailGateway, GoogleGateway)", "Servicos chamam o gateway especifico diretamente (import direto), sem Hub/Manager/Registry intermediando", "Estrutura de pastas da ADR-007: os gateways ja ficam em apps/integracoes/<sistema>/ - agrupamento por pasta, sem camada de indirecao (PO-033, aguardando QA)", "Nenhum provider isolado para Correios/CEP hoje - ver gap abaixo"] },
+    { "dot": "emerald", "title": "O que ja e real hoje (por tras de cada Provider deste desenho)", "items": ["IXC: IXCClient em apps/integracoes/ixc/client.py - gateway unico, ja unificado (PO-022/025/026) e movido para o Hub de Integracao (PO-033, aguardando QA; antes em apps/core/ixc_client.py)", "Email: sincronizacao de resposta de cotacao (IMAP) + envio (SMTP) - logica em apps/integracoes/email/ (PO-033, aguardando QA); scripts/integracoes/sincronizar_respostas_email_cotacao.py virou wrapper fino que so chama essa logica", "Google: busca de fornecedores lastmile e busca de parceiro movidas para apps/integracoes/google/ (PO-033, aguardando QA; antes em scripts/integracoes/Lastmile/ e scripts/automacoes/API_BuscaParceiro/)"] },
+    { "dot": "amber", "title": "Gap: Correios Provider ainda nao existe isolado", "items": ["Hoje a consulta de CEP e feita direto na view (clientes/views.py::buscar_cep), sem client/gateway proprio", "Chama uma API terceirizada (Hub do Desenvolvedor, ws.hubdodesenvolvedor.com.br) - nao e a API oficial dos Correios", "Se vier a virar gateway formal, seguiria o mesmo padrao ja aprovado (1 gateway, timeout, tratamento de erro) - decisao e escopo ficam para quando houver necessidade real (ex.: trocar de fornecedor de CEP, reaproveitar em mais de uma automacao)"] },
+    { "dot": "cyan", "title": "Se este Hub fosse construido (nao decidido)", "items": ["Integration Manager selecionaria o provider certo por nome (\"ixc\", \"correios\", \"email\", \"google\")", "Registry resolveria cada provider dinamicamente, no lugar do import direto de hoje", "Custo: uma camada de indirecao a mais para gerenciar, com apenas 3-4 sistemas reais conhecidos - por isso descartado por ora (ADR-006, item 10)"] }
+  ]
+}

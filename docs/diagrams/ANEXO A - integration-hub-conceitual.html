@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="generator" content="archify 2.12.0">
-  <title>Arquitetura-alvo — GerenciadorProvedoresSpeed Diagram</title>
+  <title>ANEXO A · Integration Hub (conceitual) - alternativa descartada Diagram</title>
   <script>
     // Resolve the theme before first paint so light-preference users don't
     // see a dark flash. The toolbar script below re-applies with UI state.
@@ -4496,9 +4496,9 @@
     <div class="header">
       <div class="header-row">
         <div class="pulse-dot"></div>
-        <h1>Arquitetura-alvo — GerenciadorProvedoresSpeed</h1>
+        <h1>ANEXO A · Integration Hub (conceitual) - alternativa descartada</h1>
       </div>
-      <p class="subtitle">Monólito modular em camadas (ADR-005): entrada · serviços · domínio · integração</p>
+      <p class="subtitle">Fora da sequencia de leitura · Como ficaria SE o Integration Hub generico fosse adotado - nao e a arquitetura aprovada (ver ADR-006, item 10)</p>
     </div>
 
     <script id="archify-guided-views-data" type="application/json">[]</script>
@@ -4544,9 +4544,9 @@
 
     <!-- Main Diagram -->
     <div class="diagram-container" data-detail-level="map">
-      <svg viewBox="0 0 1040 502" role="img" aria-labelledby="archify-diagram-title archify-diagram-description" data-preset="classic" data-quality-profile="standard">
-        <title id="archify-diagram-title">Arquitetura-alvo — GerenciadorProvedoresSpeed</title>
-        <desc id="archify-diagram-description">Monólito modular em camadas (ADR-005): entrada · serviços · domínio · integração</desc>
+      <svg viewBox="0 0 1110 688" role="img" aria-labelledby="archify-diagram-title archify-diagram-description" data-preset="classic" data-quality-profile="standard">
+        <title id="archify-diagram-title">ANEXO A · Integration Hub (conceitual) - alternativa descartada</title>
+        <desc id="archify-diagram-description">Fora da sequencia de leitura · Como ficaria SE o Integration Hub generico fosse adotado - nao e a arquitetura aprovada (ver ADR-006, item 10)</desc>
         <!-- Definitions -->
         <defs>
           <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
@@ -4570,254 +4570,203 @@
         <rect width="100%" height="100%" fill="url(#grid)" />
 
         <!-- Boundaries (behind everything) -->
-        <rect data-graph-role="structural-frame" data-composition-frame-kind="region" data-composition-frame-id="0" x="10" y="80" width="210" height="220" rx="12" class="c-region" stroke-width="1"/>
-        <text x="18" y="98" class="t-cloud" font-size="9" font-weight="600">Entrada (fina)</text>
-
-        <rect data-graph-role="structural-frame" data-composition-frame-kind="region" data-composition-frame-id="1" x="250" y="120" width="220" height="314" rx="12" class="c-region" stroke-width="1"/>
-        <text x="258" y="138" class="t-cloud" font-size="9" font-weight="600">Serviços / Domínio</text>
-
-        <rect data-graph-role="structural-frame" data-composition-frame-kind="security-group" data-composition-frame-id="2" x="530" y="30" width="220" height="380" rx="8" class="c-security-group" stroke-width="1"/>
-        <text x="538" y="48" class="t-security" font-size="9" font-weight="600">Camada de Integração (1 gateway por sistema)</text>
-
-        <rect data-graph-role="structural-frame" data-composition-frame-kind="region" data-composition-frame-id="3" x="790" y="30" width="210" height="380" rx="12" class="c-region" stroke-width="1"/>
-        <text x="798" y="48" class="t-cloud" font-size="9" font-weight="600">Sistemas externos</text>
+        <rect data-graph-role="structural-frame" data-composition-frame-kind="security-group" data-composition-frame-id="0" x="10" y="350" width="1060" height="114" rx="8" class="c-security-group" stroke-width="1"/>
+        <text x="18" y="368" class="t-security" font-size="9" font-weight="600">Providers (1 por sistema externo)</text>
 
         <!-- Connection paths (before components for correct z-order) -->
-        <path data-edge-from="views" data-edge-to="servicos" data-edge-label="chama serviço" data-edge-key="0" data-edge-id="views-servicos" data-composition-points="190,140;235,140;235,181;280,181" d="M 190 140 L 227 140 Q 235 140 235 148 L 235 173 Q 235 181 243 181 L 280 181" class="a-emphasis" stroke-width="1.8" marker-end="url(#arrowhead-emphasis)"/>
-        <path data-edge-from="api" data-edge-to="servicos" data-edge-key="1" data-edge-id="api-servicos" data-composition-points="190,250;235,250;235,195;280,195" d="M 190 250 L 227 250 Q 235 250 235 242 L 235 203 Q 235 195 243 195 L 280 195" class="a-emphasis" stroke-width="1.8" marker-end="url(#arrowhead-emphasis)"/>
-        <path data-edge-from="servicos" data-edge-to="dominio" data-edge-label="ORM" data-edge-key="2" data-edge-id="servicos-dominio" data-composition-points="360,240;360,330" d="M 360 240 L 360 330" class="a-emphasis" stroke-width="1.8" marker-end="url(#arrowhead-emphasis)"/>
-        <path data-edge-from="servicos" data-edge-to="audit" data-edge-label="registra execução" data-edge-key="3" data-edge-id="servicos-audit" data-composition-points="280,209;235,209;235,372;190,372" d="M 280 209 L 243 209 Q 235 209 235 217 L 235 364 Q 235 372 227 372 L 190 372" class="a-dashed" stroke-width="1.5" marker-end="url(#arrowhead-dashed)"/>
-        <path data-edge-from="servicos" data-edge-to="g_ixc" data-edge-key="4" data-edge-id="servicos-gixc" data-composition-points="440,174;500,174;500,90;560,90" d="M 440 174 L 492 174 Q 500 174 500 166 L 500 98 Q 500 90 508 90 L 560 90" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
-        <path data-edge-from="servicos" data-edge-to="g_ad" data-edge-key="5" data-edge-id="servicos-gad" data-composition-points="440,188;500,188;500,180;560,180" d="M 440 188 L 496 188 Q 500 188 500 184 L 500 184 Q 500 180 504 180 L 560 180" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
-        <path data-edge-from="servicos" data-edge-to="g_email" data-edge-key="6" data-edge-id="servicos-gemail" data-composition-points="440,202;500,202;500,270;560,270" d="M 440 202 L 492 202 Q 500 202 500 210 L 500 262 Q 500 270 508 270 L 560 270" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
-        <path data-edge-from="servicos" data-edge-to="g_google" data-edge-key="7" data-edge-id="servicos-ggoogle" data-composition-points="440,216;500,216;500,360;560,360" d="M 440 216 L 492 216 Q 500 216 500 224 L 500 352 Q 500 360 508 360 L 560 360" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
-        <path data-edge-from="g_ixc" data-edge-to="e_ixc" data-edge-label="HTTP" data-edge-key="8" data-edge-id="gixc-eixc" data-composition-points="720,90;820,90" d="M 720 90 L 820 90" class="a-emphasis" stroke-width="1.8" marker-end="url(#arrowhead-emphasis)"/>
-        <path data-edge-from="g_ad" data-edge-to="e_ad" data-edge-label="LDAP" data-edge-key="9" data-edge-id="gad-ead" data-composition-points="720,180;820,180" d="M 720 180 L 820 180" class="a-security" stroke-width="1.5" marker-end="url(#arrowhead-security)"/>
-        <path data-edge-from="g_email" data-edge-to="e_email" data-edge-label="IMAP/SMTP" data-edge-key="10" data-edge-id="gemail-eemail" data-composition-points="720,270;820,270" d="M 720 270 L 820 270" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
-        <path data-edge-from="g_google" data-edge-to="e_google" data-edge-label="API" data-edge-key="11" data-edge-id="ggoogle-egoogle" data-composition-points="720,360;820,360" d="M 720 360 L 820 360" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+        <path data-edge-from="servicos" data-edge-to="hub" data-edge-label="chama - ponto unico (conceitual)" data-edge-key="0" data-edge-id="servicos-hub" data-composition-points="500,104;500,200" d="M 500 104 L 500 200" class="a-emphasis" stroke-width="1.8" marker-end="url(#arrowhead-emphasis)"/>
+        <path data-edge-from="hub" data-edge-to="provider_ixc" data-edge-label="execute(provider=ixc)" data-edge-key="1" data-edge-id="hub-ixc" data-composition-points="486,264;486,322;150,322;150,380" d="M 486 264 L 486 314 Q 486 322 478 322 L 158 322 Q 150 322 150 330 L 150 380" class="a-emphasis" stroke-width="1.8" marker-end="url(#arrowhead-emphasis)"/>
+        <path data-edge-from="hub" data-edge-to="provider_correios" data-edge-label="execute(provider=correios)" data-edge-key="2" data-edge-id="hub-correios" data-composition-points="500,264;455,264;455,380;410,380" d="M 500 264 L 463 264 Q 455 264 455 272 L 455 372 Q 455 380 447 380 L 410 380" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+        <path data-edge-from="hub" data-edge-to="provider_email" data-edge-label="execute(provider=email)" data-edge-key="3" data-edge-id="hub-email" data-composition-points="500,264;585,264;585,380;670,380" d="M 500 264 L 577 264 Q 585 264 585 272 L 585 372 Q 585 380 593 380 L 670 380" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+        <path data-edge-from="hub" data-edge-to="provider_google" data-edge-label="execute(provider=google)" data-edge-key="4" data-edge-id="hub-google" data-composition-points="514,264;514,322;930,322;930,380" d="M 514 264 L 514 314 Q 514 322 522 322 L 922 322 Q 930 322 930 330 L 930 380" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+        <path data-edge-from="provider_ixc" data-edge-to="ext_ixc" data-edge-label="HTTP - webservice/v1" data-edge-key="5" data-edge-id="ixc-ext" data-composition-points="150,444;150,560" d="M 150 444 L 150 560" class="a-emphasis" stroke-width="1.8" marker-end="url(#arrowhead-emphasis)"/>
+        <path data-edge-from="provider_correios" data-edge-to="ext_correios" data-edge-label="GET - consulta CEP" data-edge-key="6" data-edge-id="correios-ext" data-composition-points="410,444;410,560" d="M 410 444 L 410 560" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+        <path data-edge-from="provider_email" data-edge-to="ext_email" data-edge-label="IMAP/SMTP" data-edge-key="7" data-edge-id="email-ext" data-composition-points="670,444;670,560" d="M 670 444 L 670 560" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+        <path data-edge-from="provider_google" data-edge-to="ext_google" data-edge-label="API" data-edge-key="8" data-edge-id="google-ext" data-composition-points="930,444;930,560" d="M 930 444 L 930 560" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
 
         <!-- Components -->
-        <g id="node-views" data-node-id="views" data-node-label="Views Django" tabindex="0" role="button" aria-label="Focus Views Django, backoffice, leads, partners, Entrada (fina)" aria-pressed="false" data-node-kind="frontend" data-node-sublabel="backoffice, leads, partners" data-node-context="Entrada (fina)">
-          <title>Views Django · backoffice, leads, partners · Entrada (fina)</title>
-          <rect x="40" y="110" width="150" height="60" rx="6" class="c-mask"/>
-          <rect x="40" y="110" width="150" height="60" rx="6" class="c-frontend" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="frontend" class="semantic-sigil s-frontend" transform="translate(46 116) scale(0.6875)">
-            <rect x="2" y="3" width="12" height="10" rx="2"/>
-            <path d="M2 6.5h12"/>
-            <circle cx="4.1" cy="4.8" r=".7" class="sigil-fill"/>
-            <circle cx="6.3" cy="4.8" r=".7" class="sigil-fill"/>
-          </g>
-          <text data-detail-anchor x="115" y="138" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Views Django</text>
-        <text data-detail="context" x="115" y="154" class="t-muted" font-size="9" text-anchor="middle">backoffice, leads, partners</text>
-        </g>
-
-        <g id="node-api" data-node-id="api" data-node-label="API REST" tabindex="0" role="button" aria-label="Focus API REST, integracoes_api /api/v1, Entrada (fina)" aria-pressed="false" data-node-kind="backend" data-node-sublabel="integracoes_api /api/v1" data-node-context="Entrada (fina)">
-          <title>API REST · integracoes_api /api/v1 · Entrada (fina)</title>
-          <rect x="40" y="220" width="150" height="60" rx="6" class="c-mask"/>
-          <rect x="40" y="220" width="150" height="60" rx="6" class="c-backend" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(46 226) scale(0.6875)">
+        <g id="node-servicos" data-node-id="servicos" data-node-label="Servicos / Dominio" tabindex="0" role="button" aria-label="Focus Servicos / Dominio, cotacao, comercial, backoffice, automacoes, Architecture component" aria-pressed="false" data-node-kind="backend" data-node-sublabel="cotacao, comercial, backoffice, automacoes" data-node-context="Architecture component">
+          <title>Servicos / Dominio · cotacao, comercial, backoffice, automacoes · Architecture component</title>
+          <rect x="370" y="40" width="260" height="64" rx="6" class="c-mask"/>
+          <rect x="370" y="40" width="260" height="64" rx="6" class="c-backend" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(376 46) scale(0.6875)">
             <path d="M6 3 3 8l3 5M10 3l3 5-3 5"/>
           </g>
-          <text data-detail-anchor x="115" y="248" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">API REST</text>
-        <text data-detail="context" x="115" y="264" class="t-muted" font-size="9" text-anchor="middle">integracoes_api /api/v1</text>
+          <text data-detail-anchor x="500" y="70" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Servicos / Dominio</text>
+        <text data-detail="context" x="500" y="86" class="t-muted" font-size="9" text-anchor="middle">cotacao, comercial, backoffice, automacoes</text>
         </g>
 
-        <g id="node-servicos" data-node-id="servicos" data-node-label="Camada de Serviços" tabindex="0" role="button" aria-label="Focus Camada de Serviços, regra de negócio por app, Serviços / Domínio" aria-pressed="false" data-node-kind="backend" data-node-sublabel="regra de negócio por app" data-node-tag="views e API ficam finas" data-node-context="Serviços / Domínio">
-          <title>Camada de Serviços · regra de negócio por app · Serviços / Domínio · views e API ficam finas</title>
-          <rect x="280" y="150" width="160" height="90" rx="6" class="c-mask"/>
-          <rect x="280" y="150" width="160" height="90" rx="6" class="c-backend" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(286 156) scale(0.6875)">
-            <path d="M6 3 3 8l3 5M10 3l3 5-3 5"/>
-          </g>
-          <text data-detail-anchor x="360" y="193" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Camada de Serviços</text>
-        <text data-detail="context" x="360" y="209" class="t-muted" font-size="9" text-anchor="middle">regra de negócio por app</text>
-        <text data-detail="fine" x="360" y="232" class="t-backend" font-size="7" text-anchor="middle">views e API ficam finas</text>
-        </g>
-
-        <g id="node-dominio" data-node-id="dominio" data-node-label="Domínio · MySQL" tabindex="0" role="button" aria-label="Focus Domínio · MySQL, Partner · Proposal · Lead, Serviços / Domínio" aria-pressed="false" data-node-kind="database" data-node-sublabel="Partner · Proposal · Lead" data-node-tag="speed_prod (hub do sistema)" data-node-context="Serviços / Domínio">
-          <title>Domínio · MySQL · Partner · Proposal · Lead · Serviços / Domínio · speed_prod (hub do sistema)</title>
-          <rect x="285" y="330" width="150" height="84" rx="6" class="c-mask"/>
-          <rect x="285" y="330" width="150" height="84" rx="6" class="c-database" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="database" class="semantic-sigil s-database" transform="translate(291 336) scale(0.6875)">
-            <ellipse cx="8" cy="4" rx="5" ry="2"/>
-            <path d="M3 4v8c0 1.1 2.2 2 5 2s5-.9 5-2V4M3 8c0 1.1 2.2 2 5 2s5-.9 5-2"/>
-          </g>
-          <text data-detail-anchor x="360" y="370" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Domínio · MySQL</text>
-        <text data-detail="context" x="360" y="386" class="t-muted" font-size="9" text-anchor="middle">Partner · Proposal · Lead</text>
-        <text data-detail="fine" x="360" y="406" class="t-database" font-size="7" text-anchor="middle">speed_prod (hub do sistema)</text>
-        </g>
-
-        <g id="node-audit" data-node-id="audit" data-node-label="IntegrationAudit" tabindex="0" role="button" aria-label="Focus IntegrationAudit, auditoria transversal, Architecture component" aria-pressed="false" data-node-kind="database" data-node-sublabel="auditoria transversal" data-node-context="Architecture component">
-          <title>IntegrationAudit · auditoria transversal · Architecture component</title>
-          <rect x="40" y="340" width="150" height="64" rx="6" class="c-mask"/>
-          <rect x="40" y="340" width="150" height="64" rx="6" class="c-database" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="database" class="semantic-sigil s-database" transform="translate(46 346) scale(0.6875)">
-            <ellipse cx="8" cy="4" rx="5" ry="2"/>
-            <path d="M3 4v8c0 1.1 2.2 2 5 2s5-.9 5-2V4M3 8c0 1.1 2.2 2 5 2s5-.9 5-2"/>
-          </g>
-          <text data-detail-anchor x="115" y="370" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">IntegrationAudit</text>
-        <text data-detail="context" x="115" y="386" class="t-muted" font-size="9" text-anchor="middle">auditoria transversal</text>
-        </g>
-
-        <g id="node-g_ixc" data-node-id="g_ixc" data-node-label="IXCGateway" tabindex="0" role="button" aria-label="Focus IXCGateway, IXCClient (HTTP único), Camada de Integração (1 gateway por sistema)" aria-pressed="false" data-node-kind="security" data-node-sublabel="IXCClient (HTTP único)" data-node-tag="PO-022: unificar" data-node-context="Camada de Integração (1 gateway por sistema)">
-          <title>IXCGateway · IXCClient (HTTP único) · Camada de Integração (1 gateway por sistema) · PO-022: unificar</title>
-          <rect x="560" y="60" width="160" height="60" rx="6" class="c-mask"/>
-          <rect x="560" y="60" width="160" height="60" rx="6" class="c-security" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="security" class="semantic-sigil s-security" transform="translate(566 66) scale(0.6875)">
-            <path d="M8 2.2 13 4v3.5c0 3.1-1.8 5.4-5 6.5-3.2-1.1-5-3.4-5-6.5V4Z"/>
-            <path d="m5.8 8 1.5 1.5 3-3"/>
-          </g>
-          <text data-detail-anchor x="640" y="88" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">IXCGateway</text>
-        <text data-detail="context" x="640" y="104" class="t-muted" font-size="9" text-anchor="middle">IXCClient (HTTP único)</text>
-        <text data-detail="fine" x="640" y="112" class="t-security" font-size="7" text-anchor="middle">PO-022: unificar</text>
-        </g>
-
-        <g id="node-g_ad" data-node-id="g_ad" data-node-label="ADGateway" tabindex="0" role="button" aria-label="Focus ADGateway, Active Directory / LDAP, Camada de Integração (1 gateway por sistema)" aria-pressed="false" data-node-kind="security" data-node-sublabel="Active Directory / LDAP" data-node-context="Camada de Integração (1 gateway por sistema)">
-          <title>ADGateway · Active Directory / LDAP · Camada de Integração (1 gateway por sistema)</title>
-          <rect x="560" y="150" width="160" height="60" rx="6" class="c-mask"/>
-          <rect x="560" y="150" width="160" height="60" rx="6" class="c-security" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="security" class="semantic-sigil s-security" transform="translate(566 156) scale(0.6875)">
-            <path d="M8 2.2 13 4v3.5c0 3.1-1.8 5.4-5 6.5-3.2-1.1-5-3.4-5-6.5V4Z"/>
-            <path d="m5.8 8 1.5 1.5 3-3"/>
-          </g>
-          <text data-detail-anchor x="640" y="178" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">ADGateway</text>
-        <text data-detail="context" x="640" y="194" class="t-muted" font-size="9" text-anchor="middle">Active Directory / LDAP</text>
-        </g>
-
-        <g id="node-g_email" data-node-id="g_email" data-node-label="EmailGateway" tabindex="0" role="button" aria-label="Focus EmailGateway, cotação (IMAP/SMTP), Camada de Integração (1 gateway por sistema)" aria-pressed="false" data-node-kind="messagebus" data-node-sublabel="cotação (IMAP/SMTP)" data-node-context="Camada de Integração (1 gateway por sistema)">
-          <title>EmailGateway · cotação (IMAP/SMTP) · Camada de Integração (1 gateway por sistema)</title>
-          <rect x="560" y="240" width="160" height="60" rx="6" class="c-mask"/>
-          <rect x="560" y="240" width="160" height="60" rx="6" class="c-messagebus" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="messagebus" class="semantic-sigil s-messagebus" transform="translate(566 246) scale(0.6875)">
+        <g id="node-hub" data-node-id="hub" data-node-label="Integration Hub" tabindex="0" role="button" aria-label="Focus Integration Hub, ponto unico de entrada (conceitual), Architecture component" aria-pressed="false" data-node-kind="messagebus" data-node-sublabel="ponto unico de entrada (conceitual)" data-node-tag="nao construido - ver card" data-node-context="Architecture component">
+          <title>Integration Hub · ponto unico de entrada (conceitual) · Architecture component · nao construido - ver card</title>
+          <rect x="370" y="200" width="260" height="64" rx="6" class="c-mask"/>
+          <rect x="370" y="200" width="260" height="64" rx="6" class="c-messagebus" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="messagebus" class="semantic-sigil s-messagebus" transform="translate(376 206) scale(0.6875)">
             <path d="M2.5 4.5h11M2.5 8h11M2.5 11.5h11"/>
             <circle cx="5" cy="4.5" r="1" class="sigil-fill"/>
             <circle cx="10.5" cy="8" r="1" class="sigil-fill"/>
             <circle cx="7" cy="11.5" r="1" class="sigil-fill"/>
           </g>
-          <text data-detail-anchor x="640" y="268" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">EmailGateway</text>
-        <text data-detail="context" x="640" y="284" class="t-muted" font-size="9" text-anchor="middle">cotação (IMAP/SMTP)</text>
+          <text data-detail-anchor x="500" y="230" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Integration Hub</text>
+        <text data-detail="context" x="500" y="246" class="t-muted" font-size="9" text-anchor="middle">ponto unico de entrada (conceitual)</text>
+        <text data-detail="fine" x="500" y="256" class="t-messagebus" font-size="7" text-anchor="middle">nao construido - ver card</text>
         </g>
 
-        <g id="node-g_google" data-node-id="g_google" data-node-label="GoogleGateway" tabindex="0" role="button" aria-label="Focus GoogleGateway, lastmile / busca parceiro, Camada de Integração (1 gateway por sistema)" aria-pressed="false" data-node-kind="backend" data-node-sublabel="lastmile / busca parceiro" data-node-context="Camada de Integração (1 gateway por sistema)">
-          <title>GoogleGateway · lastmile / busca parceiro · Camada de Integração (1 gateway por sistema)</title>
-          <rect x="560" y="330" width="160" height="60" rx="6" class="c-mask"/>
-          <rect x="560" y="330" width="160" height="60" rx="6" class="c-backend" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(566 336) scale(0.6875)">
-            <path d="M6 3 3 8l3 5M10 3l3 5-3 5"/>
+        <g id="node-provider_ixc" data-node-id="provider_ixc" data-node-label="IXC Provider" tabindex="0" role="button" aria-label="Focus IXC Provider, client + services + mapper, Providers (1 por sistema externo)" aria-pressed="false" data-node-kind="security" data-node-sublabel="client + services + mapper" data-node-tag="real hoje (IXCGateway)" data-node-context="Providers (1 por sistema externo)">
+          <title>IXC Provider · client + services + mapper · Providers (1 por sistema externo) · real hoje (IXCGateway)</title>
+          <rect x="40" y="380" width="220" height="64" rx="6" class="c-mask"/>
+          <rect x="40" y="380" width="220" height="64" rx="6" class="c-security" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="security" class="semantic-sigil s-security" transform="translate(46 386) scale(0.6875)">
+            <path d="M8 2.2 13 4v3.5c0 3.1-1.8 5.4-5 6.5-3.2-1.1-5-3.4-5-6.5V4Z"/>
+            <path d="m5.8 8 1.5 1.5 3-3"/>
           </g>
-          <text data-detail-anchor x="640" y="358" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">GoogleGateway</text>
-        <text data-detail="context" x="640" y="374" class="t-muted" font-size="9" text-anchor="middle">lastmile / busca parceiro</text>
+          <text data-detail-anchor x="150" y="410" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">IXC Provider</text>
+        <text data-detail="context" x="150" y="426" class="t-muted" font-size="9" text-anchor="middle">client + services + mapper</text>
+        <text data-detail="fine" x="150" y="436" class="t-security" font-size="7" text-anchor="middle">real hoje (IXCGateway)</text>
         </g>
 
-        <g id="node-e_ixc" data-node-id="e_ixc" data-node-label="IXC" tabindex="0" role="button" aria-label="Focus IXC, ERP do provedor, Sistemas externos" aria-pressed="false" data-node-kind="external" data-node-sublabel="ERP do provedor" data-node-context="Sistemas externos">
-          <title>IXC · ERP do provedor · Sistemas externos</title>
-          <rect x="820" y="60" width="150" height="60" rx="6" class="c-mask"/>
-          <rect x="820" y="60" width="150" height="60" rx="6" class="c-external" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="external" class="semantic-sigil s-external" transform="translate(826 66) scale(0.6875)">
+        <g id="node-provider_correios" data-node-id="provider_correios" data-node-label="Correios Provider" tabindex="0" role="button" aria-label="Focus Correios Provider, consulta CEP, Providers (1 por sistema externo)" aria-pressed="false" data-node-kind="security" data-node-sublabel="consulta CEP" data-node-tag="gap: hoje sem provider isolado" data-node-context="Providers (1 por sistema externo)">
+          <title>Correios Provider · consulta CEP · Providers (1 por sistema externo) · gap: hoje sem provider isolado</title>
+          <rect x="300" y="380" width="220" height="64" rx="6" class="c-mask"/>
+          <rect x="300" y="380" width="220" height="64" rx="6" class="c-security" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="security" class="semantic-sigil s-security" transform="translate(306 386) scale(0.6875)">
+            <path d="M8 2.2 13 4v3.5c0 3.1-1.8 5.4-5 6.5-3.2-1.1-5-3.4-5-6.5V4Z"/>
+            <path d="m5.8 8 1.5 1.5 3-3"/>
+          </g>
+          <text data-detail-anchor x="410" y="410" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Correios Provider</text>
+        <text data-detail="context" x="410" y="426" class="t-muted" font-size="9" text-anchor="middle">consulta CEP</text>
+        <text data-detail="fine" x="410" y="436" class="t-security" font-size="7" text-anchor="middle">gap: hoje sem provider isolado</text>
+        </g>
+
+        <g id="node-provider_email" data-node-id="provider_email" data-node-label="Email Provider" tabindex="0" role="button" aria-label="Focus Email Provider, cotacao (IMAP/SMTP), Providers (1 por sistema externo)" aria-pressed="false" data-node-kind="security" data-node-sublabel="cotacao (IMAP/SMTP)" data-node-tag="real hoje (EmailGateway)" data-node-context="Providers (1 por sistema externo)">
+          <title>Email Provider · cotacao (IMAP/SMTP) · Providers (1 por sistema externo) · real hoje (EmailGateway)</title>
+          <rect x="560" y="380" width="220" height="64" rx="6" class="c-mask"/>
+          <rect x="560" y="380" width="220" height="64" rx="6" class="c-security" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="security" class="semantic-sigil s-security" transform="translate(566 386) scale(0.6875)">
+            <path d="M8 2.2 13 4v3.5c0 3.1-1.8 5.4-5 6.5-3.2-1.1-5-3.4-5-6.5V4Z"/>
+            <path d="m5.8 8 1.5 1.5 3-3"/>
+          </g>
+          <text data-detail-anchor x="670" y="410" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Email Provider</text>
+        <text data-detail="context" x="670" y="426" class="t-muted" font-size="9" text-anchor="middle">cotacao (IMAP/SMTP)</text>
+        <text data-detail="fine" x="670" y="436" class="t-security" font-size="7" text-anchor="middle">real hoje (EmailGateway)</text>
+        </g>
+
+        <g id="node-provider_google" data-node-id="provider_google" data-node-label="Google Provider" tabindex="0" role="button" aria-label="Focus Google Provider, lastmile / busca parceiro, Providers (1 por sistema externo)" aria-pressed="false" data-node-kind="security" data-node-sublabel="lastmile / busca parceiro" data-node-tag="real hoje (GoogleGateway)" data-node-context="Providers (1 por sistema externo)">
+          <title>Google Provider · lastmile / busca parceiro · Providers (1 por sistema externo) · real hoje (GoogleGateway)</title>
+          <rect x="820" y="380" width="220" height="64" rx="6" class="c-mask"/>
+          <rect x="820" y="380" width="220" height="64" rx="6" class="c-security" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="security" class="semantic-sigil s-security" transform="translate(826 386) scale(0.6875)">
+            <path d="M8 2.2 13 4v3.5c0 3.1-1.8 5.4-5 6.5-3.2-1.1-5-3.4-5-6.5V4Z"/>
+            <path d="m5.8 8 1.5 1.5 3-3"/>
+          </g>
+          <text data-detail-anchor x="930" y="410" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Google Provider</text>
+        <text data-detail="context" x="930" y="426" class="t-muted" font-size="9" text-anchor="middle">lastmile / busca parceiro</text>
+        <text data-detail="fine" x="930" y="436" class="t-security" font-size="7" text-anchor="middle">real hoje (GoogleGateway)</text>
+        </g>
+
+        <g id="node-ext_ixc" data-node-id="ext_ixc" data-node-label="IXC" tabindex="0" role="button" aria-label="Focus IXC, webservice/v1, Architecture component" aria-pressed="false" data-node-kind="external" data-node-sublabel="webservice/v1" data-node-context="Architecture component">
+          <title>IXC · webservice/v1 · Architecture component</title>
+          <rect x="40" y="560" width="220" height="60" rx="6" class="c-mask"/>
+          <rect x="40" y="560" width="220" height="60" rx="6" class="c-external" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="external" class="semantic-sigil s-external" transform="translate(46 566) scale(0.6875)">
             <rect x="2.5" y="5" width="8.5" height="8" rx="1.5"/>
             <path d="M8 2.5h5.5V8M13.5 2.5 7.5 8.5"/>
           </g>
-          <text data-detail-anchor x="895" y="88" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">IXC</text>
-        <text data-detail="context" x="895" y="104" class="t-muted" font-size="9" text-anchor="middle">ERP do provedor</text>
+          <text data-detail-anchor x="150" y="588" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">IXC</text>
+        <text data-detail="context" x="150" y="604" class="t-muted" font-size="9" text-anchor="middle">webservice/v1</text>
         </g>
 
-        <g id="node-e_ad" data-node-id="e_ad" data-node-label="Active Directory" tabindex="0" role="button" aria-label="Focus Active Directory, diretório corporativo, Sistemas externos" aria-pressed="false" data-node-kind="external" data-node-sublabel="diretório corporativo" data-node-context="Sistemas externos">
-          <title>Active Directory · diretório corporativo · Sistemas externos</title>
-          <rect x="820" y="150" width="150" height="60" rx="6" class="c-mask"/>
-          <rect x="820" y="150" width="150" height="60" rx="6" class="c-external" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="external" class="semantic-sigil s-external" transform="translate(826 156) scale(0.6875)">
+        <g id="node-ext_correios" data-node-id="ext_correios" data-node-label="API de CEP" tabindex="0" role="button" aria-label="Focus API de CEP, Hub do Desenvolvedor - nao e a API oficial dos Correios, Architecture component" aria-pressed="false" data-node-kind="external" data-node-sublabel="Hub do Desenvolvedor - nao e a API oficial dos Correios" data-node-context="Architecture component">
+          <title>API de CEP · Hub do Desenvolvedor - nao e a API oficial dos Correios · Architecture component</title>
+          <rect x="300" y="560" width="220" height="60" rx="6" class="c-mask"/>
+          <rect x="300" y="560" width="220" height="60" rx="6" class="c-external" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="external" class="semantic-sigil s-external" transform="translate(306 566) scale(0.6875)">
             <rect x="2.5" y="5" width="8.5" height="8" rx="1.5"/>
             <path d="M8 2.5h5.5V8M13.5 2.5 7.5 8.5"/>
           </g>
-          <text data-detail-anchor x="895" y="178" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Active Directory</text>
-        <text data-detail="context" x="895" y="194" class="t-muted" font-size="9" text-anchor="middle">diretório corporativo</text>
+          <text data-detail-anchor x="410" y="588" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">API de CEP</text>
+        <text data-detail="context" x="410" y="604" class="t-muted" font-size="9" text-anchor="middle">Hub do Desenvolvedor - nao e a API oficial dos Correios</text>
         </g>
 
-        <g id="node-e_email" data-node-id="e_email" data-node-label="Servidor de E-mail" tabindex="0" role="button" aria-label="Focus Servidor de E-mail, caixa de cotação, Sistemas externos" aria-pressed="false" data-node-kind="external" data-node-sublabel="caixa de cotação" data-node-context="Sistemas externos">
-          <title>Servidor de E-mail · caixa de cotação · Sistemas externos</title>
-          <rect x="820" y="240" width="150" height="60" rx="6" class="c-mask"/>
-          <rect x="820" y="240" width="150" height="60" rx="6" class="c-external" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="external" class="semantic-sigil s-external" transform="translate(826 246) scale(0.6875)">
+        <g id="node-ext_email" data-node-id="ext_email" data-node-label="Servidor de E-mail" tabindex="0" role="button" aria-label="Focus Servidor de E-mail, caixa de cotacao, Architecture component" aria-pressed="false" data-node-kind="external" data-node-sublabel="caixa de cotacao" data-node-context="Architecture component">
+          <title>Servidor de E-mail · caixa de cotacao · Architecture component</title>
+          <rect x="560" y="560" width="220" height="60" rx="6" class="c-mask"/>
+          <rect x="560" y="560" width="220" height="60" rx="6" class="c-external" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="external" class="semantic-sigil s-external" transform="translate(566 566) scale(0.6875)">
             <rect x="2.5" y="5" width="8.5" height="8" rx="1.5"/>
             <path d="M8 2.5h5.5V8M13.5 2.5 7.5 8.5"/>
           </g>
-          <text data-detail-anchor x="895" y="268" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Servidor de E-mail</text>
-        <text data-detail="context" x="895" y="284" class="t-muted" font-size="9" text-anchor="middle">caixa de cotação</text>
+          <text data-detail-anchor x="670" y="588" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Servidor de E-mail</text>
+        <text data-detail="context" x="670" y="604" class="t-muted" font-size="9" text-anchor="middle">caixa de cotacao</text>
         </g>
 
-        <g id="node-e_google" data-node-id="e_google" data-node-label="Google API" tabindex="0" role="button" aria-label="Focus Google API, fornecedores lastmile, Sistemas externos" aria-pressed="false" data-node-kind="external" data-node-sublabel="fornecedores lastmile" data-node-context="Sistemas externos">
-          <title>Google API · fornecedores lastmile · Sistemas externos</title>
-          <rect x="820" y="330" width="150" height="60" rx="6" class="c-mask"/>
-          <rect x="820" y="330" width="150" height="60" rx="6" class="c-external" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="external" class="semantic-sigil s-external" transform="translate(826 336) scale(0.6875)">
+        <g id="node-ext_google" data-node-id="ext_google" data-node-label="Google API" tabindex="0" role="button" aria-label="Focus Google API, Maps / fornecedores lastmile, Architecture component" aria-pressed="false" data-node-kind="external" data-node-sublabel="Maps / fornecedores lastmile" data-node-context="Architecture component">
+          <title>Google API · Maps / fornecedores lastmile · Architecture component</title>
+          <rect x="820" y="560" width="220" height="60" rx="6" class="c-mask"/>
+          <rect x="820" y="560" width="220" height="60" rx="6" class="c-external" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="external" class="semantic-sigil s-external" transform="translate(826 566) scale(0.6875)">
             <rect x="2.5" y="5" width="8.5" height="8" rx="1.5"/>
             <path d="M8 2.5h5.5V8M13.5 2.5 7.5 8.5"/>
           </g>
-          <text data-detail-anchor x="895" y="358" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Google API</text>
-        <text data-detail="context" x="895" y="374" class="t-muted" font-size="9" text-anchor="middle">fornecedores lastmile</text>
+          <text data-detail-anchor x="930" y="588" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Google API</text>
+        <text data-detail="context" x="930" y="604" class="t-muted" font-size="9" text-anchor="middle">Maps / fornecedores lastmile</text>
         </g>
 
         <!-- Connection labels -->
-        <g data-detail="context" data-edge-from="views" data-edge-to="servicos" data-edge-label="chama serviço" data-edge-key="0" data-edge-id="views-servicos">
-          <rect x="198.8" y="140.5" width="72.4" height="14" rx="3" class="c-mask"/>
-          <text x="235" y="150.5" class="t-backend" font-size="8" text-anchor="middle">chama serviço</text>
+        <g data-detail="context" data-edge-from="servicos" data-edge-to="hub" data-edge-label="chama - ponto unico (conceitual)" data-edge-key="0" data-edge-id="servicos-hub">
+          <rect x="418.2" y="108" width="163.6" height="14" rx="3" class="c-mask"/>
+          <text x="500" y="118" class="t-backend" font-size="8" text-anchor="middle">chama - ponto unico (conceitual)</text>
         </g>
-
-        <g data-detail="context" data-edge-from="servicos" data-edge-to="dominio" data-edge-label="ORM" data-edge-key="2" data-edge-id="servicos-dominio">
-          <rect x="345" y="244" width="30" height="14" rx="3" class="c-mask"/>
-          <text x="360" y="254" class="t-backend" font-size="8" text-anchor="middle">ORM</text>
+        <g data-detail="context" data-edge-from="hub" data-edge-to="provider_ixc" data-edge-label="execute(provider=ixc)" data-edge-key="1" data-edge-id="hub-ixc">
+          <rect x="262.6" y="302" width="110.8" height="14" rx="3" class="c-mask"/>
+          <text x="318" y="312" class="t-backend" font-size="8" text-anchor="middle">execute(provider=ixc)</text>
         </g>
-        <g data-detail="context" data-edge-from="servicos" data-edge-to="audit" data-edge-label="registra execução" data-edge-key="3" data-edge-id="servicos-audit">
-          <rect x="189.2" y="270.5" width="91.6" height="14" rx="3" class="c-mask"/>
-          <text x="235" y="280.5" class="t-messagebus" font-size="8" text-anchor="middle">registra execução</text>
+        <g data-detail="context" data-edge-from="hub" data-edge-to="provider_correios" data-edge-label="execute(provider=correios)" data-edge-key="2" data-edge-id="hub-correios">
+          <rect x="272.6" y="340" width="134.8" height="14" rx="3" class="c-mask"/>
+          <text x="340" y="350" class="t-muted" font-size="8" text-anchor="middle">execute(provider=correios)</text>
         </g>
-
-
-
-
-        <g data-detail="context" data-edge-from="g_ixc" data-edge-to="e_ixc" data-edge-label="HTTP" data-edge-key="8" data-edge-id="gixc-eixc">
-          <rect x="755" y="70" width="30" height="14" rx="3" class="c-mask"/>
-          <text x="770" y="80" class="t-backend" font-size="8" text-anchor="middle">HTTP</text>
+        <g data-detail="context" data-edge-from="hub" data-edge-to="provider_email" data-edge-label="execute(provider=email)" data-edge-key="3" data-edge-id="hub-email">
+          <rect x="524.8" y="302" width="120.39999999999999" height="14" rx="3" class="c-mask"/>
+          <text x="585" y="312" class="t-muted" font-size="8" text-anchor="middle">execute(provider=email)</text>
         </g>
-        <g data-detail="context" data-edge-from="g_ad" data-edge-to="e_ad" data-edge-label="LDAP" data-edge-key="9" data-edge-id="gad-ead">
-          <rect x="755" y="160" width="30" height="14" rx="3" class="c-mask"/>
-          <text x="770" y="170" class="t-security" font-size="8" text-anchor="middle">LDAP</text>
+        <g data-detail="context" data-edge-from="hub" data-edge-to="provider_google" data-edge-label="execute(provider=google)" data-edge-key="4" data-edge-id="hub-google">
+          <rect x="659.4" y="302" width="125.19999999999999" height="14" rx="3" class="c-mask"/>
+          <text x="722" y="312" class="t-muted" font-size="8" text-anchor="middle">execute(provider=google)</text>
         </g>
-        <g data-detail="context" data-edge-from="g_email" data-edge-to="e_email" data-edge-label="IMAP/SMTP" data-edge-key="10" data-edge-id="gemail-eemail">
-          <rect x="743.4" y="250" width="53.199999999999996" height="14" rx="3" class="c-mask"/>
-          <text x="770" y="260" class="t-muted" font-size="8" text-anchor="middle">IMAP/SMTP</text>
+        <g data-detail="context" data-edge-from="provider_ixc" data-edge-to="ext_ixc" data-edge-label="HTTP - webservice/v1" data-edge-key="5" data-edge-id="ixc-ext">
+          <rect x="97" y="448" width="106" height="14" rx="3" class="c-mask"/>
+          <text x="150" y="458" class="t-backend" font-size="8" text-anchor="middle">HTTP - webservice/v1</text>
         </g>
-        <g data-detail="context" data-edge-from="g_google" data-edge-to="e_google" data-edge-label="API" data-edge-key="11" data-edge-id="ggoogle-egoogle">
-          <rect x="755" y="340" width="30" height="14" rx="3" class="c-mask"/>
-          <text x="770" y="350" class="t-muted" font-size="8" text-anchor="middle">API</text>
+        <g data-detail="context" data-edge-from="provider_correios" data-edge-to="ext_correios" data-edge-label="GET - consulta CEP" data-edge-key="6" data-edge-id="correios-ext">
+          <rect x="361.8" y="448" width="96.39999999999999" height="14" rx="3" class="c-mask"/>
+          <text x="410" y="458" class="t-muted" font-size="8" text-anchor="middle">GET - consulta CEP</text>
+        </g>
+        <g data-detail="context" data-edge-from="provider_email" data-edge-to="ext_email" data-edge-label="IMAP/SMTP" data-edge-key="7" data-edge-id="email-ext">
+          <rect x="643.4" y="448" width="53.199999999999996" height="14" rx="3" class="c-mask"/>
+          <text x="670" y="458" class="t-muted" font-size="8" text-anchor="middle">IMAP/SMTP</text>
+        </g>
+        <g data-detail="context" data-edge-from="provider_google" data-edge-to="ext_google" data-edge-label="API" data-edge-key="8" data-edge-id="google-ext">
+          <rect x="915" y="448" width="30" height="14" rx="3" class="c-mask"/>
+          <text x="930" y="458" class="t-muted" font-size="8" text-anchor="middle">API</text>
         </g>
 
         <!-- Legend -->
         <g data-legend-bridge>
-          <text x="40" y="473" class="t-primary" font-size="9" font-weight="600">Legend</text>
-          <g data-legend-kind="frontend">
-            <rect x="40" y="478" width="14" height="9" rx="2" class="c-frontend" stroke-width="1"/>
-            <text x="60" y="486" class="t-muted" font-size="8">Frontend</text>
-          </g>
+          <text x="40" y="659" class="t-primary" font-size="9" font-weight="600">Legend</text>
           <g data-legend-kind="backend">
-            <rect x="144" y="478" width="14" height="9" rx="2" class="c-backend" stroke-width="1"/>
-            <text x="164" y="486" class="t-muted" font-size="8">Backend</text>
-          </g>
-          <g data-legend-kind="database">
-            <rect x="243" y="478" width="14" height="9" rx="2" class="c-database" stroke-width="1"/>
-            <text x="263" y="486" class="t-muted" font-size="8">Database</text>
-          </g>
-          <g data-legend-kind="security">
-            <rect x="347" y="478" width="14" height="9" rx="2" class="c-security" stroke-width="1"/>
-            <text x="367" y="486" class="t-muted" font-size="8">Security</text>
+            <rect x="40" y="664" width="14" height="9" rx="2" class="c-backend" stroke-width="1"/>
+            <text x="60" y="672" class="t-muted" font-size="8">Backend</text>
           </g>
           <g data-legend-kind="messagebus">
-            <rect x="451" y="478" width="14" height="9" rx="2" class="c-messagebus" stroke-width="1"/>
-            <text x="471" y="486" class="t-muted" font-size="8">Message bus</text>
+            <rect x="139" y="664" width="14" height="9" rx="2" class="c-messagebus" stroke-width="1"/>
+            <text x="159" y="672" class="t-muted" font-size="8">Message bus</text>
+          </g>
+          <g data-legend-kind="security">
+            <rect x="258" y="664" width="14" height="9" rx="2" class="c-security" stroke-width="1"/>
+            <text x="278" y="672" class="t-muted" font-size="8">Security</text>
           </g>
           <g data-legend-kind="external">
-            <rect x="570" y="478" width="14" height="9" rx="2" class="c-external" stroke-width="1"/>
-            <text x="590" y="486" class="t-muted" font-size="8">External</text>
+            <rect x="362" y="664" width="14" height="9" rx="2" class="c-external" stroke-width="1"/>
+            <text x="382" y="672" class="t-muted" font-size="8">External</text>
           </g>
         </g>
       </svg>
@@ -5003,7 +4952,83 @@
 
     <!-- Info Cards -->
     <div class="cards">
+      <div class="card">
+        <div class="card-header">
+          <div class="card-dot cyan"></div>
+          <h3>Sequencia de leitura - este e um ANEXO</h3>
+        </div>
+        <ul>
+          <li>&bull; 01 · Contexto - quem usa e com quais sistemas externos falamos</li>
+          <li>&bull; 02 · Ciclo de vida da cotacao - o processo de negocio (do endereco ao desfecho)</li>
+          <li>&bull; 03 · Modelo de dominio - as entidades e como se relacionam</li>
+          <li>&bull; 04 · Arquitetura-alvo - camadas, gateways e estrutura de pastas</li>
+          <li>&bull; 05 · Modulos e dependencias - quais apps existem e quem chama quem</li>
+          <li>&bull; 06 · Arquitetura do Modulo 1 - filas de entrada/saida ao IXC e fechamento de O.S.</li>
+          <li>&bull; 07 · Processos de automacoes e rotinas - o que roda, quando e por qual caminho</li>
+          <li>&bull; ANEXO A · Integration Hub conceitual - alternativa descartada</li>
+        </ul>
+      </div>
 
+      <div class="card">
+        <div class="card-header">
+          <div class="card-dot rose"></div>
+          <h3>Status: exploratorio, nao aprovado</h3>
+        </div>
+        <ul>
+          <li>&bull; Este diagrama mostra como ficaria SE o Integration Hub generico (Manager + Registry) de melhorias_arquitetura.md fosse adotado</li>
+          <li>&bull; Decisao real (2026-07-29): NAO adotar Manager/Registry generico agora - ver ADR-006, item 10 (docs/adr/ADR-006_EXPANSAO_MODULAR_MODULO_2.md)</li>
+          <li>&bull; A arquitetura aprovada e mais simples: cada modulo importa diretamente o gateway do sistema que precisa, sem indirecao dinamica por nome</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <div class="card-dot slate"></div>
+          <h3>Arquitetura real hoje (aprovada)</h3>
+        </div>
+        <ul>
+          <li>&bull; Ver docs/diagrams/gerenciador-provedores.architecture.json / .html - 1 gateway direto por sistema externo (IXCGateway, ADGateway, EmailGateway, GoogleGateway)</li>
+          <li>&bull; Servicos chamam o gateway especifico diretamente (import direto), sem Hub/Manager/Registry intermediando</li>
+          <li>&bull; Estrutura de pastas da ADR-007: os gateways ja ficam em apps/integracoes/&lt;sistema&gt;/ - agrupamento por pasta, sem camada de indirecao (PO-033, aguardando QA)</li>
+          <li>&bull; Nenhum provider isolado para Correios/CEP hoje - ver gap abaixo</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <div class="card-dot emerald"></div>
+          <h3>O que ja e real hoje (por tras de cada Provider deste desenho)</h3>
+        </div>
+        <ul>
+          <li>&bull; IXC: IXCClient em apps/integracoes/ixc/client.py - gateway unico, ja unificado (PO-022/025/026) e movido para o Hub de Integracao (PO-033, aguardando QA; antes em apps/core/ixc_client.py)</li>
+          <li>&bull; Email: sincronizacao de resposta de cotacao (IMAP) + envio (SMTP) - logica em apps/integracoes/email/ (PO-033, aguardando QA); scripts/integracoes/sincronizar_respostas_email_cotacao.py virou wrapper fino que so chama essa logica</li>
+          <li>&bull; Google: busca de fornecedores lastmile e busca de parceiro movidas para apps/integracoes/google/ (PO-033, aguardando QA; antes em scripts/integracoes/Lastmile/ e scripts/automacoes/API_BuscaParceiro/)</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <div class="card-dot amber"></div>
+          <h3>Gap: Correios Provider ainda nao existe isolado</h3>
+        </div>
+        <ul>
+          <li>&bull; Hoje a consulta de CEP e feita direto na view (clientes/views.py::buscar_cep), sem client/gateway proprio</li>
+          <li>&bull; Chama uma API terceirizada (Hub do Desenvolvedor, ws.hubdodesenvolvedor.com.br) - nao e a API oficial dos Correios</li>
+          <li>&bull; Se vier a virar gateway formal, seguiria o mesmo padrao ja aprovado (1 gateway, timeout, tratamento de erro) - decisao e escopo ficam para quando houver necessidade real (ex.: trocar de fornecedor de CEP, reaproveitar em mais de uma automacao)</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <div class="card-dot cyan"></div>
+          <h3>Se este Hub fosse construido (nao decidido)</h3>
+        </div>
+        <ul>
+          <li>&bull; Integration Manager selecionaria o provider certo por nome (&quot;ixc&quot;, &quot;correios&quot;, &quot;email&quot;, &quot;google&quot;)</li>
+          <li>&bull; Registry resolveria cada provider dinamicamente, no lugar do import direto de hoje</li>
+          <li>&bull; Custo: uma camada de indirecao a mais para gerenciar, com apenas 3-4 sistemas reais conhecidos - por isso descartado por ora (ADR-006, item 10)</li>
+        </ul>
+      </div>
     </div>
 
     <!-- Footer -->

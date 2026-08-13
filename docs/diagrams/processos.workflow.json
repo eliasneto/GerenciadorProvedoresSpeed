@@ -1,0 +1,75 @@
+{
+  "schema_version": 1,
+  "diagram_type": "workflow",
+  "meta": {
+    "title": "07 · Processos de automacoes e rotinas",
+    "subtitle": "Leitura 7 de 7 · Os quatro tipos de gatilho e os tres pipelines de execucao, levantados do docker-compose.yml e do registro de automacoes em 2026-07-29, ampliado em 2026-08-11 com o comando manual de Escolas (PO-046)",
+    "output": "docs/diagrams/processos.html",
+    "quality_profile": "standard"
+  },
+  "lanes": [
+    { "id": "admin", "label": "Gatilho: botao no Admin" },
+    { "id": "agendado", "label": "Gatilho: agendado (loop de 60s)" },
+    { "id": "integracao", "label": "Integracao externa" },
+    { "id": "planilha", "label": "Gatilho: upload de planilha" },
+    { "id": "rastro", "label": "Rastro" },
+    { "id": "eace", "label": "Gatilho: comando manual (management command)" }
+  ],
+  "phases": [
+    { "id": "disparo", "label": "Disparo", "fromCol": 0, "toCol": 0 },
+    { "id": "preparo", "label": "Preparo", "fromCol": 1, "toCol": 1 },
+    { "id": "execucao", "label": "Execucao", "fromCol": 3, "toCol": 3 },
+    { "id": "resultado", "label": "Resultado", "fromCol": 5, "toCol": 5 }
+  ],
+  "mainPath": ["cron", "busca", "normaliza", "grava"],
+  "nodes": [
+    { "id": "botao", "lane": "admin", "col": 0, "type": "frontend", "label": "Botao Admin", "sublabel": "6 disparos manuais", "tag": "duplicado em 2 admins" },
+
+    { "id": "cron", "lane": "agendado", "col": 0, "type": "backend", "label": "Loop de 60s", "sublabel": "speed_sincronizador", "tag": "6 rotinas" },
+    { "id": "busca", "lane": "agendado", "col": 1, "type": "backend", "label": "Busca lote", "sublabel": "IXC ou caixa de e-mail" },
+    { "id": "normaliza", "lane": "agendado", "col": 3, "type": "backend", "label": "Normaliza", "sublabel": "UF, cidade, filial" },
+    { "id": "grava", "lane": "agendado", "col": 5, "type": "database", "label": "Grava", "sublabel": "dominio + HistoricoSincronizacao" },
+
+    { "id": "gateway", "lane": "integracao", "col": 3, "type": "security", "label": "IXCGateway", "sublabel": "IXCClient - HTTP unico" },
+    { "id": "externo", "lane": "integracao", "col": 5, "type": "external", "label": "Externos", "sublabel": "IXC, e-mail, Google" },
+
+    { "id": "comando_eace", "lane": "eace", "col": 0, "type": "frontend", "label": "Comando manual", "sublabel": "manage.py sincronizar_escolas_dashboard_eace", "tag": "sem agendamento (PO-046)" },
+    { "id": "sincroniza_escolas", "lane": "eace", "col": 3, "type": "backend", "label": "Sincroniza", "sublabel": "update_or_create por chave (key)" },
+    { "id": "externo_eace", "lane": "eace", "col": 5, "type": "external", "label": "DashboardEACE", "sublabel": "API real (X-API-Key)" },
+
+    { "id": "upload", "lane": "planilha", "col": 0, "type": "frontend", "label": "Upload", "sublabel": "planilha - 9 automacoes" },
+    { "id": "valida", "lane": "planilha", "col": 1, "type": "security", "label": "Validacao", "sublabel": "tudo ou nada", "tag": "RN-015 / RN-016" },
+    { "id": "executa", "lane": "planilha", "col": 3, "type": "backend", "label": "Executa", "sublabel": "linha a linha - services.py" },
+    { "id": "relatorio", "lane": "planilha", "col": 5, "type": "frontend", "label": "Relatorio", "sublabel": "Excel com status por linha" },
+
+    { "id": "audit", "lane": "rastro", "col": 3, "type": "database", "label": "Auditoria", "sublabel": "IntegrationAudit por linha" }
+  ],
+  "edges": [
+    { "id": "botao-busca", "from": "botao", "to": "busca", "label": "reusa a rotina", "variant": "dashed", "route": "drop", "labelDy": 11 },
+
+    { "id": "cron-busca", "from": "cron", "to": "busca", "variant": "emphasis" },
+    { "id": "busca-normaliza", "from": "busca", "to": "normaliza", "variant": "emphasis" },
+    { "id": "normaliza-grava", "from": "normaliza", "to": "grava", "variant": "emphasis" },
+    { "id": "busca-gateway", "from": "busca", "to": "gateway", "label": "le pelo gateway", "variant": "default", "route": "drop" },
+
+    { "id": "upload-valida", "from": "upload", "to": "valida", "variant": "emphasis" },
+    { "id": "valida-executa", "from": "valida", "to": "executa", "label": "planilha aprovada", "variant": "emphasis" },
+    { "id": "executa-relatorio", "from": "executa", "to": "relatorio", "variant": "emphasis" },
+    { "id": "executa-gateway", "from": "executa", "to": "gateway", "label": "escreve pelo gateway", "variant": "default" },
+    { "id": "executa-audit", "from": "executa", "to": "audit", "label": "registra", "variant": "default" },
+
+    { "id": "gateway-externo", "from": "gateway", "to": "externo", "label": "HTTP / IMAP", "variant": "emphasis" },
+
+    { "id": "comandoeace-sincroniza", "from": "comando_eace", "to": "sincroniza_escolas", "variant": "emphasis" },
+    { "id": "sincroniza-externoeace", "from": "sincroniza_escolas", "to": "externo_eace", "label": "le via DashboardEACEClient", "variant": "default", "labelAt": [528, 700] }
+  ],
+  "cards": [
+    { "dot": "cyan", "title": "Sequencia de leitura - voce esta em 07", "items": ["01 · Contexto - quem usa e com quais sistemas externos falamos", "02 · Ciclo de vida da cotacao - o processo de negocio (do endereco ao desfecho)", "03 · Modelo de dominio - as entidades e como se relacionam", "04 · Arquitetura-alvo - camadas, gateways e estrutura de pastas", "05 · Modulos e dependencias - quais apps existem e quem chama quem", "06 · Arquitetura do Modulo 1 - filas de entrada/saida ao IXC e fechamento de O.S.", "07 · Processos de automacoes e rotinas (este diagrama) - o que roda, quando e por qual caminho", "ANEXO A · Integration Hub conceitual - alternativa descartada"] },
+    { "dot": "emerald", "title": "Os 6 processos agendados e seus horarios", "items": ["sincronizar_respostas_email_cotacao - a cada 10 min (o mais frequente)", "ixc_api_incremental - a cada 4h (00/04/08/12/16/20)", "ixc_os_comercial_lastmile - diario as 03h", "ixc_faxina - diario as 22h", "ixc_api (carga total) - diario as 23h", "backup_manual - servico proprio, separado do speed_sincronizador"] },
+    { "dot": "violet", "title": "As 9 automacoes por upload de planilha", "items": ["import_prospects · cotacao_import · atendimento_import", "cadastrar_clientes_ixc · desativar_atendimentos_ixc · editar_atendimentos_ixc", "editar_logins_ixc · resolver_os_atendimento_ixc · testar_api_ixc", "Todas registradas em AutomacaoMenu: o menu onde aparecem e a permissao de grupo sao configuraveis sem deploy (RN-011)"] },
+    { "dot": "amber", "title": "Ressalvas encontradas no levantamento (2026-07-29)", "items": ["O agendador NAO e cron: e um 'while true; sleep 60' dentro do docker-compose.yml", "O controle de 'ja rodei neste slot' vive em variavel de shell (ULTIMO_SLOT_*) - reiniciar o container perde esse estado e pode repetir ou pular uma execucao", "Os 6 disparos manuais estao duplicados em clientes/admin.py e apps/auditoria/admin.py, com os mesmos nomes de metodo", "Nenhuma das duas ressalvas foi corrigida - sao achados de diagnostico"] },
+    { "dot": "slate", "title": "Alvo da ADR-007 para estes processos", "items": ["Toda rotina agendada vira management command do app dono (manage.py <comando>), eliminando os 10 bootstraps manuais de Django em scripts/", "backup_manual e setup_speed vao para ops/ - sao infraestrutura, nao dominio", "Quando/como migrar nao foi decidido: exige alterar o docker-compose.yml e janela de validacao em producao (DevOps)"] },
+    { "dot": "rose", "title": "Manutencao deste diagrama", "items": ["E o documento do conjunto que envelhece mais rapido: muda a cada automacao nova ou horario alterado", "Gatilho de atualizacao: qualquer mudanca no bloco de comando do servico speed_sincronizador (docker-compose.yml) ou no cadastro de AutomacaoMenu", "O catalogo completo, com gatilho e frequencia de cada processo, fica na tabela de docs/ARCHITECTURE.md - aqui ficam so os caminhos de execucao"] },
+    { "dot": "orange", "title": "Quarto tipo de gatilho (2026-08-11): comando manual via CLI (PO-046)", "items": ["sincronizar_escolas_dashboard_eace (apps/escolas/management/commands/) - disparado so por 'python manage.py <comando>', sem agendamento no docker-compose.yml e sem botao no Admin", "Diferente dos 3 tipos ja catalogados (botao Admin, loop de 60s, upload de planilha) - decisao explicita da PO-046 de nao agendar automaticamente", "Ja validado contra a API real do DashboardEACE: 2622 escolas sincronizadas, comando idempotente (update_or_create por chave)", "Este e um gatilho generico novo (nao especifico de Escolas) - qualquer comando manual futuro sem Admin nem agendamento cabe aqui"] }
+  ]
+}
