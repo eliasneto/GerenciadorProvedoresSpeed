@@ -1,6 +1,5 @@
 from io import BytesIO
 import logging
-import re
 from urllib.parse import urlencode
 
 import pandas as pd
@@ -13,24 +12,21 @@ from django.db.models import Sum
 from django.http import HttpResponse
 from django.shortcuts import redirect, render
 
-from apps.core.integration_audit import dataframe_to_records, registrar_auditoria_integracao
-from core.models import IntegrationAudit
-from core_admin.automacoes_registry import automacoes_do_menu, permissao_automacao, redirect_kwargs_pagina_automacao
-from core_admin.models import AutomacaoMenu
-from scripts.integracoes.backoffice.cadastrar_cliente_ixc import executar_cadastro_cliente_ixc, validar_linha_pre_envio
-from scripts.integracoes.backoffice.cria_atendimento_ixc import (
-    executar_abertura_atendimento,
-    validar_tipo_processo,
-    TIPOS_PROCESSO,
+from apps.core.integration_audit import registrar_auditoria_integracao
+from apps.backoffice.services import (
+    CADASTRO_CLIENTE_IXC_INTEGRATION,
+    buscar_opcoes_ixc,
+    processar_atendimento_import,
+    processar_cadastro_clientes_ixc,
+    processar_cotacao_import,
 )
-from scripts.integracoes.backoffice.cria_login_atendimento import (
-    executar_cadastro_ixc,
-)
-from scripts.integracoes.ixc_client import IXCClient
+from apps.core.models import AutomacaoMenu, IntegrationAudit
+from apps.core.automacoes_registry import automacoes_do_menu, permissao_automacao, redirect_kwargs_pagina_automacao
+from apps.integracoes.ixc.services.cria_atendimento_ixc import TIPOS_PROCESSO
 
 logger = logging.getLogger(__name__)
 
-CADASTRO_CLIENTE_IXC_INTEGRATION = "cadastro_cliente_ixc"
+XLSX_CONTENT_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 
 ATENDIMENTO_COLUNAS = [
     "Cliente_ID",
@@ -105,10 +101,6 @@ def aplicar_validacao_campos_id(workbook, worksheet, colunas, campos_id, campos_
                     "error_message": f"O campo {value} aceita apenas: {', '.join(opcoes)}.",
                 },
             )
-
-
-def serializar_linha_para_auditoria(dataframe, index):
-    return {str(k).strip(): dataframe.at[index, k] for k in dataframe.columns}
 
 
 def _redirect_pagina_automacao(slug):
@@ -203,84 +195,15 @@ def cotacao_import(request):
         arquivo = request.FILES["arquivo_cotacao"]
 
         try:
-            df = pd.read_excel(arquivo)
-            itens_importados = dataframe_to_records(df)
-            registrar_auditoria_integracao(
-                integration="logins_ixc",
-                action="importacao_planilha",
-                usuario=request.user,
-                arquivo_nome=arquivo.name,
-                total_registros=len(itens_importados),
-                detalhes={"colunas": list(df.columns)},
-                itens=itens_importados,
-            )
-            df["Status_Importacao"] = ""
-            df["Mensagem_Importacao"] = ""
-            df["ID_IXC"] = ""
-
-            sucessos = 0
-            falhas = 0
-            itens_execucao = []
-
-            for index, linha in df.iterrows():
-                if pd.notna(linha.get("Login_Login")):
-                    resultado = executar_cadastro_ixc(linha)
-                    if len(resultado) == 3:
-                        status, mensagem, id_ixc = resultado
-                    else:
-                        status, mensagem = resultado
-                        id_ixc = ""
-
-                    if status:
-                        sucessos += 1
-                        df.at[index, "Status_Importacao"] = "SUCESSO"
-                    else:
-                        falhas += 1
-                        df.at[index, "Status_Importacao"] = "ERRO"
-
-                    df.at[index, "Mensagem_Importacao"] = mensagem
-                    df.at[index, "ID_IXC"] = id_ixc or ""
-                    itens_execucao.append(
-                        {
-                            "linha_numero": index + 2,
-                            "status": "sucesso" if status else "erro",
-                            "mensagem": mensagem,
-                            "id_ixc": id_ixc or "",
-                            "dados_json": serializar_linha_para_auditoria(df, index),
-                        }
-                    )
-
-            registrar_auditoria_integracao(
-                integration="logins_ixc",
-                action="execucao_integracao",
-                usuario=request.user,
-                arquivo_nome=arquivo.name,
-                total_registros=sucessos + falhas,
-                total_sucessos=sucessos,
-                total_erros=falhas,
-                detalhes={"colunas": list(df.columns)},
-                itens=itens_execucao,
-            )
+            output, filename, sucessos, falhas = processar_cotacao_import(arquivo, request.user)
 
             messages.info(
                 request,
                 f"Processamento concluido! {sucessos} Sucessos | {falhas} Erros. O relatorio foi transferido automaticamente.",
             )
 
-            output = BytesIO()
-            with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
-                df.to_excel(writer, index=False, sheet_name="Resultado_Processamento")
-                worksheet = writer.sheets["Resultado_Processamento"]
-                for col_num, _ in enumerate(df.columns.values):
-                    worksheet.set_column(col_num, col_num, 22)
-
-            output.seek(0)
-
-            response = HttpResponse(
-                output.read(),
-                content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            )
-            response["Content-Disposition"] = "attachment; filename=Relatorio_Importacao_IXC.xlsx"
+            response = HttpResponse(output.getvalue(), content_type=XLSX_CONTENT_TYPE)
+            response["Content-Disposition"] = f"attachment; filename={filename}"
             return response
 
         except Exception as e:
@@ -650,219 +573,16 @@ def atendimento_import(request):
         arquivo = request.FILES["arquivo_atendimento"]
 
         try:
-            if arquivo.name.lower().endswith(".csv"):
-                try:
-                    df = pd.read_csv(arquivo, sep=None, engine="python", encoding="utf-8")
-                except UnicodeDecodeError:
-                    arquivo.seek(0)
-                    df = pd.read_csv(arquivo, sep=None, engine="python", encoding="latin1")
-            else:
-                try:
-                    df = pd.read_excel(arquivo)
-                except ValueError:
-                    arquivo.seek(0)
-                    try:
-                        df = pd.read_csv(arquivo, sep=None, engine="python", encoding="utf-8")
-                    except UnicodeDecodeError:
-                        arquivo.seek(0)
-                        df = pd.read_csv(arquivo, sep=None, engine="python", encoding="latin1")
-
-            itens_importados = dataframe_to_records(df)
-            registrar_auditoria_integracao(
-                integration="atendimento_ixc",
-                action="importacao_planilha",
-                usuario=request.user,
-                arquivo_nome=arquivo.name,
-                total_registros=len(itens_importados),
-                detalhes={"colunas": list(df.columns)},
-                itens=itens_importados,
-            )
-            df["Status_Importacao"] = ""
-            df["Mensagem_Importacao"] = ""
-            df["ID_IXC"] = ""
-
-            # --- Fase 1: validar todos os registros antes de chamar a API ---
-            indices_com_cliente = [
-                index for index, linha in df.iterrows()
-                if pd.notna(linha.get("Cliente_ID"))
-            ]
-            erros_validacao = {}
-            for index in indices_com_cliente:
-                ok, msg_erro = validar_tipo_processo(df.loc[index])
-                if not ok:
-                    erros_validacao[index] = msg_erro
-
-            if erros_validacao:
-                for index in indices_com_cliente:
-                    if index in erros_validacao:
-                        df.at[index, "Status_Importacao"] = "ERRO_VALIDACAO"
-                        df.at[index, "Mensagem_Importacao"] = erros_validacao[index]
-                    else:
-                        df.at[index, "Status_Importacao"] = "NAO_ENVIADO"
-                        df.at[index, "Mensagem_Importacao"] = (
-                            "Nao enviado: outro registro da planilha tem divergencia de validacao."
-                        )
-
-                itens_validacao = [
-                    {
-                        "linha_numero": index + 2,
-                        "status": "erro" if index in erros_validacao else "bloqueado",
-                        "mensagem": df.at[index, "Mensagem_Importacao"],
-                        "id_ixc": "",
-                        "dados_json": serializar_linha_para_auditoria(df, index),
-                    }
-                    for index in indices_com_cliente
-                ]
-                registrar_auditoria_integracao(
-                    integration="atendimento_ixc",
-                    action="validacao_bloqueada",
-                    usuario=request.user,
-                    arquivo_nome=arquivo.name,
-                    total_registros=len(indices_com_cliente),
-                    total_sucessos=0,
-                    total_erros=len(erros_validacao),
-                    detalhes={
-                        "colunas": list(df.columns),
-                        "motivo": "Divergencia entre Tipo_Processo e Workflow_ID em um ou mais registros.",
-                    },
-                    itens=itens_validacao,
-                )
-
-                output = BytesIO()
-                with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
-                    df.to_excel(writer, index=False, sheet_name="Resultado_OS")
-                    worksheet = writer.sheets["Resultado_OS"]
-                    for col_num, _ in enumerate(df.columns.values):
-                        worksheet.set_column(col_num, col_num, 22)
-                output.seek(0)
-                response = HttpResponse(
-                    output.read(),
-                    content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                )
-                response["Content-Disposition"] = "attachment; filename=Relatorio_OS_IXC.xlsx"
-                return response
-
-            # --- Fase 2: todos passaram — enviar para a API ---
-            sucessos = 0
-            falhas = 0
-            itens_execucao = []
-
-            for index in indices_com_cliente:
-                status, mensagem = executar_abertura_atendimento(
-                    df.loc[index],
-                    usuario_sistema=request.user,
-                )
-
-                if status:
-                    sucessos += 1
-                    df.at[index, "Status_Importacao"] = "SUCESSO"
-                else:
-                    falhas += 1
-                    df.at[index, "Status_Importacao"] = "ERRO"
-
-                df.at[index, "Mensagem_Importacao"] = mensagem
-                itens_execucao.append(
-                    {
-                        "linha_numero": index + 2,
-                        "status": "sucesso" if status else "erro",
-                        "mensagem": mensagem,
-                        "id_ixc": "",
-                        "dados_json": serializar_linha_para_auditoria(df, index),
-                    }
-                )
-
-            registrar_auditoria_integracao(
-                integration="atendimento_ixc",
-                action="execucao_integracao",
-                usuario=request.user,
-                arquivo_nome=arquivo.name,
-                total_registros=sucessos + falhas,
-                total_sucessos=sucessos,
-                total_erros=falhas,
-                detalhes={"colunas": list(df.columns)},
-                itens=itens_execucao,
-            )
-
-            output = BytesIO()
-            with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
-                df.to_excel(writer, index=False, sheet_name="Resultado_OS")
-                worksheet = writer.sheets["Resultado_OS"]
-                for col_num, _ in enumerate(df.columns.values):
-                    worksheet.set_column(col_num, col_num, 22)
-
-            output.seek(0)
-            response = HttpResponse(
-                output.read(),
-                content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            )
-            response["Content-Disposition"] = "attachment; filename=Relatorio_OS_IXC.xlsx"
+            output, filename = processar_atendimento_import(arquivo, request.user)
+            response = HttpResponse(output.getvalue(), content_type=XLSX_CONTENT_TYPE)
+            response["Content-Disposition"] = f"attachment; filename={filename}"
             return response
 
-        except Exception as e:
+        except Exception:
             logger.exception("Falha ao gerar o relatorio de O.S. IXC.")
             return HttpResponse(status=400)
 
     return _redirect_pagina_automacao("atendimento_import")
-
-
-def _ler_dataframe_upload(arquivo):
-    def _normalizar_dataframe(dataframe):
-        dataframe = dataframe.copy()
-        dataframe.columns = [
-            re.sub(r"\s*\*\s*$", "", str(coluna).replace("﻿", "").strip())
-            for coluna in dataframe.columns
-        ]
-        return dataframe
-
-    if arquivo.name.lower().endswith(".csv"):
-        try:
-            return _normalizar_dataframe(
-                pd.read_csv(arquivo, sep=None, engine="python", encoding="utf-8")
-            )
-        except UnicodeDecodeError:
-            arquivo.seek(0)
-            return _normalizar_dataframe(
-                pd.read_csv(arquivo, sep=None, engine="python", encoding="latin1")
-            )
-
-    try:
-        return _normalizar_dataframe(pd.read_excel(arquivo))
-    except ValueError:
-        arquivo.seek(0)
-        try:
-            return _normalizar_dataframe(
-                pd.read_csv(arquivo, sep=None, engine="python", encoding="utf-8")
-            )
-        except UnicodeDecodeError:
-            arquivo.seek(0)
-            return _normalizar_dataframe(
-                pd.read_csv(arquivo, sep=None, engine="python", encoding="latin1")
-            )
-
-
-def _buscar_opcoes_ixc(endpoint, campo_nome="nome", limite=200):
-    payload = {
-        "qtype": "id",
-        "query": "0",
-        "oper": ">",
-        "page": "1",
-        "rp": str(limite),
-        "sortname": "id",
-        "sortorder": "asc",
-    }
-    try:
-        status_code, body = IXCClient().listar(endpoint, payload)
-        if status_code != 200 or not isinstance(body, dict):
-            return []
-        registros = body.get("registros") or []
-        return [
-            (str(r.get("id") or "").strip(), str(r.get(campo_nome) or r.get("nome") or r.get("razao") or "").strip())
-            for r in registros
-            if str(r.get("id") or "").strip()
-        ]
-    except Exception:
-        logger.exception("Falha ao buscar opcoes de %s no IXC.", endpoint)
-        return []
 
 
 @user_passes_test(permissao_automacao("cadastrar_clientes_ixc"))
@@ -877,156 +597,9 @@ def cadastrar_clientes_ixc(request):
         return _redirect_pagina_automacao("cadastrar_clientes_ixc")
 
     try:
-        df = _ler_dataframe_upload(arquivo)
-        itens_importados = dataframe_to_records(df)
-        registrar_auditoria_integracao(
-            integration=CADASTRO_CLIENTE_IXC_INTEGRATION,
-            action="importacao_planilha",
-            usuario=request.user,
-            arquivo_nome=arquivo.name,
-            total_registros=len(itens_importados),
-            detalhes={"colunas": list(df.columns)},
-            itens=itens_importados,
-        )
-
-        # --- fase 1: pre-validacao de todos os registros ---
-        opcoes_tipo_cliente = _buscar_opcoes_ixc("cliente_tipo")
-        opcoes_filial = _buscar_opcoes_ixc("filial")
-        ids_tipo_cliente = {id_ for id_, _ in opcoes_tipo_cliente} if opcoes_tipo_cliente else None
-        ids_filial = {id_ for id_, _ in opcoes_filial} if opcoes_filial else None
-
-        df["Status_Validacao"] = ""
-        df["Erros_Validacao"] = ""
-
-        total_com_erro = 0
-        total_ok = 0
-
-        for index, linha in df.iterrows():
-            if not (pd.notna(linha.get("Razao_Social")) or pd.notna(linha.get("RAZAO_SOCIAL"))):
-                continue
-            erros = validar_linha_pre_envio(dict(linha), ids_tipo_cliente, ids_filial)
-            if erros:
-                df.at[index, "Status_Validacao"] = "ERRO"
-                df.at[index, "Erros_Validacao"] = " | ".join(erros)
-                total_com_erro += 1
-            else:
-                df.at[index, "Status_Validacao"] = "OK — apto para envio"
-                total_ok += 1
-
-        if total_com_erro > 0:
-            registrar_auditoria_integracao(
-                integration=CADASTRO_CLIENTE_IXC_INTEGRATION,
-                action="validacao_planilha_recusada",
-                usuario=request.user,
-                arquivo_nome=arquivo.name,
-                total_registros=total_com_erro + total_ok,
-                total_erros=total_com_erro,
-                detalhes={
-                    "motivo": "planilha recusada na validacao pre-envio",
-                    "registros_com_erro": total_com_erro,
-                    "registros_ok": total_ok,
-                },
-            )
-
-            df_report = df[df["Status_Validacao"] != ""].copy()
-            output = BytesIO()
-            with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
-                df_report.to_excel(writer, index=False, sheet_name="Validacao_Cadastro_Clientes_IXC")
-                workbook = writer.book
-                worksheet = writer.sheets["Validacao_Cadastro_Clientes_IXC"]
-
-                fmt_erro = workbook.add_format({"bg_color": "#FEE2E2", "font_color": "#991B1B", "bold": True, "border": 1})
-                fmt_ok = workbook.add_format({"bg_color": "#DCFCE7", "font_color": "#166534", "bold": True, "border": 1})
-
-                status_col = list(df_report.columns).index("Status_Validacao")
-                erros_col = list(df_report.columns).index("Erros_Validacao")
-                num_rows = len(df_report)
-
-                worksheet.conditional_format(
-                    1, status_col, num_rows, status_col,
-                    {"type": "text", "criteria": "containing", "value": "ERRO", "format": fmt_erro},
-                )
-                worksheet.conditional_format(
-                    1, status_col, num_rows, status_col,
-                    {"type": "text", "criteria": "containing", "value": "OK", "format": fmt_ok},
-                )
-
-                for col_num, col_name in enumerate(df_report.columns):
-                    if col_name == "Erros_Validacao":
-                        worksheet.set_column(col_num, col_num, 90)
-                    elif col_name == "Status_Validacao":
-                        worksheet.set_column(col_num, col_num, 24)
-                    elif col_name in {"Razao_Social", "Nome_Fantasia", "Endereco", "Observacao"}:
-                        worksheet.set_column(col_num, col_num, 36)
-                    else:
-                        worksheet.set_column(col_num, col_num, 22)
-
-            response = HttpResponse(
-                output.getvalue(),
-                content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            )
-            response["Content-Disposition"] = "attachment; filename=Validacao_Cadastro_Clientes_IXC.xlsx"
-            return response
-
-        # --- fase 2: envio ao IXC (somente se todos passaram na validacao) ---
-        df = df.drop(columns=["Status_Validacao", "Erros_Validacao"])
-        df["Status_Importacao"] = ""
-        df["Mensagem_Importacao"] = ""
-        df["ID_IXC"] = ""
-
-        sucessos = 0
-        falhas = 0
-        itens_execucao = []
-
-        for index, linha in df.iterrows():
-            if pd.notna(linha.get("Razao_Social")) or pd.notna(linha.get("RAZAO_SOCIAL")):
-                try:
-                    status, mensagem, cliente_ixc_id = executar_cadastro_cliente_ixc(linha, usuario_sistema=request.user)
-                except Exception as exc_linha:
-                    status, mensagem, cliente_ixc_id = False, f"Erro inesperado ao processar linha: {exc_linha}", ""
-
-                if status:
-                    sucessos += 1
-                    df.at[index, "Status_Importacao"] = "SUCESSO"
-                else:
-                    falhas += 1
-                    df.at[index, "Status_Importacao"] = "ERRO"
-
-                df.at[index, "Mensagem_Importacao"] = mensagem
-                df.at[index, "ID_IXC"] = cliente_ixc_id or ""
-                itens_execucao.append(
-                    {
-                        "linha_numero": index + 2,
-                        "status": "sucesso" if status else "erro",
-                        "mensagem": mensagem,
-                        "dados_json": serializar_linha_para_auditoria(df, index),
-                    }
-                )
-
-        registrar_auditoria_integracao(
-            integration=CADASTRO_CLIENTE_IXC_INTEGRATION,
-            action="execucao_integracao",
-            usuario=request.user,
-            arquivo_nome=arquivo.name,
-            total_registros=sucessos + falhas,
-            total_sucessos=sucessos,
-            total_erros=falhas,
-            detalhes={"colunas": list(df.columns)},
-            itens=itens_execucao,
-        )
-
-        output = BytesIO()
-        with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
-            df.to_excel(writer, index=False, sheet_name="Resultado_Cadastro_Clientes_IXC")
-            worksheet = writer.sheets["Resultado_Cadastro_Clientes_IXC"]
-            for col_num, _ in enumerate(df.columns.values):
-                worksheet.set_column(col_num, col_num, 24 if df.columns[col_num] != "Mensagem_Importacao" else 90)
-
-        response = HttpResponse(
-            output.getvalue(),
-            content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        )
-        response["Content-Disposition"] = "attachment; filename=Relatorio_Cadastro_Clientes_IXC.xlsx"
+        output, filename = processar_cadastro_clientes_ixc(arquivo, request.user)
+        response = HttpResponse(output.getvalue(), content_type=XLSX_CONTENT_TYPE)
+        response["Content-Disposition"] = f"attachment; filename={filename}"
         return response
     except Exception as exc:
         logger.exception("Falha ao processar o cadastro de clientes no IXC.")
@@ -1037,8 +610,8 @@ def cadastrar_clientes_ixc(request):
 @user_passes_test(permissao_automacao("cadastrar_clientes_ixc"))
 @login_required
 def download_template_cadastro_cliente_ixc(request):
-    opcoes_tipo_cliente = _buscar_opcoes_ixc("cliente_tipo")
-    opcoes_filial = _buscar_opcoes_ixc("filial")
+    opcoes_tipo_cliente = buscar_opcoes_ixc("cliente_tipo")
+    opcoes_filial = buscar_opcoes_ixc("filial")
 
     colunas = [
         "Razao_Social",
