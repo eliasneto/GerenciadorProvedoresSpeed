@@ -26,5 +26,5 @@ services:
     command: >
       sh -c "mkdir -p /app/media &&
              chmod -R 777 /app/media &&
-             python setup_speed.py &&
-             gunicorn --bind 0.0.0.0:8000 --timeout 1200 --workers 3 --reload --log-level debug --access-logfile - config.wsgi:application"
+             python ops/setup_speed.py &&
+             gunicorn --bind 0.0.0.0:8000 --timeout 3600 --workers 3 --reload --log-level debug --access-logfile - config.wsgi:application"

@@ -1,5 +1,4 @@
 import os
-import sys
 from pathlib import Path
 
 from decouple import config
@@ -30,9 +29,6 @@ if USE_AD_AUTH:
 # Build paths inside the project
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-# Adiciona a pasta 'apps' ao PATH
-sys.path.insert(0, os.path.join(BASE_DIR, 'apps'))
-
 SECRET_KEY = config('SECRET_KEY')
 
 # SEGURANÇA: Mude para False em produção para o WhiteNoise funcionar 100%
@@ -53,14 +49,15 @@ INSTALLED_APPS = [
     'rest_framework',
     
     # Suas Apps
-    'core',
-    'auditoria',
-    'leads',
-    'partners',
-    'clientes',
-    'core_admin',
-    'backoffice',
-    'integracoes_api',
+    'apps.core',
+    'apps.auditoria',
+    'apps.leads',
+    'apps.partners',
+    'apps.clientes',
+    'apps.core_admin',
+    'apps.backoffice',
+    'apps.integracoes_api',
+    'apps.escolas',
 ]
 
 # ============================================
@@ -71,7 +68,7 @@ MIDDLEWARE = [
     'whitenoise.middleware.WhiteNoiseMiddleware', # Essencial para arquivos estáticos
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
-    'core.middleware.RestoreBackupUploadGuardMiddleware',
+    'apps.core.middleware.RestoreBackupUploadGuardMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
@@ -91,7 +88,8 @@ TEMPLATES = [
                 'django.template.context_processors.request',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
-                'core_admin.context_processors.automacoes_realocadas',
+                'apps.core_admin.context_processors.automacoes_realocadas',
+                'apps.leads.context_processors.setores_disponiveis',
             ],
         },
     },
@@ -260,22 +258,17 @@ LOGGING = {
             "level": "WARNING",
             "propagate": False,
         },
-        "core.middleware": {
-            "handlers": ["console"],
-            "level": "WARNING",
-            "propagate": False,
-        },
         "apps.core.middleware": {
             "handlers": ["console"],
             "level": "WARNING",
             "propagate": False,
         },
-        "core_admin": {
+        "apps.core_admin": {
             "handlers": ["console"],
             "level": "ERROR",
             "propagate": False,
         },
-        "backoffice": {
+        "apps.backoffice": {
             "handlers": ["console"],
             "level": "ERROR",
             "propagate": False,
@@ -310,7 +303,7 @@ GRAPH_EMAIL_REPLIES_TIMEOUT = config('GRAPH_EMAIL_REPLIES_TIMEOUT', default=30, 
 GRAPH_EMAIL_REPLIES_MAX_PAGES_PER_RUN = config('GRAPH_EMAIL_REPLIES_MAX_PAGES_PER_RUN', default=20, cast=int)
 
 REST_FRAMEWORK = {
-    "DEFAULT_SCHEMA_CLASS": "integracoes_api.schema.IntegracoesApiSchema",
+    "DEFAULT_SCHEMA_CLASS": "apps.integracoes_api.schema.IntegracoesApiSchema",
     "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
     "PAGE_SIZE": 20,
 }

@@ -138,6 +138,7 @@ def inicializar_sistema():
         "Parceiro",
         "Backoffice",
         "Gestao",
+        "Setor",
     ]
     for nome_grupo in grupos_padrao:
         _, criado = Group.objects.get_or_create(name=nome_grupo)

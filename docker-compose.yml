@@ -4,6 +4,11 @@ services:
     container_name: speed_mysql
     init: true
     restart: always
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     environment:
       - TZ=America/Fortaleza
       - MYSQL_DATABASE=${MYSQL_DATABASE}
@@ -20,6 +25,11 @@ services:
     container_name: speed_sistema
     init: true
     restart: always
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     ports:
       - "8091:8000"
     environment:
@@ -46,6 +56,9 @@ services:
       - IXC_PANEL_PASSWORD=${IXC_PANEL_PASSWORD}
       - IXC_URL=${IXC_URL}
       - IXC_TOKEN=${IXC_TOKEN}
+      # DashboardEACE (ADR-009) - estrutura preparatoria, sem contrato de API definido ainda
+      - DASHBOARD_EACE_URL=${DASHBOARD_EACE_URL}
+      - DASHBOARD_EACE_TOKEN=${DASHBOARD_EACE_TOKEN}
     extra_hosts:
       - "howbe.local:192.168.90.51"
     volumes:
@@ -53,8 +66,8 @@ services:
     command: >
       sh -c "mkdir -p /app/media &&
              chmod -R 777 /app/media &&
-             python setup_speed.py &&
-             gunicorn --bind 0.0.0.0:8000 --timeout 1200 --workers 3 --log-level debug --access-logfile - config.wsgi:application"
+             python ops/setup_speed.py &&
+             gunicorn --bind 0.0.0.0:8000 --timeout 3600 --workers 3 --log-level debug --access-logfile - config.wsgi:application"
     depends_on:
       - speed_db
 
@@ -63,6 +76,11 @@ services:
     container_name: speed_sincronizador_ixc
     init: true
     restart: always
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     environment:
       - TZ=America/Fortaleza
       - TIME_ZONE=America/Fortaleza
@@ -75,6 +93,9 @@ services:
       - OS_LASTMILE_LOOKBACK_DAYS=${OS_LASTMILE_LOOKBACK_DAYS:-10}
       - IXC_URL=${IXC_URL}
       - IXC_TOKEN=${IXC_TOKEN}
+      # DashboardEACE (ADR-009) - estrutura preparatoria, sem contrato de API definido ainda
+      - DASHBOARD_EACE_URL=${DASHBOARD_EACE_URL}
+      - DASHBOARD_EACE_TOKEN=${DASHBOARD_EACE_TOKEN}
     volumes:
       - ./media:/app/media
     depends_on:
@@ -96,39 +117,43 @@ services:
         DATA_HOJE=$$(date +%Y%m%d);
         SLOT_ATUAL=$$(date +%Y%m%d%H);
 
-        if [ \"$$MINUTO_AGORA\" = \"00\" ] && [ \"$$SLOT_ATUAL\" != \"$$ULTIMO_SLOT_INCREMENTAL\" ]; then
-          case \"$$HORA_AGORA\" in
-            00|04|08|12|16|20)
-              echo ' ['$$(date +%H:%M)'] Iniciando sincronizacao incremental programada (4h)...';
-              python scripts/integracoes/ixc_api_incremental.py;
-              ULTIMO_SLOT_INCREMENTAL=$$SLOT_ATUAL;
-              ;;
-          esac
-        fi
+        # ADR-008 (2026-08-07): sincronizacao de Cliente/Endereco com o IXC
+        # desativada a pedido do usuario - enderecos agora sao importados
+        # manualmente. Para reativar, descomentar os 4 blocos abaixo
+        # (incremental, carga total, OS comercial/lastmile e faxina).
+        # if [ \"$$MINUTO_AGORA\" = \"00\" ] && [ \"$$SLOT_ATUAL\" != \"$$ULTIMO_SLOT_INCREMENTAL\" ]; then
+        #   case \"$$HORA_AGORA\" in
+        #     00|04|08|12|16|20)
+        #       echo ' ['$$(date +%H:%M)'] Iniciando sincronizacao incremental programada (4h)...';
+        #       python manage.py ixc_sincronizacao_incremental;
+        #       ULTIMO_SLOT_INCREMENTAL=$$SLOT_ATUAL;
+        #       ;;
+        #   esac
+        # fi
 
-        if [ \"$$HORA_AGORA\" = \"23\" ] && [ \"$$MINUTO_AGORA\" = \"00\" ] && [ \"$$DATA_HOJE\" != \"$$ULTIMA_DATA_TOTAL\" ]; then
-          echo ' ['$$(date +%H:%M)'] Iniciando Carga Total Programada (23h)...';
-          python scripts/integracoes/ixc_api.py;
-          ULTIMA_DATA_TOTAL=$$DATA_HOJE;
-        fi
+        # if [ \"$$HORA_AGORA\" = \"23\" ] && [ \"$$MINUTO_AGORA\" = \"00\" ] && [ \"$$DATA_HOJE\" != \"$$ULTIMA_DATA_TOTAL\" ]; then
+        #   echo ' ['$$(date +%H:%M)'] Iniciando Carga Total Programada (23h)...';
+        #   python manage.py ixc_carga_total;
+        #   ULTIMA_DATA_TOTAL=$$DATA_HOJE;
+        # fi
 
-        if [ \"$$HORA_AGORA\" = \"03\" ] && [ \"$$MINUTO_AGORA\" = \"00\" ] && [ \"$$DATA_HOJE\" != \"$$ULTIMA_DATA_OS_LASTMILE\" ]; then
-          echo ' ['$$(date +%H:%M)'] Iniciando atualizacao diaria de OS Comercial | Lastmile (03h)...';
-          python scripts/integracoes/ixc_os_comercial_lastmile.py;
-          ULTIMA_DATA_OS_LASTMILE=$$DATA_HOJE;
-        fi
+        # if [ \"$$HORA_AGORA\" = \"03\" ] && [ \"$$MINUTO_AGORA\" = \"00\" ] && [ \"$$DATA_HOJE\" != \"$$ULTIMA_DATA_OS_LASTMILE\" ]; then
+        #   echo ' ['$$(date +%H:%M)'] Iniciando atualizacao diaria de OS Comercial | Lastmile (03h)...';
+        #   python manage.py ixc_os_comercial_lastmile;
+        #   ULTIMA_DATA_OS_LASTMILE=$$DATA_HOJE;
+        # fi
 
-        if [ \"$$HORA_AGORA\" = \"22\" ] && [ \"$$MINUTO_AGORA\" = \"00\" ] && [ \"$$DATA_HOJE\" != \"$$ULTIMA_DATA_FAXINA\" ]; then
-          echo ' ['$$(date +%H:%M)'] Iniciando Faxina Diaria (22h)...';
-          python scripts/integracoes/ixc_faxina.py;
-          ULTIMA_DATA_FAXINA=$$DATA_HOJE;
-        fi
+        # if [ \"$$HORA_AGORA\" = \"22\" ] && [ \"$$MINUTO_AGORA\" = \"00\" ] && [ \"$$DATA_HOJE\" != \"$$ULTIMA_DATA_FAXINA\" ]; then
+        #   echo ' ['$$(date +%H:%M)'] Iniciando Faxina Diaria (22h)...';
+        #   python manage.py ixc_faxina;
+        #   ULTIMA_DATA_FAXINA=$$DATA_HOJE;
+        # fi
 
         if [ \"$$SLOT_ATUAL$${MINUTO_AGORA}\" != \"$$ULTIMO_SLOT_EMAIL_RESPOSTAS\" ]; then
           case \"$$MINUTO_AGORA\" in
             00|10|20|30|40|50)
               echo ' ['$$(date +%H:%M)'] Sincronizando respostas de e-mail das cotacoes...';
-              python scripts/integracoes/sincronizar_respostas_email_cotacao.py;
+              python manage.py sincronizar_respostas_email_cotacao;
               ULTIMO_SLOT_EMAIL_RESPOSTAS=$$SLOT_ATUAL$${MINUTO_AGORA};
               ;;
           esac
@@ -145,6 +170,11 @@ services:
       - backup
     init: true
     restart: always
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     depends_on:
       - speed_db
     environment:
@@ -173,7 +203,7 @@ services:
         if [ \"$$HORA\" = \"00\" ] && [ \"$$MINUTO\" = \"00\" ]; then
           DATA=$$(date +%Y-%m-%d_%H-%M);
           echo \"[$$DATA] Iniciando backup automatico...\";
-          python scripts/integracoes/backup_manual.py;
+          python ops/backup_manual.py;
           echo \"[$$DATA] Backup automatico finalizado.\";
           sleep 60;
         fi;
