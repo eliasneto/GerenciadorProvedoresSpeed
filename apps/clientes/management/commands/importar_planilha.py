@@ -2,7 +2,7 @@ import csv
 import uuid  # <-- IMPORTANTE: Adicionamos o gerador de ID único
 from django.core.management.base import BaseCommand
 from django.db import transaction
-from clientes.models import Cliente, Endereco 
+from apps.clientes.models import Cliente, Endereco
 
 class Command(BaseCommand):
     help = 'Importa clientes e endereços de uma planilha CSV padronizada da Speed.'

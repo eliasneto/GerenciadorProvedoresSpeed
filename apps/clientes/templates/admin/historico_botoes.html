@@ -217,6 +217,11 @@
 {% endblock %}
 
 {% block object-tools-items %}
+    {% comment %}
+    ADR-008 (2026-08-07): botoes das rotinas de sincronizacao de Cliente/
+    Endereco com o IXC desativados (OS Comercial | Lastmile, Faxina,
+    Incremental, Carga Total). Descomentar junto com as views em
+    apps/clientes/admin.py e apps/auditoria/admin.py para reativar.
     <li class="sync-launcher__trigger">
         <a href="#" id="open-os-lastmile-panel">OS Comercial | Lastmile</a>
     </li>
@@ -238,6 +243,12 @@
         </a>
     </li>
     <li>
+        <a href="rodar-carga-total/" class="addlink sync-launcher__total">
+            Carga Total
+        </a>
+    </li>
+    {% endcomment %}
+    <li>
         <a href="rodar-backup/" class="addlink sync-launcher__backup">
             Rodar Backup
         </a>
@@ -247,16 +258,14 @@
             Respostas de E-mail
         </a>
     </li>
-    <li>
-        <a href="rodar-carga-total/" class="addlink sync-launcher__total">
-            Carga Total
-        </a>
-    </li>
     {{ block.super }}
 {% endblock %}
 
 {% block content_title %}
 {{ block.super }}
+{% comment %}
+ADR-008 (2026-08-07): painel de filtro da rotina OS Comercial | Lastmile
+desativado junto com o botao que o abria. Descomentar para reativar.
 <div class="sync-launcher">
     <section id="os-lastmile-panel" class="sync-launcher__panel{% if request.GET.open_os_form %} is-open{% endif %}">
         <div class="sync-launcher__hero">
@@ -304,6 +313,7 @@
         </form>
     </section>
 </div>
+{% endcomment %}
 {% endblock %}
 
 {% block footer %}
