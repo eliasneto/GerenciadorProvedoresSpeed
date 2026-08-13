@@ -1,0 +1,224 @@
+{% extends "core/base.html" %}
+
+{% block title %}Speed | Campos{% endblock %}
+
+{% block content %}
+<div class="min-h-screen bg-[#F8F9FA] -mx-6 -my-6 md:-mx-10 md:-my-10 px-6 md:px-10 py-10">
+    <div class="max-w-4xl mx-auto space-y-8">
+        <div class="mb-4 flex flex-col items-center">
+            <div class="w-20 h-20 bg-ageis-yellow rounded-[2rem] flex items-center justify-center shadow-2xl mb-6">
+                <i data-lucide="list-plus" class="text-black w-10 h-10"></i>
+            </div>
+            <h1 class="text-3xl font-black text-gray-900 uppercase italic text-center">Campos</h1>
+            <p class="text-gray-400 font-bold text-xs uppercase tracking-widest mt-2">Administração • Campos personalizados por Setor</p>
+        </div>
+
+        <div class="bg-white p-8 rounded-[3rem] border border-gray-100 shadow-sm space-y-6">
+            <div class="flex items-center justify-between gap-4">
+                <div>
+                    <p class="text-[10px] font-black uppercase tracking-widest text-gray-400">{% if campo_em_edicao %}Editando{% else %}Novo campo{% endif %}</p>
+                    <h2 class="mt-1 text-lg font-black italic text-gray-900">{% if campo_em_edicao %}Editar campo "{{ campo_em_edicao.nome }}"{% else %}Criar campo{% endif %}</h2>
+                </div>
+                {% if campo_em_edicao %}
+                <a href="{% url 'campos_list' %}" class="text-[11px] font-black uppercase tracking-widest text-gray-400 hover:text-gray-700 transition">Cancelar</a>
+                {% endif %}
+            </div>
+
+            <form method="POST" class="space-y-5" id="form-campo">
+                {% csrf_token %}
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                        <label for="{{ form.nome.id_for_label }}" class="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-2">Nome do campo</label>
+                        <input
+                            id="{{ form.nome.id_for_label }}"
+                            name="{{ form.nome.html_name }}"
+                            type="text"
+                            value="{{ form.nome.value|default:'' }}"
+                            placeholder="Ex.: Data de instalação"
+                            class="mt-2 w-full p-4 bg-gray-50 border border-gray-100 rounded-2xl text-sm font-semibold text-gray-800 outline-none focus:ring-2 focus:ring-ageis-yellow"
+                        >
+                        {% for error in form.nome.errors %}
+                        <p class="mt-2 ml-2 text-[11px] text-red-600 font-bold">{{ error }}</p>
+                        {% endfor %}
+                    </div>
+
+                    <div>
+                        <label for="{{ form.setor_nome.id_for_label }}" class="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-2">Setor dono</label>
+                        <select
+                            id="{{ form.setor_nome.id_for_label }}"
+                            name="{{ form.setor_nome.html_name }}"
+                            class="mt-2 w-full p-4 bg-gray-50 border border-gray-100 rounded-2xl text-sm font-semibold text-gray-800 outline-none focus:ring-2 focus:ring-ageis-yellow"
+                        >
+                            <option value="">Selecione um Setor</option>
+                            {% for valor, rotulo in form.setor_nome.field.choices %}
+                            <option value="{{ valor }}" {% if form.setor_nome.value == valor %}selected{% endif %}>{{ rotulo }}</option>
+                            {% endfor %}
+                        </select>
+                        {% for error in form.setor_nome.errors %}
+                        <p class="mt-2 ml-2 text-[11px] text-red-600 font-bold">{{ error }}</p>
+                        {% endfor %}
+                        {% if not form.setor_nome.field.choices %}
+                        <p class="mt-2 ml-2 text-[11px] text-gray-400 font-bold">Nenhum Setor cadastrado ainda. Cadastre um <a href="{% url 'processos_list' %}" class="underline">Processo</a> primeiro.</p>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <div>
+                    <label for="{{ form.tipo.id_for_label }}" class="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-2">Tipo</label>
+                    <select
+                        id="{{ form.tipo.id_for_label }}"
+                        name="{{ form.tipo.html_name }}"
+                        onchange="toggleBlocosPorTipoCampo(this.value)"
+                        class="mt-2 w-full p-4 bg-gray-50 border border-gray-100 rounded-2xl text-sm font-semibold text-gray-800 outline-none focus:ring-2 focus:ring-ageis-yellow"
+                    >
+                        <option value="">Selecione um tipo</option>
+                        {% for valor, rotulo in form.tipo.field.choices %}
+                        <option value="{{ valor }}" {% if form.tipo.value == valor %}selected{% endif %}>{{ rotulo }}</option>
+                        {% endfor %}
+                    </select>
+                    {% for error in form.tipo.errors %}
+                    <p class="mt-2 ml-2 text-[11px] text-red-600 font-bold">{{ error }}</p>
+                    {% endfor %}
+                </div>
+
+                <div id="bloco-opcoes-campo" class="{% if form.tipo.value != 'lista' %}hidden{% endif %}">
+                    <label for="{{ form.opcoes_texto.id_for_label }}" class="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-2">{{ form.opcoes_texto.label }}</label>
+                    <textarea
+                        id="{{ form.opcoes_texto.id_for_label }}"
+                        name="{{ form.opcoes_texto.html_name }}"
+                        rows="4"
+                        placeholder="Uma opção por linha"
+                        class="mt-2 w-full p-4 bg-gray-50 border border-gray-100 rounded-2xl text-sm font-semibold text-gray-800 outline-none focus:ring-2 focus:ring-ageis-yellow"
+                    >{{ form.opcoes_texto.value|default:'' }}</textarea>
+                    {% for error in form.opcoes_texto.errors %}
+                    <p class="mt-2 ml-2 text-[11px] text-red-600 font-bold">{{ error }}</p>
+                    {% endfor %}
+                </div>
+
+                <div id="bloco-calculado-campo" class="grid grid-cols-1 sm:grid-cols-2 gap-4 {% if form.tipo.value != 'calculado' %}hidden{% endif %}">
+                    <div>
+                        <label for="{{ form.campo_base.id_for_label }}" class="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-2">Campo base</label>
+                        <select
+                            id="{{ form.campo_base.id_for_label }}"
+                            name="{{ form.campo_base.html_name }}"
+                            class="mt-2 w-full p-4 bg-gray-50 border border-gray-100 rounded-2xl text-sm font-semibold text-gray-800 outline-none focus:ring-2 focus:ring-ageis-yellow"
+                        >
+                            <option value="">Selecione um campo do tipo Data</option>
+                            {% for campo_opcao in form.campo_base.field.queryset %}
+                            <option value="{{ campo_opcao.pk }}" {% if form.campo_base.value|stringformat:"s" == campo_opcao.pk|stringformat:"s" %}selected{% endif %}>{{ campo_opcao.nome }} ({{ campo_opcao.setor_nome }})</option>
+                            {% endfor %}
+                        </select>
+                        {% for error in form.campo_base.errors %}
+                        <p class="mt-2 ml-2 text-[11px] text-red-600 font-bold">{{ error }}</p>
+                        {% endfor %}
+                        <p class="mt-2 ml-2 text-[11px] text-gray-400 font-bold">Precisa ser um campo tipo Data do mesmo Setor dono.</p>
+                    </div>
+                    <div>
+                        <label for="{{ form.horas_prazo.id_for_label }}" class="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-2">Horas de prazo</label>
+                        <input
+                            id="{{ form.horas_prazo.id_for_label }}"
+                            name="{{ form.horas_prazo.html_name }}"
+                            type="number"
+                            min="1"
+                            step="1"
+                            value="{{ form.horas_prazo.value|default:'' }}"
+                            placeholder="Ex.: 72"
+                            class="mt-2 w-full p-4 bg-gray-50 border border-gray-100 rounded-2xl text-sm font-semibold text-gray-800 outline-none focus:ring-2 focus:ring-ageis-yellow"
+                        >
+                        {% for error in form.horas_prazo.errors %}
+                        <p class="mt-2 ml-2 text-[11px] text-red-600 font-bold">{{ error }}</p>
+                        {% endfor %}
+                        <p class="mt-2 ml-2 text-[11px] text-gray-400 font-bold">Convertidas em dias corridos (arredondado para cima).</p>
+                    </div>
+                </div>
+
+                <div>
+                    <label for="{{ form.status_condicionante_nome.id_for_label }}" class="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-2">{{ form.status_condicionante_nome.label }}</label>
+                    <input
+                        id="{{ form.status_condicionante_nome.id_for_label }}"
+                        name="{{ form.status_condicionante_nome.html_name }}"
+                        type="text"
+                        value="{{ form.status_condicionante_nome.value|default:'' }}"
+                        placeholder="Opcional — ex.: Agendando Parceiro"
+                        class="mt-2 w-full p-4 bg-gray-50 border border-gray-100 rounded-2xl text-sm font-semibold text-gray-800 outline-none focus:ring-2 focus:ring-ageis-yellow"
+                    >
+                    {% for error in form.status_condicionante_nome.errors %}
+                    <p class="mt-2 ml-2 text-[11px] text-red-600 font-bold">{{ error }}</p>
+                    {% endfor %}
+                    <p class="mt-2 ml-2 text-[11px] text-gray-400 font-bold">Preenchido, o campo só aparece no modal quando o Status atual do RE/RI/Mapa Calor tiver esse nome. Vazio: sempre aparece.</p>
+                </div>
+
+                <button type="submit" class="px-6 py-4 bg-ageis-black text-ageis-yellow font-black uppercase italic rounded-2xl hover:bg-gray-800 transition shadow-lg flex items-center gap-2 justify-center">
+                    {% if campo_em_edicao %}
+                    <i data-lucide="check" class="w-5 h-5"></i> Salvar alterações
+                    {% else %}
+                    <i data-lucide="plus" class="w-5 h-5"></i> Criar
+                    {% endif %}
+                </button>
+            </form>
+        </div>
+
+        <div class="bg-white rounded-[2.5rem] border border-gray-100 shadow-sm overflow-hidden">
+            <div class="px-8 py-6 border-b border-gray-100">
+                <p class="text-[10px] font-black uppercase tracking-widest text-gray-400">Cadastrados</p>
+                <h2 class="mt-1 text-lg font-black italic text-gray-900">Campos ({{ campos|length }})</h2>
+            </div>
+
+            <div class="divide-y divide-gray-100">
+                {% for campo in campos %}
+                <div class="flex flex-wrap items-center justify-between gap-x-4 gap-y-3 px-8 py-5">
+                    <div class="min-w-0">
+                        <p class="font-black text-gray-900 uppercase text-sm">{{ campo.nome }}</p>
+                        {% if campo.tipo == 'lista' and campo.opcoes %}
+                        <p class="text-[11px] text-gray-400 font-bold mt-1">{{ campo.opcoes|join:", " }}</p>
+                        {% endif %}
+                        {% if campo.tipo == 'calculado' and campo.campo_base %}
+                        <p class="text-[11px] text-gray-400 font-bold mt-1">{{ campo.campo_base.nome }} + {{ campo.horas_prazo }}h</p>
+                        {% endif %}
+                        {% if campo.status_condicionante_nome %}
+                        <p class="text-[11px] text-gray-400 font-bold mt-1">Só aparece no Status "{{ campo.status_condicionante_nome }}"</p>
+                        {% endif %}
+                    </div>
+                    <div class="flex items-center gap-2 flex-shrink-0">
+                        <span class="text-[10px] font-black uppercase bg-gray-100 text-gray-600 px-3 py-1.5 rounded-full">{{ campo.get_tipo_display }}</span>
+                        <span class="text-[10px] font-black uppercase bg-ageis-yellow/20 text-gray-800 px-3 py-1.5 rounded-full">{{ campo.setor_nome }}</span>
+                        <a
+                            href="{% url 'campo_editar' pk=campo.pk %}"
+                            class="flex items-center justify-center rounded-full p-1.5 -m-1 text-gray-400 hover:text-gray-800 hover:bg-gray-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-300 transition"
+                            aria-label="Editar campo {{ campo.nome }}"
+                            title="Editar campo"
+                        >
+                            <i data-lucide="pencil" class="w-3.5 h-3.5"></i>
+                        </a>
+                        <form method="POST" action="{% url 'campo_excluir' pk=campo.pk %}" onsubmit="return confirm('Excluir o campo \'{{ campo.nome|escapejs }}\'? {{ campo.total_valores }} valor(es) preenchido(s) para este campo serão perdidos.');">
+                            {% csrf_token %}
+                            <button
+                                type="submit"
+                                class="flex items-center justify-center rounded-full p-1.5 -m-1 text-gray-400 hover:text-red-600 hover:bg-red-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-300 transition"
+                                aria-label="Excluir campo {{ campo.nome }}"
+                                title="Excluir campo"
+                            >
+                                <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+                            </button>
+                        </form>
+                    </div>
+                </div>
+                {% empty %}
+                <div class="px-8 py-16 text-center opacity-40">
+                    <p class="font-black italic uppercase text-gray-600">Nenhum campo cadastrado</p>
+                    <p class="text-xs font-bold text-gray-400 mt-1">Crie o primeiro campo usando o formulário acima.</p>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    function toggleBlocosPorTipoCampo(tipo) {
+        document.getElementById('bloco-opcoes-campo').classList.toggle('hidden', tipo !== 'lista');
+        document.getElementById('bloco-calculado-campo').classList.toggle('hidden', tipo !== 'calculado');
+    }
+</script>
+{% endblock %}

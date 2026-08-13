@@ -1,0 +1,92 @@
+{% extends "core/base.html" %}
+
+{% block title %}Speed | {{ processo.nome }}{% endblock %}
+
+{% block content %}
+<div class="min-h-screen bg-[#F8F9FA] -mx-6 -my-6 md:-mx-10 md:-my-10 px-6 md:px-10 py-10">
+    <div class="max-w-4xl mx-auto space-y-8">
+        <div>
+            <a href="{% url 'processos_list' %}" class="inline-flex items-center gap-2 text-[11px] font-black uppercase tracking-widest text-gray-400 hover:text-gray-700 transition">
+                <i data-lucide="arrow-left" class="w-4 h-4"></i> Processos
+            </a>
+            <h1 class="mt-3 text-3xl font-black text-gray-900 uppercase italic">{{ processo.nome }}</h1>
+            <p class="text-gray-400 font-bold text-xs uppercase tracking-widest mt-2">Administração • Setores e Status deste processo</p>
+        </div>
+
+        <div class="bg-white p-8 rounded-[3rem] border border-gray-100 shadow-sm space-y-6">
+            <div>
+                <p class="text-[10px] font-black uppercase tracking-widest text-gray-400">Novo setor</p>
+                <h2 class="mt-1 text-lg font-black italic text-gray-900">Adicionar setor a este processo</h2>
+            </div>
+
+            <form method="POST" class="flex flex-col sm:flex-row gap-4 sm:items-end">
+                {% csrf_token %}
+                <div class="flex-grow">
+                    <label for="{{ form.nome.id_for_label }}" class="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-2">Nome do setor</label>
+                    <input
+                        id="{{ form.nome.id_for_label }}"
+                        name="{{ form.nome.html_name }}"
+                        type="text"
+                        value="{{ form.nome.value|default:'' }}"
+                        placeholder="Ex.: Lastmile"
+                        class="mt-2 w-full p-4 bg-gray-50 border border-gray-100 rounded-2xl text-sm font-semibold text-gray-800 outline-none focus:ring-2 focus:ring-ageis-yellow"
+                    >
+                    {% for error in form.nome.errors %}
+                        <p class="mt-2 ml-2 text-[11px] text-red-600 font-bold">{{ error }}</p>
+                    {% endfor %}
+                </div>
+                <button type="submit" class="px-6 py-4 bg-ageis-black text-ageis-yellow font-black uppercase italic rounded-2xl hover:bg-gray-800 transition shadow-lg flex items-center gap-2 justify-center">
+                    <i data-lucide="plus" class="w-5 h-5"></i> Adicionar setor
+                </button>
+            </form>
+        </div>
+
+        <div class="space-y-6">
+            {% for setor in setores %}
+            <div class="bg-white rounded-[2.5rem] border border-gray-100 shadow-sm overflow-hidden">
+                <div class="px-8 py-5 border-b border-gray-100 flex items-center justify-between">
+                    <h3 class="font-black text-gray-900 uppercase text-sm">{{ setor.nome }}</h3>
+                    <span class="text-[10px] font-black text-gray-400 uppercase">{{ setor.status_opcoes.all|length }} status</span>
+                </div>
+
+                <div class="px-8 py-5 space-y-4">
+                    <div class="flex flex-wrap gap-2">
+                        {% for status in setor.status_opcoes.all %}
+                        <span class="inline-flex items-center gap-2 text-[10px] font-black uppercase bg-gray-100 text-gray-600 pl-3 pr-2 py-1.5 rounded-full">
+                            {{ status.nome }}
+                            <form method="POST" action="{% url 'processo_setor_status_excluir' processo_pk=processo.pk setor_pk=setor.pk status_pk=status.pk %}" onsubmit="return confirm('Excluir o status \'{{ status.nome|escapejs }}\'? Registros de Rede Externa/Interna que usam este status ficarão sem status definido.');">
+                                {% csrf_token %}
+                                <button type="submit" class="flex items-center justify-center rounded-full p-1 -m-1 text-gray-400 hover:text-red-600 hover:bg-red-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-300 transition" aria-label="Excluir status {{ status.nome }}" title="Excluir status">
+                                    <i data-lucide="x" class="w-3 h-3"></i>
+                                </button>
+                            </form>
+                        </span>
+                        {% empty %}
+                        <span class="text-[11px] text-gray-400 font-bold italic">Nenhum status cadastrado ainda.</span>
+                        {% endfor %}
+                    </div>
+
+                    <form method="POST" action="{% url 'processo_setor_status_criar' processo_pk=processo.pk setor_pk=setor.pk %}" class="flex gap-3">
+                        {% csrf_token %}
+                        <input
+                            type="text"
+                            name="{{ status_form.nome.html_name }}"
+                            placeholder="Novo status para este setor"
+                            class="flex-grow p-3 bg-gray-50 border border-gray-100 rounded-xl text-sm font-semibold text-gray-800 outline-none focus:ring-2 focus:ring-ageis-yellow"
+                        >
+                        <button type="submit" class="px-4 py-3 bg-gray-100 text-gray-600 font-black uppercase text-[11px] rounded-xl hover:bg-gray-200 transition flex items-center gap-2">
+                            <i data-lucide="plus" class="w-4 h-4"></i> Status
+                        </button>
+                    </form>
+                </div>
+            </div>
+            {% empty %}
+            <div class="bg-white rounded-[2.5rem] border border-gray-100 shadow-sm px-8 py-16 text-center opacity-40">
+                <p class="font-black italic uppercase text-gray-600">Nenhum setor cadastrado</p>
+                <p class="text-xs font-bold text-gray-400 mt-1">Adicione o primeiro setor usando o formulário acima.</p>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+{% endblock %}

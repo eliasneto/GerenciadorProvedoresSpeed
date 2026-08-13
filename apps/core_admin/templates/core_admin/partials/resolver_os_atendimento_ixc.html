@@ -52,7 +52,7 @@
 
         <div id="resolucaoOsLoading" class="hidden flex flex-col items-center justify-center gap-3 mt-4 py-2">
             <div class="w-6 h-6 border-4 border-gray-100 border-t-ageis-yellow rounded-full animate-spin"></div>
-            <span class="text-[10px] font-black uppercase tracking-widest text-gray-500">Anexando e Fechando O.S...</span>
+            <span id="resolucaoOsLoadingText" class="text-[10px] font-black uppercase tracking-widest text-gray-500">Anexando e Fechando O.S...</span>
         </div>
 
         <div id="resolucaoOsSuccess" class="hidden flex items-center justify-center gap-2 mt-4 bg-green-50 border border-green-100 py-3 px-4 rounded-xl">
@@ -76,7 +76,37 @@
         const resolucaoOsZipName = document.getElementById('resolucaoOsZipName');
         const resolucaoOsSubmit = document.getElementById('resolucaoOsSubmit');
         const resolucaoOsLoading = document.getElementById('resolucaoOsLoading');
+        const resolucaoOsLoadingText = document.getElementById('resolucaoOsLoadingText');
         const resolucaoOsSuccess = document.getElementById('resolucaoOsSuccess');
+        const resolucaoOsProgressoUrl = "{% url 'progresso_resolucao_os_atendimento' %}";
+        const TEXTO_LOADING_PADRAO = 'Anexando e Fechando O.S...';
+
+        function gerarExecucaoId() {
+            if (window.crypto && window.crypto.randomUUID) {
+                return window.crypto.randomUUID();
+            }
+            return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+        }
+
+        function iniciarPollingProgresso(execucaoId) {
+            return setInterval(async function () {
+                try {
+                    const resposta = await fetch(`${resolucaoOsProgressoUrl}?execucao_id=${encodeURIComponent(execucaoId)}`, {
+                        headers: { 'X-Requested-With': 'XMLHttpRequest' }
+                    });
+                    if (!resposta.ok) {
+                        return;
+                    }
+                    const progresso = await resposta.json();
+                    if (progresso.status === 'em_andamento' && progresso.linha_atual && resolucaoOsLoadingText) {
+                        const atendimento = progresso.atendimento_id ? ` (Atendimento ${progresso.atendimento_id})` : '';
+                        resolucaoOsLoadingText.textContent = `Processando linha ${progresso.linha_atual} de ${progresso.total_linhas}${atendimento}...`;
+                    }
+                } catch (erroPolling) {
+                    // Falha de polling nao deve interromper a execucao principal.
+                }
+            }, 2000);
+        }
 
         if (resolucaoOsFile && resolucaoOsFileName) {
             resolucaoOsFile.addEventListener('change', function (e) {
@@ -99,10 +129,17 @@
 
                 resolucaoOsSubmit.classList.add('hidden');
                 resolucaoOsSuccess.classList.add('hidden');
+                if (resolucaoOsLoadingText) {
+                    resolucaoOsLoadingText.textContent = TEXTO_LOADING_PADRAO;
+                }
                 resolucaoOsLoading.classList.remove('hidden');
+
+                const execucaoId = gerarExecucaoId();
+                const intervalId = iniciarPollingProgresso(execucaoId);
 
                 try {
                     const formData = new FormData(resolucaoOsForm);
+                    formData.append('execucao_id', execucaoId);
                     const response = await fetch(resolucaoOsForm.action, {
                         method: 'POST',
                         body: formData,
@@ -137,6 +174,8 @@
                     }, 5000);
                 } catch (error) {
                     window.location.reload();
+                } finally {
+                    clearInterval(intervalId);
                 }
             });
         }

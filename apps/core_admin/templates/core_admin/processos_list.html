@@ -1,0 +1,69 @@
+{% extends "core/base.html" %}
+
+{% block title %}Speed | Processos{% endblock %}
+
+{% block content %}
+<div class="min-h-screen bg-[#F8F9FA] -mx-6 -my-6 md:-mx-10 md:-my-10 px-6 md:px-10 py-10">
+    <div class="max-w-4xl mx-auto space-y-8">
+        <div class="mb-4 flex flex-col items-center">
+            <div class="w-20 h-20 bg-ageis-yellow rounded-[2rem] flex items-center justify-center shadow-2xl mb-6">
+                <i data-lucide="git-branch" class="text-black w-10 h-10"></i>
+            </div>
+            <h1 class="text-3xl font-black text-gray-900 uppercase italic text-center">Processos</h1>
+            <p class="text-gray-400 font-bold text-xs uppercase tracking-widest mt-2">Administração • Catálogo de Setores e Status para RE/RI/Mapa Calor</p>
+        </div>
+
+        <div class="bg-white p-8 rounded-[3rem] border border-gray-100 shadow-sm space-y-6">
+            <div>
+                <p class="text-[10px] font-black uppercase tracking-widest text-gray-400">Novo processo</p>
+                <h2 class="mt-1 text-lg font-black italic text-gray-900">Criar processo</h2>
+            </div>
+
+            <form method="POST" class="flex flex-col sm:flex-row gap-4 sm:items-end">
+                {% csrf_token %}
+                <div class="flex-grow">
+                    <label for="{{ form.nome.id_for_label }}" class="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-2">Nome do processo</label>
+                    <input
+                        id="{{ form.nome.id_for_label }}"
+                        name="{{ form.nome.html_name }}"
+                        type="text"
+                        value="{{ form.nome.value|default:'' }}"
+                        placeholder="Ex.: Rede Externa (RE)"
+                        class="mt-2 w-full p-4 bg-gray-50 border border-gray-100 rounded-2xl text-sm font-semibold text-gray-800 outline-none focus:ring-2 focus:ring-ageis-yellow"
+                    >
+                    {% for error in form.nome.errors %}
+                        <p class="mt-2 ml-2 text-[11px] text-red-600 font-bold">{{ error }}</p>
+                    {% endfor %}
+                </div>
+                <button type="submit" class="px-6 py-4 bg-ageis-black text-ageis-yellow font-black uppercase italic rounded-2xl hover:bg-gray-800 transition shadow-lg flex items-center gap-2 justify-center">
+                    <i data-lucide="plus" class="w-5 h-5"></i> Criar
+                </button>
+            </form>
+        </div>
+
+        <div class="bg-white rounded-[2.5rem] border border-gray-100 shadow-sm overflow-hidden">
+            <div class="px-8 py-6 border-b border-gray-100">
+                <p class="text-[10px] font-black uppercase tracking-widest text-gray-400">Cadastrados</p>
+                <h2 class="mt-1 text-lg font-black italic text-gray-900">Processos ({{ processos|length }})</h2>
+            </div>
+
+            <div class="divide-y divide-gray-100">
+                {% for processo in processos %}
+                <a href="{% url 'processo_detail' pk=processo.pk %}" class="flex items-center justify-between px-8 py-5 hover:bg-gray-50 transition-all">
+                    <div>
+                        <p class="font-black text-gray-900 uppercase text-sm">{{ processo.nome }}</p>
+                        <p class="text-[11px] text-gray-400 font-bold uppercase mt-1">{{ processo.total_setores }} setor{{ processo.total_setores|pluralize }}</p>
+                    </div>
+                    <i data-lucide="chevron-right" class="w-5 h-5 text-gray-300"></i>
+                </a>
+                {% empty %}
+                <div class="px-8 py-16 text-center opacity-40">
+                    <p class="font-black italic uppercase text-gray-600">Nenhum processo cadastrado</p>
+                    <p class="text-xs font-bold text-gray-400 mt-1">Crie o primeiro processo usando o formulário acima.</p>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

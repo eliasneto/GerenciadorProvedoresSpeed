@@ -8,9 +8,10 @@ from django.http import JsonResponse
 from django.urls import path
 from django.utils import timezone
 
-from scripts.integracoes.ixc_client import IXCClient
+from apps.integracoes.ixc.client import IXCClient
+from apps.core.models import AutomacaoMenu
 
-from .models import AcessoBancoDados, AutomacaoMenu, ConfiguracaoEmailEnvio, TabelaAcessoBanco, TesteConexaoIXC
+from .models import AcessoBancoDados, ConfiguracaoEmailEnvio, TabelaAcessoBanco, TesteConexaoIXC
 
 
 def sincronizar_tabelas_do_sistema():
@@ -183,7 +184,7 @@ class TesteConexaoIXCAdmin(admin.ModelAdmin):
         return custom + urls
 
     def changelist_view(self, request, extra_context=None):
-        from scripts.integracoes.ixc_client import IXCClient as _C
+        from apps.integracoes.ixc.client import IXCClient as _C
         extra_context = extra_context or {}
         extra_context['title'] = 'Teste de Conexao — API IXC'
         extra_context['ixc_url'] = _C().base_url

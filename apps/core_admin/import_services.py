@@ -7,8 +7,8 @@ from django.contrib.auth import get_user_model
 from django.db import transaction
 from django.utils import timezone
 
-from core.models import IntegrationAudit
-from leads.models import Lead, LeadEmpresa, LeadEndereco
+from apps.core.models import IntegrationAudit
+from apps.leads.models import Lead, LeadEmpresa, LeadEndereco
 
 
 IMPORT_INTEGRATION = "importador_leads"

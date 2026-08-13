@@ -2,4 +2,4 @@ from django.apps import AppConfig
 
 
 class CoreAdminConfig(AppConfig):
-    name = 'core_admin'
+    name = 'apps.core_admin'

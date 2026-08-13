@@ -1,6 +1,6 @@
 import re
 from django.core.management.base import BaseCommand
-from leads.models import LeadEmpresa, Lead
+from apps.leads.models import LeadEmpresa, Lead
 
 
 def _converter_notacao_cientifica(valor):

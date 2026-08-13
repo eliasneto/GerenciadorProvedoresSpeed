@@ -1,4 +1,4 @@
-from core_admin.models import AutomacaoMenu
+from apps.core.models import AutomacaoMenu
 
 
 def automacoes_realocadas(request):
