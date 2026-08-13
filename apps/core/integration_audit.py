@@ -1,7 +1,7 @@
 from datetime import date, datetime
 from decimal import Decimal
 
-from core.models import IntegrationAudit, IntegrationAuditItem
+from apps.core.models import IntegrationAudit, IntegrationAuditItem
 
 
 def _json_safe(value):
@@ -49,6 +49,7 @@ def registrar_auditoria_integracao(
     total_erros=0,
     detalhes=None,
     itens=None,
+    execucao_id=None,
 ):
     audit = IntegrationAudit.objects.create(
         integration=integration,
@@ -59,6 +60,7 @@ def registrar_auditoria_integracao(
         total_sucessos=total_sucessos or 0,
         total_erros=total_erros or 0,
         detalhes_json=_json_safe(detalhes or {}),
+        execucao_id=execucao_id or None,
     )
 
     if itens:

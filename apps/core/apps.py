@@ -3,7 +3,7 @@ from django.apps import AppConfig
 
 class CoreConfig(AppConfig):
     default_auto_field = 'django.db.models.BigAutoField'
-    name = 'core'
+    name = 'apps.core'
 
     def ready(self):
-        import core.ad_sync  # noqa: F401
+        import apps.integracoes.ad.ad_sync  # noqa: F401

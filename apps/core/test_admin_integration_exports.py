@@ -6,7 +6,7 @@ import pandas as pd
 from django.http import HttpResponse
 from django.test import SimpleTestCase
 
-from core.admin_integration_exports import build_integration_audit_export, IntegrationAuditExportAdminMixin
+from apps.core.admin_integration_exports import build_integration_audit_export, IntegrationAuditExportAdminMixin
 
 
 class IntegrationAuditExportUnitTests(SimpleTestCase):

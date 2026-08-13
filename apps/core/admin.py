@@ -6,6 +6,7 @@ from .admin_integration_exports import IntegrationAuditExportAdminMixin
 from .models import (
     EmailCotacaoRespostaImportacao,
     EmailCotacaoRespostaSync,
+    EmailEscolaRespostaImportacao,
     IntegrationAudit,
     IntegrationAuditItem,
     RegistroHistorico,
@@ -72,6 +73,26 @@ class EmailCotacaoRespostaImportacaoAdmin(admin.ModelAdmin):
     )
 
 
+@admin.register(EmailEscolaRespostaImportacao)
+class EmailEscolaRespostaImportacaoAdmin(admin.ModelAdmin):
+    list_display = ("codigo_rastreio", "nivel", "remetente", "assunto", "recebido_em", "importado_em")
+    list_filter = ("nivel", "recebido_em", "importado_em")
+    search_fields = ("codigo_rastreio", "assunto", "remetente", "graph_message_id", "internet_message_id")
+    readonly_fields = (
+        "nivel",
+        "content_type",
+        "object_id",
+        "codigo_rastreio",
+        "historico",
+        "graph_message_id",
+        "internet_message_id",
+        "assunto",
+        "remetente",
+        "recebido_em",
+        "importado_em",
+    )
+
+
 class IntegrationAuditItemInline(admin.TabularInline):
     model = IntegrationAuditItem
     extra = 0
@@ -111,6 +132,7 @@ for modelo in (
     RegistroHistorico,
     EmailCotacaoRespostaSync,
     EmailCotacaoRespostaImportacao,
+    EmailEscolaRespostaImportacao,
     IntegrationAudit,
     IntegrationAuditItem,
 ):
