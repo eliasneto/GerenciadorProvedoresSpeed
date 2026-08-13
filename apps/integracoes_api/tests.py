@@ -2,8 +2,8 @@ from django.urls import reverse
 
 from rest_framework.test import APITestCase
 
-from clientes.models import Cliente, Endereco
-from partners.models import Partner, Proposal
+from apps.clientes.models import Cliente, Endereco
+from apps.partners.models import Partner, Proposal
 
 
 class IntegracoesApiTests(APITestCase):

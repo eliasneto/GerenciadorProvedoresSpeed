@@ -7,8 +7,8 @@ from rest_framework import generics, permissions
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from clientes.models import Cliente, Endereco
-from partners.models import Partner, Proposal
+from apps.clientes.models import Cliente, Endereco
+from apps.partners.models import Partner, Proposal
 
 from .schema import IntegracoesApiSchema
 from .serializers import (

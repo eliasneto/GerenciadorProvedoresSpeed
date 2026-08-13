@@ -1,7 +1,7 @@
 from rest_framework import serializers
 
-from clientes.models import Cliente, Endereco
-from partners.models import Partner, Proposal
+from apps.clientes.models import Cliente, Endereco
+from apps.partners.models import Partner, Proposal
 
 
 class ClienteSerializer(serializers.ModelSerializer):
