@@ -1,13 +1,15 @@
 from django.conf import settings
 from django.db import models
 
-from clientes.models import HistoricoSincronizacao, LogAlteracaoIXC
-from core.models import (
+from apps.clientes.models import HistoricoSincronizacao, LogAlteracaoIXC
+from apps.core.models import (
+    CotacaoStatusAuditoria as CotacaoStatusAuditoriaCore,
     EmailCotacaoRespostaImportacao,
     EmailCotacaoRespostaSync,
     IntegrationAudit,
     IntegrationAuditItem,
     RegistroHistorico,
+    RestoreBackupAuditoria as RestoreBackupAuditoriaCore,
 )
 
 
@@ -44,87 +46,30 @@ class LoginAuditoria(models.Model):
         return f"{self.get_acao_display()} - {usuario} - {self.criado_em:%d/%m/%Y %H:%M}"
 
 
-class RestoreBackupAuditoria(models.Model):
-    ORIGEM_CHOICES = [
-        ("servidor", "Backup do servidor"),
-        ("upload", "Upload manual"),
-    ]
-
-    usuario = models.ForeignKey(
-        settings.AUTH_USER_MODEL,
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name="auditorias_restore_backup",
-        verbose_name="Usuario",
-    )
-    origem = models.CharField("Origem", max_length=20, choices=ORIGEM_CHOICES)
-    arquivo_nome = models.CharField("Arquivo", max_length=255)
-    sucesso = models.BooleanField("Sucesso", default=False)
-    media_restaurada = models.BooleanField("Midia restaurada", default=False)
-    endereco_ip = models.GenericIPAddressField("Endereco IP", blank=True, null=True)
-    user_agent = models.CharField("User Agent", max_length=500, blank=True)
-    detalhes = models.TextField("Detalhes", blank=True)
-    criado_em = models.DateTimeField("Criado em", auto_now_add=True)
+class RestoreBackupAuditoria(RestoreBackupAuditoriaCore):
+    """Proxy de exibicao: dado e regra moraram em apps.core (PO-036, ADR-007 item 8),
+    mantido aqui apenas para preservar a secao do Django Admin onde este log
+    ja era exibido (mesmo precedente do IntegrationAudit/IntegrationAuditAuditoria)."""
 
     class Meta:
+        proxy = True
+        app_label = "auditoria"
         ordering = ["-criado_em"]
         verbose_name = "Auditoria de Restore de Backup"
         verbose_name_plural = "Auditorias de Restore de Backup"
 
-    def __str__(self):
-        return f"{self.arquivo_nome} - {'sucesso' if self.sucesso else 'erro'} - {self.criado_em:%d/%m/%Y %H:%M}"
 
-
-class CotacaoStatusAuditoria(models.Model):
-    ORIGEM_CHOICES = [
-        ("alteracao_individual", "Alteracao individual"),
-        ("alteracao_lote", "Alteracao em lote"),
-        ("conversao_viavel", "Conversao de cotacao viavel"),
-        ("fechamento_automatico", "Fechamento automatico de outra cotacao"),
-    ]
-
-    usuario = models.ForeignKey(
-        settings.AUTH_USER_MODEL,
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name="auditorias_status_cotacao",
-        verbose_name="Usuario",
-    )
-    proposal = models.ForeignKey(
-        "partners.Proposal",
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name="auditorias_status",
-        verbose_name="Cotacao",
-    )
-    codigo_cotacao = models.CharField("Codigo da cotacao", max_length=30, blank=True)
-    codigo_lote = models.CharField("Codigo do lote", max_length=30, blank=True)
-    parceiro_nome = models.CharField("Parceiro", max_length=200, blank=True)
-    cliente_nome = models.CharField("Cliente", max_length=255, blank=True)
-    endereco_referencia = models.CharField("Endereco", max_length=255, blank=True)
-    status_anterior = models.CharField("Status anterior", max_length=30)
-    status_novo = models.CharField("Status novo", max_length=30)
-    origem = models.CharField("Origem", max_length=30, choices=ORIGEM_CHOICES)
-    integrou_ixc = models.BooleanField("Integrou com IXC", default=False)
-    endereco_ip = models.GenericIPAddressField("Endereco IP", blank=True, null=True)
-    user_agent = models.CharField("User Agent", max_length=500, blank=True)
-    detalhes = models.TextField("Detalhes", blank=True)
-    criado_em = models.DateTimeField("Criado em", auto_now_add=True)
+class CotacaoStatusAuditoria(CotacaoStatusAuditoriaCore):
+    """Proxy de exibicao: dado e regra moraram em apps.core (PO-036, ADR-007 item 8),
+    mantido aqui apenas para preservar a secao do Django Admin onde este log
+    ja era exibido (mesmo precedente do IntegrationAudit/IntegrationAuditAuditoria)."""
 
     class Meta:
+        proxy = True
+        app_label = "auditoria"
         ordering = ["-criado_em"]
         verbose_name = "Auditoria de Status da Cotacao"
         verbose_name_plural = "Auditorias de Status das Cotacoes"
-
-    def __str__(self):
-        return (
-            f"{self.codigo_cotacao or 'cotacao'} - "
-            f"{self.status_anterior} -> {self.status_novo} - "
-            f"{self.criado_em:%d/%m/%Y %H:%M}"
-        )
 
 
 class RegistroHistoricoAuditoria(RegistroHistorico):

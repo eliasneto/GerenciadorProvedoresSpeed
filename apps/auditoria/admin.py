@@ -8,11 +8,9 @@ from django.http import HttpResponse, HttpResponseRedirect
 from django.urls import path, reverse
 from django.utils.http import urlencode
 
-from clientes.sync_utils import buscar_rotina_em_execucao, descrever_rotina_em_execucao
-from core.admin_integration_exports import IntegrationAuditExportAdminMixin
-from core.integration_audit import dataframe_to_records, registrar_auditoria_integracao
-from core.models import IntegrationAuditItem
-from scripts.integracoes.backoffice.desativar_atendimento_ixc import executar_desativacao_atendimento
+from apps.clientes.sync_utils import buscar_rotina_em_execucao, descrever_rotina_em_execucao
+from apps.core.admin_integration_exports import IntegrationAuditExportAdminMixin
+from apps.core.models import IntegrationAuditItem
 
 from .models import (
     CadastroClienteIXCAuditoria,
@@ -289,11 +287,6 @@ class DesativacaoAtendimentoIXCAuditoriaAdmin(IntegrationAuditExportAdminMixin, 
                 self.admin_site.admin_view(self.baixar_modelo_desativacao),
                 name="auditoria_desativacaoatendimentoixcauditoria_baixar_modelo",
             ),
-            path(
-                "processar-planilha/",
-                self.admin_site.admin_view(self.processar_planilha_desativacao),
-                name="auditoria_desativacaoatendimentoixcauditoria_processar_planilha",
-            ),
         ]
         return custom_urls + urls
 
@@ -304,34 +297,9 @@ class DesativacaoAtendimentoIXCAuditoriaAdmin(IntegrationAuditExportAdminMixin, 
                 "download_modelo_url": reverse(
                     "admin:auditoria_desativacaoatendimentoixcauditoria_baixar_modelo"
                 ),
-                "processar_planilha_url": reverse(
-                    "admin:auditoria_desativacaoatendimentoixcauditoria_processar_planilha"
-                ),
-                "pode_processar_desativacao": self.has_change_permission(request),
             }
         )
         return super().changelist_view(request, extra_context=extra_context)
-
-    def _serializar_linha_para_auditoria(self, dataframe, index):
-        return {str(k).strip(): dataframe.at[index, k] for k in dataframe.columns}
-
-    def _ler_dataframe_upload(self, arquivo):
-        if arquivo.name.lower().endswith(".csv"):
-            try:
-                return pd.read_csv(arquivo, sep=None, engine="python", encoding="utf-8")
-            except UnicodeDecodeError:
-                arquivo.seek(0)
-                return pd.read_csv(arquivo, sep=None, engine="python", encoding="latin1")
-
-        try:
-            return pd.read_excel(arquivo)
-        except ValueError:
-            arquivo.seek(0)
-            try:
-                return pd.read_csv(arquivo, sep=None, engine="python", encoding="utf-8")
-            except UnicodeDecodeError:
-                arquivo.seek(0)
-                return pd.read_csv(arquivo, sep=None, engine="python", encoding="latin1")
 
     def baixar_modelo_desativacao(self, request):
         if not self.has_view_permission(request):
@@ -433,94 +401,6 @@ class DesativacaoAtendimentoIXCAuditoriaAdmin(IntegrationAuditExportAdminMixin, 
         response["Content-Disposition"] = "attachment; filename=Modelo_Desativacao_Atendimentos_IXC.xlsx"
         return response
 
-    def processar_planilha_desativacao(self, request):
-        if request.method != "POST":
-            return HttpResponseRedirect("../")
-
-        if not self.has_change_permission(request):
-            raise PermissionDenied
-
-        arquivo = request.FILES.get("arquivo_desativacao_atendimento")
-        if not arquivo:
-            messages.error(request, "Selecione uma planilha para processar a desativacao dos atendimentos.")
-            return HttpResponseRedirect("../")
-
-        try:
-            df = self._ler_dataframe_upload(arquivo)
-            itens_importados = dataframe_to_records(df)
-            registrar_auditoria_integracao(
-                integration=self.integration_code,
-                action="importacao_planilha",
-                usuario=request.user,
-                arquivo_nome=arquivo.name,
-                total_registros=len(itens_importados),
-                detalhes={"colunas": list(df.columns)},
-                itens=itens_importados,
-            )
-
-            df["Status_Importacao"] = ""
-            df["Mensagem_Importacao"] = ""
-            df["ID_IXC"] = ""
-
-            sucessos = 0
-            falhas = 0
-            itens_execucao = []
-
-            for index, linha in df.iterrows():
-                if pd.notna(linha.get("Atendimento_ID")):
-                    status, mensagem, atendimento_id = executar_desativacao_atendimento(
-                        linha,
-                        usuario_sistema=request.user,
-                    )
-
-                    if status:
-                        sucessos += 1
-                        df.at[index, "Status_Importacao"] = "SUCESSO"
-                    else:
-                        falhas += 1
-                        df.at[index, "Status_Importacao"] = "ERRO"
-
-                    df.at[index, "Mensagem_Importacao"] = mensagem
-                    df.at[index, "ID_IXC"] = atendimento_id or ""
-                    itens_execucao.append(
-                        {
-                            "linha_numero": index + 2,
-                            "status": "sucesso" if status else "erro",
-                            "mensagem": mensagem,
-                            "dados_json": self._serializar_linha_para_auditoria(df, index),
-                        }
-                    )
-
-            registrar_auditoria_integracao(
-                integration=self.integration_code,
-                action="execucao_integracao",
-                usuario=request.user,
-                arquivo_nome=arquivo.name,
-                total_registros=sucessos + falhas,
-                total_sucessos=sucessos,
-                total_erros=falhas,
-                detalhes={"colunas": list(df.columns)},
-                itens=itens_execucao,
-            )
-
-            output = BytesIO()
-            with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
-                df.to_excel(writer, index=False, sheet_name="Resultado_Desativacao_IXC")
-                worksheet = writer.sheets["Resultado_Desativacao_IXC"]
-                for col_num, _ in enumerate(df.columns.values):
-                    worksheet.set_column(col_num, col_num, 24)
-
-            output.seek(0)
-            response = HttpResponse(
-                output.read(),
-                content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            )
-            response["Content-Disposition"] = "attachment; filename=Relatorio_Desativacao_Atendimentos_IXC.xlsx"
-            return response
-        except Exception as exc:
-            messages.error(request, f"Falha ao processar a desativacao dos atendimentos: {exc}")
-            return HttpResponseRedirect("../")
-
 
 @admin.register(LogAlteracaoIXCAuditoria)
 class LogAlteracaoIXCAuditoriaAdmin(admin.ModelAdmin):
@@ -543,118 +423,123 @@ class HistoricoSincronizacaoAuditoriaAdmin(admin.ModelAdmin):
     def get_urls(self):
         urls = super().get_urls()
         custom_urls = [
-            path("rodar-carga-total/", self.admin_site.admin_view(self.btn_rodar_carga_total), name="rodar-carga-total"),
-            path("rodar-incremental/", self.admin_site.admin_view(self.btn_rodar_incremental), name="rodar-incremental"),
-            path("rodar-faxina/", self.admin_site.admin_view(self.btn_rodar_faxina), name="rodar-faxina"),
-            path("rodar-os-comercial-lastmile/", self.admin_site.admin_view(self.btn_rodar_os_comercial_lastmile), name="rodar-os-comercial-lastmile"),
-            path("parar-os-comercial-lastmile/", self.admin_site.admin_view(self.btn_parar_os_comercial_lastmile), name="parar-os-comercial-lastmile"),
+            # ADR-008 (2026-08-07): rotinas de sincronizacao de Cliente/Endereco
+            # com o IXC desativadas. Descomentar as 5 linhas abaixo para reativar.
+            # path("rodar-carga-total/", self.admin_site.admin_view(self.btn_rodar_carga_total), name="rodar-carga-total"),
+            # path("rodar-incremental/", self.admin_site.admin_view(self.btn_rodar_incremental), name="rodar-incremental"),
+            # path("rodar-faxina/", self.admin_site.admin_view(self.btn_rodar_faxina), name="rodar-faxina"),
+            # path("rodar-os-comercial-lastmile/", self.admin_site.admin_view(self.btn_rodar_os_comercial_lastmile), name="rodar-os-comercial-lastmile"),
+            # path("parar-os-comercial-lastmile/", self.admin_site.admin_view(self.btn_parar_os_comercial_lastmile), name="parar-os-comercial-lastmile"),
             path("rodar-respostas-email-cotacao/", self.admin_site.admin_view(self.btn_rodar_respostas_email_cotacao), name="rodar-respostas-email-cotacao"),
             path("rodar-backup/", self.admin_site.admin_view(self.btn_rodar_backup), name="rodar-backup"),
         ]
         return custom_urls + urls
 
-    def changelist_view(self, request, extra_context=None):
-        extra_context = extra_context or {}
-        rotina_os_lastmile_ativa = buscar_rotina_em_execucao("os_comercial_lastmile")
-        extra_context.update({
-            "rotina_os_lastmile_ativa": rotina_os_lastmile_ativa,
-            "rotina_os_lastmile_descricao": (
-                descrever_rotina_em_execucao("os_comercial_lastmile", rotina_os_lastmile_ativa)
-                if rotina_os_lastmile_ativa else ""
-            ),
-        })
-        return super().changelist_view(request, extra_context=extra_context)
+    # ADR-008 (2026-08-07): so existia para informar o status da rotina de OS
+    # Comercial | Lastmile (desativada) ao template. Descomentar junto com os
+    # botoes acima para reativar.
+    # def changelist_view(self, request, extra_context=None):
+    #     extra_context = extra_context or {}
+    #     rotina_os_lastmile_ativa = buscar_rotina_em_execucao("os_comercial_lastmile")
+    #     extra_context.update({
+    #         "rotina_os_lastmile_ativa": rotina_os_lastmile_ativa,
+    #         "rotina_os_lastmile_descricao": (
+    #             descrever_rotina_em_execucao("os_comercial_lastmile", rotina_os_lastmile_ativa)
+    #             if rotina_os_lastmile_ativa else ""
+    #         ),
+    #     })
+    #     return super().changelist_view(request, extra_context=extra_context)
 
-    def btn_rodar_carga_total(self, request):
-        rotina_ativa = buscar_rotina_em_execucao("total")
-        if rotina_ativa:
-            self.message_user(request, descrever_rotina_em_execucao("total", rotina_ativa), messages.WARNING)
-            return HttpResponseRedirect("../")
-        subprocess.Popen(["python", "scripts/integracoes/ixc_api.py", "manual", request.user.username])
-        self.message_user(request, "Carga total iniciada em segundo plano.", messages.SUCCESS)
-        return HttpResponseRedirect("../")
+    # def btn_rodar_carga_total(self, request):
+    #     rotina_ativa = buscar_rotina_em_execucao("total")
+    #     if rotina_ativa:
+    #         self.message_user(request, descrever_rotina_em_execucao("total", rotina_ativa), messages.WARNING)
+    #         return HttpResponseRedirect("../")
+    #     subprocess.Popen(["python", "scripts/integracoes/ixc_api.py", "manual", request.user.username])
+    #     self.message_user(request, "Carga total iniciada em segundo plano.", messages.SUCCESS)
+    #     return HttpResponseRedirect("../")
 
-    def btn_rodar_incremental(self, request):
-        rotina_ativa = buscar_rotina_em_execucao("incremental")
-        if rotina_ativa:
-            self.message_user(request, descrever_rotina_em_execucao("incremental", rotina_ativa), messages.WARNING)
-            return HttpResponseRedirect("../")
-        subprocess.Popen(["python", "scripts/integracoes/ixc_api_incremental.py", "manual", request.user.username])
-        self.message_user(request, "Sincronizacao incremental iniciada.", messages.SUCCESS)
-        return HttpResponseRedirect("../")
+    # def btn_rodar_incremental(self, request):
+    #     rotina_ativa = buscar_rotina_em_execucao("incremental")
+    #     if rotina_ativa:
+    #         self.message_user(request, descrever_rotina_em_execucao("incremental", rotina_ativa), messages.WARNING)
+    #         return HttpResponseRedirect("../")
+    #     subprocess.Popen(["python", "scripts/integracoes/ixc_api_incremental.py", "manual", request.user.username])
+    #     self.message_user(request, "Sincronizacao incremental iniciada.", messages.SUCCESS)
+    #     return HttpResponseRedirect("../")
 
-    def btn_rodar_faxina(self, request):
-        rotina_ativa = buscar_rotina_em_execucao("faxina")
-        if rotina_ativa:
-            self.message_user(request, descrever_rotina_em_execucao("faxina", rotina_ativa), messages.WARNING)
-            return HttpResponseRedirect("../")
-        subprocess.Popen(["python", "scripts/integracoes/ixc_faxina.py", "manual", request.user.username])
-        self.message_user(request, "Rotina de faxina iniciada.", messages.SUCCESS)
-        return HttpResponseRedirect("../")
+    # def btn_rodar_faxina(self, request):
+    #     rotina_ativa = buscar_rotina_em_execucao("faxina")
+    #     if rotina_ativa:
+    #         self.message_user(request, descrever_rotina_em_execucao("faxina", rotina_ativa), messages.WARNING)
+    #         return HttpResponseRedirect("../")
+    #     subprocess.Popen(["python", "scripts/integracoes/ixc_faxina.py", "manual", request.user.username])
+    #     self.message_user(request, "Rotina de faxina iniciada.", messages.SUCCESS)
+    #     return HttpResponseRedirect("../")
 
-    def btn_rodar_os_comercial_lastmile(self, request):
-        rotina_ativa = buscar_rotina_em_execucao("os_comercial_lastmile")
-        if rotina_ativa:
-            self.message_user(
-                request,
-                descrever_rotina_em_execucao("os_comercial_lastmile", rotina_ativa),
-                messages.WARNING,
-            )
-            return HttpResponseRedirect("../?" + urlencode({"tipo__exact": "os_comercial_lastmile"}))
+    # def btn_rodar_os_comercial_lastmile(self, request):
+    #     rotina_ativa = buscar_rotina_em_execucao("os_comercial_lastmile")
+    #     if rotina_ativa:
+    #         self.message_user(
+    #             request,
+    #             descrever_rotina_em_execucao("os_comercial_lastmile", rotina_ativa),
+    #             messages.WARNING,
+    #         )
+    #         return HttpResponseRedirect("../?" + urlencode({"tipo__exact": "os_comercial_lastmile"}))
+    #
+    #     comando = ["python", "scripts/integracoes/ixc_os_comercial_lastmile.py", "manual", request.user.username]
+    #
+    #     cliente_local_id = (request.GET.get("cliente_local_id") or "").strip()
+    #     cliente_ixc_id = (request.GET.get("cliente_ixc_id") or "").strip()
+    #     os_alterada_desde = (request.GET.get("os_alterada_desde") or "").strip()
+    #     os_alterada_nos_ultimos_dias = (request.GET.get("os_alterada_nos_ultimos_dias") or "").strip()
+    #
+    #     if cliente_local_id:
+    #         comando.append(f"--cliente-local-id={cliente_local_id}")
+    #     if cliente_ixc_id:
+    #         comando.append(f"--cliente-ixc-id={cliente_ixc_id}")
+    #     if os_alterada_desde:
+    #         comando.append(f"--os-alterada-desde={os_alterada_desde}")
+    #     if os_alterada_nos_ultimos_dias:
+    #         comando.append(f"--os-alterada-nos-ultimos-dias={os_alterada_nos_ultimos_dias}")
+    #
+    #     subprocess.Popen(comando)
+    #
+    #     detalhes = []
+    #     if cliente_local_id:
+    #         detalhes.append(f"cliente local {cliente_local_id}")
+    #     if cliente_ixc_id:
+    #         detalhes.append(f"cliente IXC {cliente_ixc_id}")
+    #     if os_alterada_desde:
+    #         detalhes.append(f"O.S. alterada desde {os_alterada_desde}")
+    #     if os_alterada_nos_ultimos_dias:
+    #         detalhes.append(f"O.S. alterada nos ultimos {os_alterada_nos_ultimos_dias} dias")
+    #
+    #     mensagem = "Rotina de OS Comercial | Lastmile iniciada."
+    #     if detalhes:
+    #         mensagem += " Filtros: " + ", ".join(detalhes) + "."
+    #
+    #     self.message_user(request, mensagem, messages.SUCCESS)
+    #     return HttpResponseRedirect("../?" + urlencode({"tipo__exact": "os_comercial_lastmile"}))
 
-        comando = ["python", "scripts/integracoes/ixc_os_comercial_lastmile.py", "manual", request.user.username]
-
-        cliente_local_id = (request.GET.get("cliente_local_id") or "").strip()
-        cliente_ixc_id = (request.GET.get("cliente_ixc_id") or "").strip()
-        os_alterada_desde = (request.GET.get("os_alterada_desde") or "").strip()
-        os_alterada_nos_ultimos_dias = (request.GET.get("os_alterada_nos_ultimos_dias") or "").strip()
-
-        if cliente_local_id:
-            comando.append(f"--cliente-local-id={cliente_local_id}")
-        if cliente_ixc_id:
-            comando.append(f"--cliente-ixc-id={cliente_ixc_id}")
-        if os_alterada_desde:
-            comando.append(f"--os-alterada-desde={os_alterada_desde}")
-        if os_alterada_nos_ultimos_dias:
-            comando.append(f"--os-alterada-nos-ultimos-dias={os_alterada_nos_ultimos_dias}")
-
-        subprocess.Popen(comando)
-
-        detalhes = []
-        if cliente_local_id:
-            detalhes.append(f"cliente local {cliente_local_id}")
-        if cliente_ixc_id:
-            detalhes.append(f"cliente IXC {cliente_ixc_id}")
-        if os_alterada_desde:
-            detalhes.append(f"O.S. alterada desde {os_alterada_desde}")
-        if os_alterada_nos_ultimos_dias:
-            detalhes.append(f"O.S. alterada nos ultimos {os_alterada_nos_ultimos_dias} dias")
-
-        mensagem = "Rotina de OS Comercial | Lastmile iniciada."
-        if detalhes:
-            mensagem += " Filtros: " + ", ".join(detalhes) + "."
-
-        self.message_user(request, mensagem, messages.SUCCESS)
-        return HttpResponseRedirect("../?" + urlencode({"tipo__exact": "os_comercial_lastmile"}))
-
-    def btn_parar_os_comercial_lastmile(self, request):
-        rotina_ativa = buscar_rotina_em_execucao("os_comercial_lastmile")
-        if not rotina_ativa:
-            self.message_user(
-                request,
-                "Nenhuma rotina de OS Comercial | Lastmile em execucao foi encontrada.",
-                messages.WARNING,
-            )
-            return HttpResponseRedirect("../?" + urlencode({"tipo__exact": "os_comercial_lastmile"}))
-
-        rotina_ativa.detalhes = "STOP"
-        rotina_ativa.save(update_fields=["detalhes"])
-        self.message_user(
-            request,
-            f"Sinal de parada enviado para a rotina de OS Comercial | Lastmile #{rotina_ativa.id}.",
-            messages.WARNING,
-        )
-        return HttpResponseRedirect("../?" + urlencode({"tipo__exact": "os_comercial_lastmile"}))
+    # def btn_parar_os_comercial_lastmile(self, request):
+    #     rotina_ativa = buscar_rotina_em_execucao("os_comercial_lastmile")
+    #     if not rotina_ativa:
+    #         self.message_user(
+    #             request,
+    #             "Nenhuma rotina de OS Comercial | Lastmile em execucao foi encontrada.",
+    #             messages.WARNING,
+    #         )
+    #         return HttpResponseRedirect("../?" + urlencode({"tipo__exact": "os_comercial_lastmile"}))
+    #
+    #     rotina_ativa.detalhes = "STOP"
+    #     rotina_ativa.save(update_fields=["detalhes"])
+    #     self.message_user(
+    #         request,
+    #         f"Sinal de parada enviado para a rotina de OS Comercial | Lastmile #{rotina_ativa.id}.",
+    #         messages.WARNING,
+    #     )
+    #     return HttpResponseRedirect("../?" + urlencode({"tipo__exact": "os_comercial_lastmile"}))
 
     def btn_rodar_backup(self, request):
         rotina_ativa = buscar_rotina_em_execucao("backup")

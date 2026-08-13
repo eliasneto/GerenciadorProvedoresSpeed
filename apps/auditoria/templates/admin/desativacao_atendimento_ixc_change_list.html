@@ -126,34 +126,13 @@
 {{ block.super }}
 <section class="ixc-deactivate-panel">
     <div class="ixc-deactivate-panel__eyebrow">Finalizacao administrativa no IXC</div>
-    <h2 class="ixc-deactivate-panel__title">Desativar atendimentos via planilha</h2>
+    <h2 class="ixc-deactivate-panel__title">Historico de desativacao de atendimentos</h2>
     <p class="ixc-deactivate-panel__subtitle">
-        Finalize atendimentos no IXC sem apagar historico. O sistema localiza a O.S. vinculada, registra o fechamento e devolve uma planilha com o resultado de cada linha.
+        Esta tela lista o historico desta automacao. O disparo manual (upload da planilha e processamento)
+        foi centralizado na area de Automacoes do Administrador.
     </p>
-    <p class="ixc-deactivate-panel__note">
-        Cada linha precisa trazer o <code>Atendimento_ID</code> e a confirmacao <code>SIM</code> no campo <code>Confirmar_Desativacao</code>. O campo <code>OS_ID</code> e opcional.
-    </p>
-
-    <form action="{{ processar_planilha_url }}" method="post" enctype="multipart/form-data">
-        {% csrf_token %}
-        <div class="ixc-deactivate-panel__upload">
-            <input
-                type="file"
-                name="arquivo_desativacao_atendimento"
-                accept=".xlsx,.xls,.csv"
-                {% if pode_processar_desativacao %}required{% else %}disabled{% endif %}
-            >
-            <div class="ixc-deactivate-panel__actions">
-                <a href="{{ download_modelo_url }}" class="ixc-deactivate-panel__download">Baixar modelo</a>
-                <button type="submit" class="ixc-deactivate-panel__submit" {% if not pode_processar_desativacao %}disabled{% endif %}>
-                    Processar desativacao
-                </button>
-            </div>
-        </div>
-    </form>
-
-    <div class="ixc-deactivate-panel__meta">
-        Se o IXC recusar a finalizacao por dados obrigatorios ou vinculo de tecnico, o motivo volta no relatorio exportado.
+    <div class="ixc-deactivate-panel__actions">
+        <a href="{{ download_modelo_url }}" class="ixc-deactivate-panel__download">Baixar modelo</a>
     </div>
 </section>
 {% endblock %}
