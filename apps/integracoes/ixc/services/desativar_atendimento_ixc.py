@@ -3,6 +3,7 @@ import pandas as pd
 from apps.integracoes.ixc.services.cria_atendimento_ixc import normalizar_id_numerico
 from apps.integracoes.ixc.client import IXCClient
 from scripts.integracoes.ixc_finalizacao_service import (
+    IXCConsultaIndisponivelError,
     finalizar_os_existente,
     normalizar_texto,
     resumir_erro_finalizacao,
@@ -43,8 +44,9 @@ def _listar_registros(endpoint, qtype, query, limite="10"):
         "sortorder": "desc",
     }
     status_code, body = IXCClient().listar(endpoint, payload)
-    if status_code != 200 or not isinstance(body, dict):
-        return []
+    if status_code != 200 or not isinstance(body, dict) or "raw" in body:
+        detalhe = (body.get("message") if isinstance(body, dict) else None) or f"HTTP {status_code}"
+        raise IXCConsultaIndisponivelError(f"falha ao consultar '{endpoint}' no IXC ({detalhe})")
     return body.get("registros") or []
 
 
@@ -110,71 +112,103 @@ def executar_desativacao_atendimento(dados, usuario_sistema=None):
     if not confirmado:
         return False, erro_confirmacao, atendimento_id
 
-    atendimento = buscar_atendimento_ixc_por_id(atendimento_id)
-    if not atendimento:
-        return False, f"Atendimento {atendimento_id} nao encontrado no IXC.", atendimento_id
-
-    if normalizar_texto(atendimento.get("status")).upper() == "F":
-        return True, f"Atendimento {atendimento_id} ja esta finalizado no IXC.", atendimento_id
-
-    os_alvos = listar_os_para_desativacao(atendimento_id, os_id=os_id)
-    if not os_alvos:
-        return (
-            False,
-            (
-                f"Atendimento {atendimento_id} nao possui O.S. aberta localizada "
-                "para finalizacao automatica."
-            ),
-            atendimento_id,
-        )
-
-    if os_id:
-        os_alvo = os_alvos[0]
-        os_alvo_id = normalizar_texto(os_alvo.get("id"))
-        os_atendimento_id = normalizar_texto(os_alvo.get("id_ticket"))
-        if os_atendimento_id and os_atendimento_id != atendimento_id:
-            return (
-                False,
-                f"O.S. {os_alvo_id} esta vinculada ao atendimento {os_atendimento_id}, nao ao atendimento {atendimento_id}.",
-                atendimento_id,
-            )
-    else:
-        os_alvo_id = ""
-
-    mensagem = limpar_texto(linha.get("Mensagem")) or MENSAGEM_PADRAO_DESATIVACAO
-    email_ixc = limpar_texto(linha.get("Usuario_IXC"))
     resultados = []
+    try:
+        atendimento = buscar_atendimento_ixc_por_id(atendimento_id)
+        if not atendimento:
+            # Confirmado em 2026-08-28: ha atendimentos que existem e estao "Em progresso"
+            # no painel do IXC, mas a consulta via API (mesmo por id, id_cliente ou
+            # id_login) nao retorna o registro — inconsistencia da propria API do IXC,
+            # nao um caso confirmado de atendimento removido. Por seguranca, a linha
+            # continua bloqueada, mas a mensagem nao afirma que o atendimento nao existe mais.
+            os_vinculadas = listar_os_para_desativacao(atendimento_id, os_id=os_id)
+            if os_vinculadas:
+                os_ids_vinculadas = ", ".join(normalizar_texto(os_atual.get("id")) for os_atual in os_vinculadas)
+                return (
+                    False,
+                    (
+                        f"Nao foi possivel confirmar o atendimento {atendimento_id} pela API do IXC "
+                        f"(o registro pode existir e estar ativo no painel — ja observamos essa "
+                        f"inconsistencia entre painel e API). Ha O.S. aberta vinculada a esse "
+                        f"atendimento: {os_ids_vinculadas}. Nenhuma acao foi feita; confirme "
+                        "manualmente no IXC antes de repetir."
+                    ),
+                    atendimento_id,
+                )
+            return False, f"Atendimento {atendimento_id} nao encontrado no IXC.", atendimento_id
 
-    for indice, os_alvo in enumerate(os_alvos):
-        os_alvo_id = normalizar_texto(os_alvo.get("id"))
-        finaliza_atendimento = indice == len(os_alvos) - 1
-        resultado = finalizar_os_existente(
-            os_alvo_id,
-            mensagem=mensagem,
-            finaliza_atendimento=finaliza_atendimento,
-            usuario_sistema=usuario_sistema,
-            email_ixc=email_ixc,
-        )
-        resultados.append((os_alvo_id, resultado))
+        if normalizar_texto(atendimento.get("status")).upper() == "F":
+            return True, f"Atendimento {atendimento_id} ja esta finalizado no IXC.", atendimento_id
 
-        if not resultado.get("ok"):
-            os_sucesso = [item_id for item_id, item_resultado in resultados[:-1] if item_resultado.get("ok")]
-            trecho_sucesso = (
-                f" O.S. finalizadas antes da falha: {', '.join(os_sucesso)}."
-                if os_sucesso
-                else ""
-            )
+        os_alvos = listar_os_para_desativacao(atendimento_id, os_id=os_id)
+        if not os_alvos:
             return (
                 False,
                 (
-                    f"Nao foi possivel finalizar o atendimento {atendimento_id}. "
-                    f"O.S. com falha: {os_alvo_id}. {resumir_erro_finalizacao(resultado)}"
-                    f"{trecho_sucesso}"
+                    f"Atendimento {atendimento_id} nao possui O.S. aberta localizada "
+                    "para finalizacao automatica."
                 ),
                 atendimento_id,
             )
 
-    atendimento_atualizado = buscar_atendimento_ixc_por_id(atendimento_id)
+        if os_id:
+            os_alvo = os_alvos[0]
+            os_alvo_id = normalizar_texto(os_alvo.get("id"))
+            os_atendimento_id = normalizar_texto(os_alvo.get("id_ticket"))
+            if os_atendimento_id and os_atendimento_id != atendimento_id:
+                return (
+                    False,
+                    f"O.S. {os_alvo_id} esta vinculada ao atendimento {os_atendimento_id}, nao ao atendimento {atendimento_id}.",
+                    atendimento_id,
+                )
+        else:
+            os_alvo_id = ""
+
+        mensagem = limpar_texto(linha.get("Mensagem")) or MENSAGEM_PADRAO_DESATIVACAO
+        email_ixc = limpar_texto(linha.get("Usuario_IXC"))
+
+        for indice, os_alvo in enumerate(os_alvos):
+            os_alvo_id = normalizar_texto(os_alvo.get("id"))
+            finaliza_atendimento = indice == len(os_alvos) - 1
+            resultado = finalizar_os_existente(
+                os_alvo_id,
+                mensagem=mensagem,
+                finaliza_atendimento=finaliza_atendimento,
+                usuario_sistema=usuario_sistema,
+                email_ixc=email_ixc,
+            )
+            resultados.append((os_alvo_id, resultado))
+
+            if not resultado.get("ok"):
+                os_sucesso = [item_id for item_id, item_resultado in resultados[:-1] if item_resultado.get("ok")]
+                trecho_sucesso = (
+                    f" O.S. finalizadas antes da falha: {', '.join(os_sucesso)}."
+                    if os_sucesso
+                    else ""
+                )
+                return (
+                    False,
+                    (
+                        f"Nao foi possivel finalizar o atendimento {atendimento_id}. "
+                        f"O.S. com falha: {os_alvo_id}. {resumir_erro_finalizacao(resultado)}"
+                        f"{trecho_sucesso}"
+                    ),
+                    atendimento_id,
+                )
+
+        atendimento_atualizado = buscar_atendimento_ixc_por_id(atendimento_id)
+    except IXCConsultaIndisponivelError as exc:
+        os_sucesso = [item_id for item_id, item_resultado in resultados if item_resultado.get("ok")]
+        trecho_sucesso = f" O.S. ja finalizadas antes da falha: {', '.join(os_sucesso)}." if os_sucesso else ""
+        return (
+            False,
+            (
+                f"Nao foi possivel confirmar dados do atendimento {atendimento_id} no IXC: {exc}."
+                f"{trecho_sucesso} Tente novamente mais tarde."
+            ),
+            atendimento_id,
+        )
+
     atendimento_finalizado = normalizar_texto(atendimento_atualizado.get("status")).upper() == "F"
     os_ids_finalizadas = [item_id for item_id, _ in resultados]
 

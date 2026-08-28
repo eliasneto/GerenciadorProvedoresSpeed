@@ -598,6 +598,167 @@ Tipo de feature: `fullstack` (QA obrigatorio).
 Agente recomendado para executar:
 - `dev`.
 
+### PO-089 - Resolver automaticamente a proxima tarefa do workflow ao solucionar a O.S. (IXC)
+
+Status: `🔍 Aguardando QA` (implementado pelo Dev em 2026-08-24, segunda rodada)
+
+**Entrega do Dev (2026-08-24, segunda rodada — RN-071):**
+- Investigacao tecnica confirmou que o IXC expoe a propria definicao do workflow via API (`wfl_tarefa`: campos `decisao`, `sequencia`, `id_processo`, `id_proxima_tarefa` = proxima sequencia). Isso permitiu resolucao **dinamica**, sem tabela mantida a mao: para a tarefa atual da O.S., o sistema consulta o IXC, verifica se e uma tarefa de decisao e, se for, busca as tarefas ativas da proxima sequencia no mesmo processo.
+- Havendo uma unica tarefa candidata, o sistema usa-a automaticamente — nenhuma configuracao necessaria. Havendo mais de uma candidata (decisao de negocio real, ex.: concluido vs. parceiro declinou), so resolve sozinho se o par ja estiver confirmado num pequeno mapeamento interno (hoje: `150 -> 148`, o unico caso ja confirmado); caso contrario, bloqueia a linha com mensagem clara listando as opcoes encontradas no IXC, em vez de adivinhar.
+- `Proxima_Tarefa_ID` da planilha virou **opcional**: quando preenchido, vale como override manual só da primeira O.S. do lote; quando vazio (caso normal agora), toda O.S. — incluindo as abertas pelo IXC nas rodadas seguintes (RN-010), mesmo quando bifurcam em mais de um setor — tem sua propria tarefa resolvida sozinha.
+- Aba de ajuda da planilha (`Proxima_Tarefa_ID`) reescrita: deixa de listar isso como pre-requisito e passa a dizer que so precisa ser preenchido se o sistema pedir explicitamente (a mensagem de erro ja traz as opcoes).
+- **Validado ao vivo em producao, sem informar nenhum ID:** atendimento 7856 (O.S. 17655, mesma tarefa 150), autorizado pelo usuario — solucionado com sucesso só com a resolucao automatica; o IXC abriu sozinho as O.S. 18128 (setor 49) e 18129 (setor 13), reproduzindo o mesmo padrao ja confirmado no atendimento 7827.
+- Planilha real do usuario (`Modelo_Resolucao_OS_Atendimentos .xlsx`, raiz do projeto) atualizada a pedido dele: aba de ajuda regenerada com o texto novo do `Proxima_Tarefa_ID`; linhas dos atendimentos **7827** e **7856** removidas por ja terem sido solucionadas nesta investigacao (16 atendimentos restantes na planilha, nenhum outro tocado).
+
+**Entrega do Dev (2026-08-24, primeira rodada — historico, superada pela rodada acima):**
+- `Proxima_Tarefa_ID` da planilha agora e aplicado somente na primeira O.S. solucionada de cada atendimento (a que o usuario efetivamente viu na tela do IXC); qualquer O.S. aberta depois pelo proprio workflow do IXC nas rodadas seguintes (RN-010) fecha sem forcar proxima tarefa. Melhoria valida (evita reaproveitar o ID errado num lote), mas **nao era a causa do problema relatado** — ver achado tecnico abaixo.
+- Achado tecnico (investigado com dados reais do IXC, ambiente de producao, atendimento 7827, com autorizacao do usuario): a tarefa 150 ("Realizar Implantacao EACE") **exige** `Proxima_Tarefa_ID` preenchido para ser solucionada — nao e um caso de "nao forcar decisao". O valor correto e `148` ("Processo Cotacao Finalizada"), confirmado batendo com 3 atendimentos reais fechados manualmente por outro operador (6894, 6846, 6845) e reproduzido ao vivo no atendimento 7827: solucionar a O.S. 17662 com `Proxima_Tarefa_ID = 148` fez o **proprio IXC** abrir as duas O.S. de setor (49 e 13) automaticamente — sem a automacao escolher setor nenhum. Ou seja: `148` nao e "escolher um setor", e sim "avancar para o proximo no do fluxo", que por sua vez bifurca sozinho.
+- **Gap real:** a aba de ajuda da planilha (`Tarefas_Decisao_IXC`) lista os IDs das tarefas atuais que exigem decisao (147/150/151), mas nao informa qual `Proxima_Tarefa_ID` usar para cada uma — por isso a coluna ficou em branco na planilha real e a O.S. 17662 nao solucionava. Confirmado (2026-08-24) que `150 → 148`; os mapeamentos de 147 e 151 continuam desconhecidos.
+- **Pendencia para o Orquestrador:** RN-019/RN-070 partiam da premissa de que a automacao estava "se impondo" sobre a decisao do IXC; o achado acima mostra que o problema real e falta de informacao (mapeamento tarefa atual -> proxima tarefa) na planilha/aba de ajuda, nao comportamento da automacao. Recomendo revisar RN-070 e os criterios de PO-089 com esse achado antes de considerar o cenario relatado como resolvido; nao alterei `business_rules.md` por estar fora do escopo do Dev.
+- Acao real executada em producao (autorizada pelo usuario): O.S. 17662 do atendimento 7827 solucionada com `Proxima_Tarefa_ID = 148`; O.S. 18126 (setor 49) e 18127 (setor 13) abertas pelo IXC como consequencia. Atendimento 7827 permanece ativo (RN-001).
+
+**Observacao (fora do escopo desta PO):** ao rodar a suite completa de `apps.core_admin`, `test_migracao_de_dados_preservou_automacoes_existentes_em_administrador` falhou (`'backoffice' != 'administrador'`); confirmado que a falha e pre-existente (reproduz sem as alteracoes desta PO), nao relacionada a RN-070/PO-089.
+
+Objetivo (revisado 2026-08-24, ver RN-071):
+Hoje a automacao de resolucao de O.S. em massa (RN-019/PO-040) exige que o
+usuario descubra manualmente, operando o IXC, o ID da "proxima tarefa" para
+toda tarefa de decisao do workflow, e digite esse ID na coluna
+`Proxima_Tarefa_ID` da planilha. Isso e inviavel na pratica: o usuario nao
+tem como saber esse ID sem investigar o IXC caso a caso (foi assim que a
+O.S. do atendimento 7827 ficou travada — a coluna ficou em branco por falta
+dessa informacao, e o IXC recusou o fechamento). O objetivo passa a ser: o
+sistema resolve essa proxima tarefa sozinho, sem depender do usuario
+descobrir e informar o ID. Quem decide quantas O.S. resultam do avanco
+(1, 2 ou mais) e sempre o IXC — a automacao so avanca o workflow.
+
+Criterios de aceite:
+- a planilha/tela de solucao de O.S. deixa de exigir que o usuario descubra
+  e informe manualmente o ID de proxima tarefa para tarefas de decisao
+  conhecidas;
+- o sistema resolve automaticamente o `id_proxima_tarefa` a partir da tarefa
+  atual da O.S. (`id_wfl_tarefa`); levantamento tecnico do Dev decide entre
+  descobrir esse valor dinamicamente (se o IXC expuser o dado do workflow
+  via API) ou manter um mapeamento interno tarefa-atual -> proxima-tarefa,
+  alimentado conforme cada tarefa nova for identificada — se houver
+  trade-off arquitetural real entre as duas abordagens, registrar ADR antes
+  de implementar;
+- o mapeamento ja confirmado (150 -> 148, "Realizar Implantacao EACE" ->
+  "Processo Cotacao Finalizada") e reaproveitado como semente do mecanismo
+  escolhido, sem exigir nova descoberta manual para esse caso;
+- ao avancar o workflow, a automacao nunca decide nem limita quantas O.S.
+  resultam disso — se o IXC abrir 1, soluciona 1; se abrir 2 (ex.: uma por
+  setor), soluciona as 2, reaproveitando o laco ja existente (RN-010);
+- tarefa de decisao ainda sem mapeamento conhecido (ex.: 147, 151) bloqueia
+  a linha com mensagem clara, em vez de adivinhar um valor ou falhar
+  silenciosamente;
+- testado em pelo menos um atendimento real que reproduza o caso ja
+  confirmado (tarefa 150) sem o usuario informar nenhum ID manualmente.
+
+Regras relacionadas: RN-071, RN-019 (substituida), RN-070 (substituida),
+RN-010 (docs/business_rules.md).
+
+Decisao arquitetural: a definir pelo Dev apos levantamento de viabilidade
+(dinamica vs. mapeamento mantido) — mesma raiz de ADR-004 (fechar O.S. e
+avanco de workflow BPM, nao marcacao simples de status).
+
+Tipo de feature: `backend-only` (QA obrigatorio).
+
+Agente recomendado para executar:
+- `dev`.
+
+### PO-090 - Corrigir falha de comunicacao com o IXC relatada como "atendimento/O.S. nao encontrado"
+
+Status: `🔍 Aguardando QA` (implementado pelo Dev em 2026-08-28, segunda rodada)
+
+**Entrega do Dev (2026-08-28, segunda rodada — achado importante corrige a primeira rodada):**
+- Usuario rodou a automacao de novo e trouxe o relatorio real (`Relatorio_Resolucao_OS_Atendimentos_IXC (6).xlsx`, 203 linhas): todas as 203 falharam com "Atendimento X nao encontrado no IXC". Amostrei 8 IDs espalhados por toda a planilha (ex.: 5327, 5401, 5923, 11913) consultando o IXC direto: em todos, a tabela `su_ticket` responde `HTTP 200, total: 0` (nenhum erro de comunicacao), mas ha uma O.S. aberta (status "A") vinculada a esse atendimento.
+- Primeira hipotese (registrada abaixo, na entrega original) foi que o IXC tivesse removido o registro do atendimento — comportamento ja documentado no projeto para este mesmo cliente (`ixc_relatorio_atendimentos_cotacao_parceiro.py`). **O usuario contestou com print do IXC**: o atendimento 5327 existe no painel, com status "Em progresso", cliente 575, login 3399, mesmos dados que a O.S. aponta.
+- Investiguei mais a fundo (usando so esse 1 registro, sem repetir para os demais): busquei o atendimento 5327 por `id`, por `id_cliente` (paginando todos os 1686 tickets do cliente 575 sem achar o 5327 entre eles) e por `id_login`; testei tambem uma chamada `GET` direta (`su_ticket/5327`), sem passar pelo `listar`. As 4 vias falharam igual. Ou seja: **o atendimento existe e esta ativo no IXC, mas a API do IXC (webservice v1) nao o retorna por nenhum caminho testado** — nao e falha de comunicacao (ja corrigida nesta mesma PO) nem atendimento removido; e uma inconsistencia da propria API do IXC entre o que o painel mostra e o que o webservice devolve, para pelo menos parte dos atendimentos criados em lote via API em 2026-05-15 para o cliente 575.
+- Corrigido (ajuste sobre a entrega original): quando o atendimento nao vem pela API mas ha O.S. aberta vinculada a ele, a mensagem **nao afirma mais que o atendimento "nao existe mais"** — passa a dizer que nao foi possivel confirmar via API (podendo existir e estar ativo no painel) e lista a(s) O.S. vinculada(s), sem fechar nada automaticamente (mantida a exigencia de RN-014 de confirmar o atendimento antes de fechar a O.S.).
+- **Pendencia relevante para o Orquestrador/negocio:** esta e uma limitacao da propria API do IXC (nao do nosso codigo) — pode estar afetando as 203 linhas do relatorio real do usuario. Recomendo avaliar contato com o suporte/fornecedor do IXC sobre por que atendimentos criados em lote via API deixam de ser retornados pelo `webservice/v1` (`su_ticket`) mesmo estando ativos no painel; enquanto isso nao for resolvido do lado do IXC, a automacao nao tem como confirmar esses atendimentos com seguranca antes de fechar as O.S. deles.
+- Testes novos (`apps/backoffice/tests.py`) cobrindo a mensagem corrigida para o caso "atendimento nao retornado pela API mas com O.S. vinculada". Suite completa das classes sem dependencia de banco reexecutada apos o ajuste: 107 testes, 0 falhas.
+
+**Entrega do Dev (2026-08-28, primeira rodada — parcialmente superada pela rodada acima):**
+- Investigacao do relato do usuario: 3 execucoes da automacao de fechamento de O.S. em massa no servidor, todas com erro "Atendimento X nao encontrado no IXC" para atendimentos que existiam de fato (exemplo citado: atendimento 6436). Consulta direta ao IXC confirmou que o atendimento 6436 existe (ja finalizado, `su_status = S`) — o "nao encontrado" nao refletia a realidade do IXC.
+- Causa raiz no codigo: `buscar_atendimento_ixc_por_id`, `listar_os_para_desativacao`, `buscar_os_atendimento_ixc` (`desativar_atendimento_ixc.py`) e `buscar_os_por_id` (`ixc_finalizacao_service.py`) tratavam **qualquer falha de comunicacao com o IXC** (timeout, HTTP diferente de 200, resposta invalida/nao-JSON) exatamente igual a "nenhum registro encontrado" — retornando lista/dict vazio nos dois casos. Uma instabilidade temporaria do IXC (ou do link do servidor ate o IXC) acabava relatada ao usuario como se o atendimento/O.S. nao existisse, escondendo a causa real. **Esta correcao continua valida** (ver segunda rodada acima para o motivo de nao ter resolvido o relato do usuario sozinha).
+- Corrigido: essas funcoes agora levantam `IXCConsultaIndisponivelError` quando a chamada falha, distinguindo esse caso de uma consulta que respondeu OK e simplesmente nao achou nada (esse ultimo caso continua sendo tratado como "nao encontrado", sem mudanca). `executar_resolucao_os_atendimento_ixc`, `executar_desativacao_atendimento` e `finalizar_os_existente` passam a capturar o erro e retornar mensagem clara ("Nao foi possivel confirmar ... no IXC: <motivo>. Tente novamente."), preservando o progresso ja feito (O.S. ja fechadas antes da falha continuam reportadas).
+- O exemplo do usuario (atendimento 6436) nao pode ser reproduzido ao vivo porque o atendimento ja aparece finalizado no IXC hoje; a causa raiz foi confirmada por leitura de codigo e coberta com testes automatizados simulando a falha de comunicacao.
+- Testes novos em `apps/backoffice/tests.py` e `scripts/integracoes/tests.py`. Suite completa das classes sem dependencia de banco (`apps.backoffice.tests`, `scripts.integracoes.tests` e demais apps afetados) executada: 142 testes, 0 falhas (2 erros pre-existentes e sem relacao, em `ExplorarTabelaTests`, por encoding de emoji no console Windows).
+- **Pendencia para o Orquestrador:** registrar em `business_rules.md` a regra de que falha de comunicacao com o IXC nunca pode ser relatada como "nao encontrado" nas automacoes de fechamento/desativacao de O.S. (proposta: RN-072) — fora do escopo do Dev alterar `business_rules.md` diretamente.
+
+Objetivo:
+Usuario relatou que, ao rodar a automacao de fechamento de O.S. em massa no
+servidor (3 execucoes), todas as linhas falharam com "Atendimento nao
+encontrado no IXC" para atendimentos que existiam de fato no IXC (ex.:
+atendimento 6436). O objetivo e eliminar mensagens de erro enganosas quando a
+causa real e uma falha de comunicacao com o IXC, nao a ausencia do registro.
+
+Criterios de aceite:
+- uma falha ao consultar o IXC (timeout, HTTP diferente de 200, resposta
+  invalida/nao-JSON) nunca e relatada como "atendimento/O.S. nao encontrado";
+- o texto do erro deixa claro que houve falha de comunicacao com o IXC e
+  orienta a tentar novamente;
+- O.S. ja fechadas antes da falha continuam sendo reportadas (progresso
+  parcial nao se perde);
+- o caso legitimo de "nao encontrado" (IXC respondeu OK e nao achou o
+  registro) continua funcionando como antes, sem alteracao;
+- quando o IXC responde OK sem o atendimento, mas ha O.S. aberta vinculada a
+  ele, a mensagem nao afirma que o atendimento deixou de existir — informa que
+  nao foi possivel confirmar via API e lista a(s) O.S. vinculada(s), sem
+  fechar nada automaticamente (achado da segunda rodada, 2026-08-28);
+- **em aberto, dependente de decisao de negocio/fornecedor:** o que fazer
+  quando o proprio IXC confirma (por print do painel) que o atendimento existe
+  e esta "Em progresso", mas a API nunca o retorna — hoje a linha fica
+  bloqueada indefinidamente nesse caso, ja que a automacao nao tem como
+  confirmar o atendimento com seguranca.
+
+Regras relacionadas: RN-001, RN-002, RN-010, RN-014 (docs/business_rules.md);
+nova regra a registrar pelo Orquestrador (proposta: RN-072, incluindo o caso
+de inconsistencia da API do IXC descrito na segunda rodada).
+
+Tipo de feature: `backend-only` (QA obrigatorio).
+
+Agente recomendado para executar:
+- `dev` (correcao ja implementada; aguardando QA).
+
+### PO-091 - Aceitar Excel e CSV como anexo, alem de PDF, na resolucao de O.S. em massa
+
+Status: `🔍 Aguardando QA` (implementado pelo Dev em 2026-08-28)
+
+**Entrega do Dev (2026-08-28):**
+- Usuario solicitou diretamente: o anexo da automacao de resolucao de O.S. (RN-008) aceitava somente PDF, mas ele precisa anexar Excel ou CSV tambem.
+- `localizar_anexo_no_zip` passou a aceitar `.pdf`, `.xlsx`, `.xls` e `.csv` (antes so `.pdf`), com o `content-type` enviado ao IXC calculado a partir da extensao do arquivo (antes fixo em `application/pdf` para qualquer anexo). Mensagem de erro para formato nao aceito atualizada para citar os formatos permitidos, em vez de falar so em PDF.
+- Confirmado que o endpoint do IXC (`su_ticket_arquivos`, usado por `anexar_arquivo_ticket_ixc`) ja e generico quanto a tipo de arquivo — a restricao a PDF era somente uma regra nossa (RN-008), nao uma limitacao do IXC.
+- Textos de ajuda da planilha (`Nome_Anexo`, `Nome_Anexo_2`, `Nome_Anexo_3`) e o texto de apoio na tela de upload (`resolver_os_atendimento_ixc.html`) atualizados para nao falar mais so em PDF.
+- Testes novos em `apps/backoffice/tests.py`: aceitacao de `.xlsx` e `.csv` dentro do ZIP, `content-type` correto por extensao, e mensagem de erro atualizada para extensao nao suportada. Suite completa das classes sem dependencia de banco reexecutada: 145 testes, 0 falhas.
+- **Pendencia para o Orquestrador:** atualizar RN-008 em `business_rules.md` (hoje diz "apenas PDF e aceito") para refletir os novos formatos aceitos (PDF, Excel `.xlsx`/`.xls` e CSV) — fora do escopo do Dev alterar `business_rules.md` diretamente.
+
+Objetivo:
+O anexo obrigatorio/condicional da automacao de resolucao de O.S. em massa
+(RN-006/RN-008) aceitava somente arquivos PDF dentro do ZIP importado.
+Usuario precisa anexar tambem planilhas Excel ou CSV (ex.: propostas
+comerciais em formato de planilha), entao a restricao de formato precisa ser
+ampliada.
+
+Criterios de aceite:
+- um arquivo `.pdf`, `.xlsx`, `.xls` ou `.csv` dentro do ZIP, correspondendo
+  ao nome informado em `Nome_Anexo`/`Nome_Anexo_2`/`Nome_Anexo_3`, e aceito
+  como anexo valido;
+- o arquivo e enviado ao IXC com o `content-type` correto para o seu formato
+  (nao mais fixo em `application/pdf`);
+- um arquivo de extensao nao suportada continua bloqueando a linha antes de
+  qualquer fechamento de O.S. (RN-006), com mensagem explicita citando os
+  formatos aceitos;
+- o comportamento para PDF nao muda (retrocompatibilidade).
+
+Regras relacionadas: RN-006, RN-008, RN-009 (docs/business_rules.md) —
+RN-008 precisa ser atualizada pelo Orquestrador para citar os novos formatos.
+
+Tipo de feature: `backend-only` (QA obrigatorio).
+
+Agente recomendado para executar:
+- `dev` (correcao ja implementada; aguardando QA).
+
 ## Epic 7 - Seguranca de credenciais
 
 ### PO-027 - Impedir login com senha antiga do AD via fallback do ModelBackend
@@ -743,6 +904,84 @@ Tipo de feature: `backend-only` (QA obrigatorio).
 
 Agente recomendado para executar:
 - `dev`
+
+## Epic 15 - Identificacao do usuario nos logs e telas do sistema
+
+### PO-080 - Exibir apenas o nome da pessoa nos logs/telas do sistema, sem o dominio do AD
+
+Status: `🔍 Aguardando QA` (implementado pelo Dev em 2026-08-14)
+
+Entrega do Dev (2026-08-14):
+- 1ª rodada: `apps/integracoes/ad/ad_sync.py` ganhou `sincronizar_nome_usuario`
+  (mesmo padrao de `sincronizar_email_usuario`) para preencher `first_name`/
+  `last_name` a partir de `displayName`/`sn` do AD a cada login — corrige o
+  gap real de `AUTH_LDAP_ALWAYS_UPDATE_USER = False` (so aplicava o mapeamento
+  na criacao do usuario). `sync_ad_user_emails` passou a sincronizar nome
+  junto, na mesma varredura em lote.
+- O usuario testou em producao e a tela continuou mostrando o e-mail — a 1ª
+  rodada nao resolveu porque a tela real (historico de RE/RI/Escola e
+  timeline global) nunca usava `get_full_name|default:username`: os tres
+  templates tinham `item.usuario.email` **fixo**, sem fallback nenhum.
+  Corrigido em `escola_rede_historico_modal.html`,
+  `escola_historico_modal.html` e `timeline_global.html` (avatar e "Feito
+  por") para `item.usuario.get_full_name|default:item.usuario.username`,
+  dentro de um `{% if item.usuario %}` — sem o `{% if %}`, o `default` com
+  variavel de outro campo como argumento (`item.usuario.username`) lanca
+  `VariableDoesNotExist` quando `item.usuario` e `None` (registro tipo
+  "sistema" sem usuario), o que a suite de testes ja existente pegou.
+- Nao alterei `AUTH_LDAP_ALWAYS_UPDATE_USER` (tambem liga
+  `AUTH_LDAP_MIRROR_GROUPS`, ligado a permissao — fora do escopo).
+- Testes novos: `apps/integracoes/ad/tests.py` (10 casos, sync do AD) +
+  1 teste em `apps/core/tests.py` (`TimelineGlobalViewTests`) + 2 testes em
+  `apps/leads/tests.py` (`EscolaRedeHistoricoTests`), cada um confirmando que
+  a tela mostra o nome e nao mostra mais o e-mail.
+- **Testes executados:** suite completa do projeto (738 testes) no container
+  `speed_sistema` contra o MySQL real — 1 falha, a mesma pre-existente e sem
+  relacao ja documentada em entregas anteriores (`AutomacaoMenuTests`);
+  `manage.py check` sem erro.
+- **Pendencia:** usuarios ja cadastrados so recebem `first_name`/`last_name`
+  do AD apos rodar `sync_ad_user_emails` ou no proximo login — mas isso ja
+  nao bloqueia mais a correcao principal, porque as telas agora tem
+  `username` como fallback (sem dominio) mesmo sem nome preenchido.
+  `gestao_logs_integracoes.html`/`gestao_log_integracao_detail.html` tem o
+  mesmo padrao arriscado (`default` com variavel), mas sao telas mortas sem
+  rota (PO-038 ja previsto para remove-las) — nao corrigi por estarem fora
+  de qualquer fluxo acessivel.
+
+Origem: relato do usuario em 2026-08-14 — no log do sistema aparece o usuario
+sincronizado do AD (`elias.neto@howbe.local`) em vez de apenas o nome da
+pessoa.
+
+Contexto:
+As telas que exibem "quem fez a acao" (relatorio de login, historico de
+RE/RI/Mapa Calor, tela Acesso, cabecalho do sistema, dashboard de rotinas)
+usam o mesmo padrao `usuario.get_full_name|default:usuario.username`
+(`gestao_relatorio_login_usuario.html`, `dashboard.html`, `acesso_list.html`,
+`escola_rede_row.html`, `responsavel_opcoes.html`, `base.html`) ou
+equivalente em Python (`apps/auditoria/models.py`, `apps/auditoria/signals.py`).
+O fallback para `username` (login completo sincronizado pelo AD, com
+dominio) so aparece quando `get_full_name()` esta vazio — indicio de que o
+sync do AD (`apps/integracoes/ad/ad_sync.py`) autentica sem preencher
+`first_name`/`last_name` do usuario.
+
+Criterios de aceite:
+- em qualquer tela do sistema que hoje usa o padrao
+  `get_full_name|default:username` (ou equivalente), a pessoa autenticada via
+  AD passa a ser identificada pelo nome, sem o dominio do e-mail/AD;
+  usuarios sem correspondencia no AD (contas locais) continuam funcionando
+  como hoje;
+- Dev decide, na investigacao, se a correcao e popular `first_name`/`last_name`
+  no momento do sync do AD (corrige as telas listadas de uma vez, sem tocar
+  cada template) ou ajustar o fallback de exibicao — registrando a escolha e
+  o motivo na entrega;
+- nenhum template ou log passa a exibir o dominio do AD apos a correcao.
+
+Regras relacionadas: nenhuma nova.
+
+Tipo de feature: `backend-only` (QA obrigatorio).
+
+Agente recomendado para executar:
+- `dev`.
 
 ## Epic 14 - Saida do IXC como fonte de Cliente/Endereco e nova integracao DashboardEACE (Escola)
 
@@ -2430,7 +2669,65 @@ grupo, o menu "Setores" nao aparece mesmo com Setores concedidos.
 Verificacao de causa raiz e correcao, se necessaria, sao escopo do
 QA/Dev — o Orquestrador nao testa nem altera codigo.
 
-Origem: usuario, 2026-08-13 — quer que o modulo "Setores" (PO-052/PO-053)
+**Nova pendencia relatada pelo usuario (2026-08-13), apos a correcao acima:**
+usuario reporta novamente o sistema respondendo erro 500 em paginas em
+geral. Como o unico erro 500 generalizado ja registrado nesta feature teve
+como causa raiz a migracao ausente da tabela "Acessos a Setores", a
+hipotese mais provavel e que essa migracao ainda nao foi aplicada neste
+ambiente (ou houve nova regressao). Verificacao de causa raiz e correcao
+sao escopo do Dev — o Orquestrador nao executa comandos nem altera codigo.
+
+**Investigacao do Dev (2026-08-13):** hipotese acima descartada — a
+migracao `0007_acessosetor` esta aplicada no ambiente (`showmigrations`
+confirmou `[X]`) e o modulo Setores nao e a causa desta vez. Causa raiz
+real, achada nos logs do container `speed_sistema`: `apps/core_admin/urls.py`
+chegou a referenciar `views.acesso_list` (rota `/ferramentas/acesso/`) sem
+essa view existir em `apps/core_admin/views.py` — trabalho experimental da
+PO-077 (tela "Acesso"), que ainda esta `⬜ Pendente` e nao deveria ter
+codigo em andamento. Como `config/urls.py` inclui `apps.core_admin.urls` no
+carregamento do projeto inteiro, o `AttributeError` derrubava a resolucao
+de URL de **todas** as paginas, nao so da tela nova — daí "sistema cheio de
+erro 500". Essa rota ja nao existe mais em `apps/core_admin/urls.py` (foi
+revertida antes desta investigacao, sem passar por commit). Confirmado
+corrigido: import do urlconf executado sem erro, rotas testadas (`/`,
+`/login/`, `/health/`) respondendo normalmente, e suite `apps.leads` +
+`apps.core_admin` + `apps.core` (383 testes) executada — apenas uma falha
+pre-existente e sem relacao (`AutomacaoMenuTests`, ver pendencia separada
+abaixo). PO-075 em si nao precisou de nenhuma alteracao de codigo.
+Resíduo sem risco: o template `apps/core_admin/templates/core_admin/acesso_list.html`
+ficou criado e sem uso (nao referenciado por nenhuma URL) — nao remocido
+por nao ter sido criado por este agente nesta tarefa; segue disponivel
+para quando a PO-077 for formalmente iniciada.
+
+**Pendencia separada encontrada durante a regressao (fora do escopo desta
+correcao, nao corrigida agora):** `apps.core_admin.tests.AutomacaoMenuTests.test_migracao_de_dados_preservou_automacoes_existentes_em_administrador`
+falha — espera `automacao.menu == "administrador"` e encontra `"backoffice"`.
+Sem relacao com PO-075/PO-077; requer confirmar com o Orquestrador/regra de
+negocio qual menu esta correto antes de qualquer correcao.
+
+**Segundo relato do usuario, mesmo dia (2026-08-13), depois da correcao
+acima ja estar valendo:** `http://localhost:8091/` voltou a dar erro 500.
+Nao era mais o `acesso_list` (aquela rota ja nao existia). Causa raiz
+diferente: sob concorrencia real (~20-30 requisicoes simultaneas contra
+`/`, reproduzido de propósito), os workers do gunicorn que já estavam de
+pe havia ~2h (desde 14:57) passaram a falhar de forma intermitente —
+por volta de 70% das requisicoes simultaneas — enquanto workers recem-
+reiniciados nao falharam nenhuma vez em 4 rodadas de teste (120/120).
+Nao foi possivel capturar o traceback exato porque o `LOGGING` do projeto
+nao tinha handler para o logger `django.request`: excecoes de view eram
+descartadas silenciosamente (handler `console` padrao do Django e filtrado
+por `require_debug_true`, e aqui `DEBUG=False`) — falha real ficava
+invisivel no `docker logs`. Corrigido em `config/settings.py`: adicionado
+logger `django.request` (handler `console`, nivel `ERROR`) — mudanca
+aditiva, nao afeta os loggers existentes. Apos reiniciar os workers (efeito
+colateral do proprio ajuste, ambiente usa `docker-compose.local.yml` com
+`--reload`), o sintoma nao voltou a ocorrer em nenhuma das rodadas de
+teste sob concorrencia. Causa raiz profunda (por que os workers antigos
+degradam apos ~2h de uso, sob o modo de desenvolvimento `--reload`) nao
+foi 100% isolada — nao ha evidencia de esgotamento de conexao com o
+banco (`Threads_connected` = 1 fora de pico de carga). Se o sintoma
+voltar, o log agora vai capturar o traceback real; correcao imediata
+enquanto isso: reiniciar o container `speed_sistema`.
 passe a ter controle de acesso proprio, em vez de depender do grupo
 `LastMile`, e que dentro do modulo cada usuario so veja/acesse os Setores
 liberados para ele. Resolve a pendencia ja registrada na ADR-016
@@ -2574,7 +2871,25 @@ Agente recomendado para executar:
 
 ### PO-077 - Tela "Acesso": conceder modulo do menu e Setor individual em um lugar so
 
-Status: `⬜ Pendente` — definicao fechada (usuario decidiu 4 pontos; Orquestrador decidiu 2 pontos reversiveis de baixo risco, Lei 9 CLAUDE.md); ADR e RN escritas; pronta para o Dev iniciar.
+Status: `🔍 Aguardando QA` (implementado pelo Dev em 2026-08-13, a pedido
+explicito do usuario, antes do QA da PO-075 — risco de sequenciamento
+aceito pelo usuario, ver nota abaixo).
+
+**Entrega do Dev:**
+- Criada a tela "Acesso" em `apps.core_admin` (`/ferramentas/acesso/`), restrita ao grupo `Administrador` (ou superusuario), com link no menu "Administração".
+- Para um usuario selecionado, mostra os modulos e Setores ja concedidos antes de qualquer alteracao (RN-058).
+- Um formulario so concede/revoga os 6 grupos do menu e os nomes de Setor individuais (`AcessoSetor`).
+- Conceder um Setor individual a quem ainda nao esta no grupo `Setor` inclui esse grupo automaticamente (RN-059); revogar um Setor individual nao remove o grupo, e revogar o grupo nao apaga os Setores concedidos (assimetria deliberada da ADR-030).
+- Revogar `Administrador` de qualquer usuario, inclusive o proprio logado, exige confirmacao explicita antes de efetivar (RN-058).
+- **Pendencia:** nenhuma funcional; validação visual em navegador feita via requisição HTTP renderizada (sem captura de tela, sem Playwright configurado no projeto) — recomenda-se o usuário confirmar a aparência na tela real.
+
+**Nota de sequenciamento:** o Orquestrador/backlog recomendava esperar o QA
+da PO-075 antes de iniciar esta feature (para nao construir sobre um
+comportamento ainda nao validado). O usuario, ao pedir explicitamente o
+inicio agora, optou por aceitar esse risco. Nao foi identificado nenhum
+comportamento da PO-075 que a implementacao desta tela tenha precisado
+supor alem do que ja esta documentado em RN-054/RN-055/ADR-028 (grupo
+`Setor` e `AcessoSetor`), que ja estavam implementados e testados.
 
 Origem: usuario pediu, em 2026-08-13, na sequencia da investigacao do menu
 "Setores" (PO-075): "EU queria dentro do administrador uma opcao chamada
@@ -2671,6 +2986,822 @@ Pendencias tecnicas (baixo risco, a criterio do Dev na implementacao):
 
 Tipo de feature: `fullstack` (tela + formulario + escrita em grupo/
 `AcessoSetor` — QA obrigatorio).
+
+Agente recomendado para executar:
+- `dev`.
+
+### PO-078 - Responsavel de subatividade restrito a usuarios com acesso ao Setor (AcessoSetor)
+
+Status: `🔍 Aguardando QA` (implementado pelo Dev em 2026-08-14)
+
+**Entrega do Dev:**
+- Campo Responsável (grid global e Tela de Setor) agora lista só quem tem acesso concedido àquele Setor, mais o(s) superusuário(s).
+- Sem Setor definido ainda na linha, continua mostrando todos os usuários ativos, sem filtro.
+- Setor sem ninguém com acesso concedido fica sem opções, em vez de mostrar todos.
+- Trocar o Setor no formulário atualiza a lista de Responsável na hora, sem precisar salvar (mesmo padrão já usado para Status).
+- Servidor rejeita salvar um Responsável fora da lista permitida, mesmo que enviado manualmente no formulário.
+- **Pendência:** validação visual em navegador não executada (sem Playwright configurado no projeto, mesma limitação já registrada na PO-077) — aplicação reiniciada e verificada sem erro de carregamento; recomenda-se o usuário confirmar a tela real.
+
+Origem: usuario pediu, em 2026-08-14: "no campo Responsável das subatividades, só aparece usuários que esteja no setor, exemplo: Eu estou na implantação mas não estou em compras, então eu vou aparecer no campo responsável em implantação mas na lista de responsável em compras eu não apareço." Verbatim.
+
+**O que ja existe hoje (verificado no codigo, nao suposto):**
+- campo Responsavel (RN-052/ADR-027) lista hoje todos os usuarios ativos do sistema (`User.objects.filter(is_active=True)`), sem filtro por Setor — `apps/leads/views.py:346` (grid global) e `apps/leads/views.py:785` (linha expandida da Tela de Setor);
+- o sistema ja tem o conceito de "usuario pertence a um Setor" pedido pelo usuario: `AcessoSetor` (`apps.leads.models.AcessoSetor`, RN-055/ADR-028) — concessao individual, por nome de Setor, hoje usada so para liberar a visibilidade do modulo "Setores" (RN-054) e a tela "Acesso" (RN-058/059).
+
+**Avaliacao de impacto arquitetural:** nao exige modelo novo — reaproveita `AcessoSetor` ja existente para uma finalidade nova (filtrar quem pode ser Responsavel, alem de filtrar quem ve o modulo "Setores"). Muda a forma de montar `responsavel_opcoes`, de uma lista unica por pagina para uma lista por linha/subatividade, pois cada linha do grid global pode ter um Setor diferente.
+
+**Definicoes fechadas em 2026-08-14 (usuario, ver RN-060):**
+1. Subatividade sem Setor definido ainda: mostra todos os usuarios ativos, sem filtro (comportamento atual mantido nesse caso).
+2. Setor sem nenhum usuario com `AcessoSetor` concedido: campo Responsavel fica sem opcoes (alem do superusuario) — nao cai de volta para todos os usuarios.
+3. Superusuario: sempre aparece como opcao em qualquer Setor, mesma excecao ja usada pela RN-055.
+
+**Criterios de aceite (RN-060):**
+- linha de RE/RI/Mapa Calor com Setor definido: campo Responsavel lista somente usuarios ativos com `AcessoSetor` concedido para aquele nome de Setor, mais o(s) superusuario(s);
+- linha sem Setor definido: campo Responsavel lista todos os usuarios ativos, sem filtro;
+- Setor sem nenhum usuario com `AcessoSetor` (fora de superusuario): campo Responsavel aparece sem opcoes selecionaveis (alem do superusuario);
+- vale nas duas telas onde Responsavel e editavel hoje — grid global de Enderecos Lastmile e Tela de Setor — calculado por linha, nao por pagina;
+- vale igualmente para RedeExterna, RedeInterna e MapaCalor;
+- validacao no servidor (nao so no HTML do formulario) rejeita salvar um `responsavel_id` que nao pertenca a lista permitida para o Setor daquela linha no momento do salvamento;
+- nenhuma alteracao em registros ja gravados: subatividade com Responsavel ja atribuido que deixou de ter `AcessoSetor` para aquele Setor mantem o valor gravado (a regra restringe novas escolhas, nao apaga historico).
+
+Regras relacionadas: RN-060 (nova); RN-025, RN-052, RN-055, RN-056
+(docs/business_rules.md).
+
+Dependencias: nenhuma dependencia bloqueante; reaproveita `AcessoSetor` ja
+implementado e testado pela PO-075 (ADR-028/RN-054/055).
+
+Pendencias tecnicas (baixo risco, a criterio do Dev na implementacao):
+- forma de evitar consulta N+1 ao calcular a lista de Responsavel por linha
+  no grid (CLAUDE.md secao 7) — prefetch/anotacao a escolher pelo Dev;
+- ajuste exato de UI quando a lista vier vazia (select desabilitado,
+  mensagem "nenhum usuario com acesso a este Setor", etc.) — decisao
+  tecnica do Dev, reversivel e de baixo risco.
+
+Tipo de feature: `fullstack` (regra de negocio + consulta + validacao de
+servidor — QA obrigatorio).
+
+Agente recomendado para executar:
+- `dev`.
+
+### PO-079 - Campo obrigatorio condicionado a transicao de Setor (origem -> destino)
+
+Status: `🔍 Aguardando QA` (implementado pelo Dev em 2026-08-14)
+
+**Entrega do Dev:**
+- Tela "Campos" (edição de um Campo já existente) ganhou uma seção para adicionar/remover Setores de destino que tornam aquele Campo obrigatório.
+- Trocar o Setor de um RE/RI/Mapa Calor (Tela de Setor ou grid global) bloqueia a troca inteira quando o Campo exigido pelo Setor de origem está vazio, mostrando qual Campo falta preencher.
+- Regra só vale numa troca real (Setor anterior já definido) — nunca na primeira atribuição de Setor.
+- Campo do tipo Calculado não pode receber regra de obrigatoriedade (bloqueado no cadastro).
+- Excluir um Campo agora avisa também quantas regras de obrigatoriedade serão perdidas, além dos valores preenchidos.
+- **Pendência:** validação visual em navegador não executada (sem Playwright configurado no projeto); renderização da tela "Campos" (edição, com a seção nova) confirmada via requisição HTTP renderizada nos testes automatizados — recomenda-se o usuário confirmar a aparência na tela real.
+
+Origem: usuario pediu, em 2026-08-14: "Na criação de campos eu queria uma
+opção de deixar um campo obrigatorio antes de enviar para X setor, ou seja,
+estou em cotação e para ir para supliemntos, um cmapo X precisa ser
+preenchido antes, mas se eu quiser mandar para compras esse campo não é
+obrigatorio, se compras quiser enviar para suprimentos também não é
+obrigatorio, ou seja, eu amarraria o setor de origin, o campo e o setor
+final." Verbatim.
+
+**Definicoes fechadas em 2026-08-14 (ADR-031, RN-061):**
+1. O Campo exigido e sempre do Setor de origem (mesmo Setor dono que ja o
+   edita, RN-032) — decisao do usuario.
+2. Campo vazio bloqueia a troca de Setor por completo (nada e salvo, erro
+   exibido) — decisao do usuario.
+3. Cadastro das regras reaproveita a tela "Campos" ja existente
+   (RN-031/036), sem tela nova — decisao do usuario.
+
+Criterios de aceite (RN-061, ADR-031):
+- tela "Campos" permite, no cadastro/edicao de um Campo, adicionar/remover
+  Setores de destino que tornam aquele Campo obrigatorio ao sair do Setor
+  dono;
+- trocar o Setor de um RE/RI/MapaCalor (RN-026, Tela de Setor e grid global)
+  para um destino amarrado a alguma regra do Setor atual verifica se o
+  Campo da regra esta preenchido; se nao, bloqueia a troca com mensagem
+  indicando o Campo e o Setor de destino;
+- multiplas regras aplicaveis na mesma transicao exigem todas satisfeitas;
+- regra nao se aplica na primeira definicao de Setor (sem Setor anterior);
+- Campo tipo Calculado nao pode ser selecionado como Campo de uma regra.
+
+Regras relacionadas: RN-061 (nova); RN-025, RN-026, RN-031, RN-032, RN-033,
+RN-035, RN-039 (docs/business_rules.md).
+
+Decisao arquitetural:
+docs/adr/ADR-031_CAMPO_OBRIGATORIO_CONDICIONADO_A_TRANSICAO_DE_SETOR.md
+
+Dependencias: nenhuma dependencia bloqueante de outra PO do backlog em
+andamento; estende o mecanismo de Campo/CampoValor (PO-057/058/064) e a
+edicao de Setor/Status de RE/RI/MapaCalor (RN-026) ja implementados em
+codigo. **Risco de sequenciamento aceito pelo usuario:** PO-057, PO-058 e
+PO-064 estao com status `Aguardando QA` (ainda nao aprovadas) — mesmo
+padrao de risco ja aceito na PO-077 (construir sobre codigo implementado mas
+ainda nao validado pelo QA).
+
+Tipo de feature: `fullstack` (model novo + formulario de cadastro +
+validacao de bloqueio na troca de Setor — QA obrigatorio).
+
+Agente recomendado para executar:
+- `dev`.
+
+### PO-081 - Bolinha de conectividade da Escola (verde/amarelo/vermelho) no grid de Enderecos Lastmile, com base em RE e RI
+
+Status: `🔍 Aguardando QA` (corrigido pelo Dev em 2026-08-14)
+
+**Correção do Dev (2026-08-14):**
+- Trocado o texto comparado de "Concluído" (com acento) para "Concluido" (sem acento), igual ao catálogo real de Status.
+- Confirmado com a escola do INEP 35207378 (a mesma reportada): a bolinha agora mostra amarelo, como esperado.
+- Testes ajustados para a grafia real, mais um teste novo garantindo que a grafia acentuada não volta a ser reconhecida.
+- Suíte completa de `apps.escolas` e `apps.leads` (302 testes) executada, sem regressão.
+
+**Bug reportado pelo usuario em 2026-08-14:** escola INEP 35207378, com RI
+concluida, aparecia com a bolinha vermelha. Orquestrador investigou (somente
+leitura): o codigo compara o Status pelo texto exato "Concluído" (com
+acento), mas os 15 status hoje cadastrados em todo o catalogo usam
+"Concluido" sem acento — mesma grafia usada desde as migrations de seed do
+projeto, anteriores a esta feature. Resultado: a bolinha nunca fica
+verde/amarela em producao, sempre vermelha. Usuario decidiu corrigir o texto
+comparado para "Concluido" (sem acento) — ver RN-062 atualizada.
+
+**Correcao a fazer pelo Dev:**
+- trocar, na property que calcula a cor, o texto comparado de "Concluído"
+  (com acento) para "Concluido" (sem acento);
+- atualizar os testes que hoje usam "Concluído" com acento nos dados de
+  teste, para refletir a grafia real do catalogo ("Concluido");
+- reexecutar a suite de `apps.escolas` e `apps.leads` para confirmar.
+
+**Entrega do Dev (2026-08-14, antes do bug reportado):**
+- Coluna "Status" do grid de Enderecos Lastmile deixou de mostrar o texto vindo da API e agora mostra uma bolinha: verde quando RE e RI estao concluidas, amarelo quando so uma esta concluida, vermelho quando nenhuma esta (inclui escola sem RE/RI cadastrada ainda).
+- Cor ajustada de laranja para amarelo a pedido do usuario em 2026-08-14, mantendo a mesma condicao (pelo menos uma das duas concluida).
+- Mapa Calor nunca interfere na cor, mesmo concluido ou pendente.
+- A cor tem um texto explicativo ao passar o mouse (tooltip), para nao depender so da cor.
+- **Pendência:** validação visual em navegador não executada (sem Playwright configurado no projeto); renderização confirmada via testes automatizados que leem o HTML gerado — recomenda-se o usuário confirmar a aparência na tela real.
+
+Origem: usuario pediu, em 2026-08-14: "quero que o dado no frontend que
+informa que a escola esta desconectada ou conectada, eu queria que fosse uma
+bolinha verde para conectado, vermelho para desconectado, e laranja se uma
+das subatividades estiver concluida, ou seja, so sera conectada se as duas
+subatividades RE e RI esta concluida, o mapa de calor nao entra nessa
+regra." Verbatim.
+
+Definicoes fechadas em 2026-08-14 (RN-062):
+1. Criterio de "concluida": comparar `status.nome` pelo texto exato
+   "Concluído" (corrigido no mesmo dia para "Concluido", sem acento — ver
+   bug reportado acima) — decisao do usuario, em vez de criar um novo campo booleano
+   no catalogo de Status do Setor (RN-025).
+2. A bolinha aparece somente na coluna "Status" do grid de Enderecos
+   Lastmile — decisao do usuario.
+3. A bolinha substitui o texto atual de `status_escola` (dado cru da API
+   DashboardEACE, RN-024) nessa coluna, em vez de ficar exibida junto —
+   decisao do usuario.
+
+Criterios de aceite (RN-062, corrigido em 2026-08-14 — o texto comparado e
+"Concluido", sem acento, para bater com o catalogo real):
+- verde quando `rede_externa.status.nome` e `rede_interna.status.nome`
+  estao ambos como "Concluido";
+- amarelo quando exatamente um dos dois esta "Concluido" (cor ajustada de
+  laranja para amarelo em 2026-08-14, a pedido do usuario, mesma condicao);
+- vermelho quando nenhum dos dois esta "Concluido", incluindo o caso de RE
+  e/ou RI ainda nao existir para a Escola;
+- Mapa Calor nunca influencia a cor da bolinha;
+- coluna "Status" do grid de Enderecos Lastmile passa a mostrar so a
+  bolinha, sem o texto de `status_escola` (o campo continua existindo e
+  sendo sincronizado no banco, so deixa de aparecer nessa coluna);
+- nenhuma outra tela (Tela de Setor, `escola_rede_row.html`, modais de
+  historico) e alterada.
+
+Regras relacionadas: RN-062 (nova); RN-023, RN-024, RN-025, RN-043
+(docs/business_rules.md).
+
+Dependencias: nenhuma dependencia bloqueante de outra PO do backlog em
+andamento; le dados ja existentes de RE/RI (Epic 15, PO-048/049).
+
+Tipo de feature: `fullstack` (nova property de calculo em `Escola` + ajuste
+visual no template do grid — QA obrigatorio, pois altera o dado que o
+usuario usa para decidir se a escola esta conectada).
+
+Agente recomendado para executar:
+- `dev`.
+
+### PO-082 - Remover repeticao do nome do Setor na coluna Acoes do card de subatividade fora do Setor atual
+
+Status: `👤 Aguardando validação visual` (implementado pelo Dev em 2026-08-14)
+
+**Entrega do Dev (2026-08-14):**
+- `escola_rede_row.html`: link da coluna de Acoes trocou de "Está no Setor
+  {{ rede.setor.nome }}" para "Ver Setor", sem repetir o nome ja mostrado na
+  coluna "Setor". Link continua indo para `setor_detail` do mesmo Setor.
+- 3 testes que checavam o texto antigo (`apps/leads/tests.py`) ajustados
+  para verificar o novo texto e o `href` de navegacao para o Setor.
+- Suite completa de `apps.leads` (208 testes) executada no container
+  `speed_sistema` contra o MySQL real, sem falha; `manage.py check` sem
+  erro.
+- **Validação visual em navegador:** não executada (sem Playwright
+  configurado no projeto); container `speed_sistema` reiniciado para
+  refletir o template atualizado (`DEBUG=False` cacheia templates).
+- **Pendência:** usuário confirmar a aparência do link "Ver Setor" no grid
+  global de Enderecos Lastmile e na Tela de Setor.
+
+Origem: relato do usuario em 2026-08-14 — no card de subatividade (RE/RI/Mapa
+Calor) exibido fora do Setor atual (grid global de Enderecos Lastmile e Tela
+de Setor), o nome do Setor aparece duas vezes na mesma linha: uma na coluna
+"Setor" e outra dentro do texto de acao ao lado, o que o usuario considera
+redundante.
+
+Contexto: `apps/leads/templates/leads/partials/escola_rede_row.html`, bloco
+somente leitura (`pertence_ao_setor_atual == False`, linhas ~80-124) — a
+coluna "Setor" (linha ~83) ja mostra `rede.setor.nome`; a coluna de Acoes
+(linha ~110) repete o mesmo nome dentro do link `Está no Setor
+{{ rede.setor.nome }}`, que tambem navega para `setor_detail`. Comportamento
+coberto hoje pelos testes `test_tela_global_mostra_campos_read_only_quando_ja_tem_setor`
+(`apps/leads/tests.py:680`) e dois casos equivalentes na Tela de Setor
+(`apps/leads/tests.py:2755-2756`).
+
+Criterios de aceite:
+- a coluna de Acoes do bloco somente leitura deixa de repetir o nome do
+  Setor ja exibido na coluna "Setor" — texto do link simplificado (ex.: "Ver
+  Setor"), sem citar o nome novamente;
+- o link continua navegando para `setor_detail` do Setor da subatividade —
+  nenhuma perda de funcionalidade, so remocao da duplicidade de texto;
+- nenhuma outra coluna (Setor, Parceiro, Status, Responsavel) e alterada;
+- os tres testes que hoje verificam o texto antigo (`apps/leads/tests.py:680`,
+  `2755`, `2756`) sao atualizados para o novo texto, sem alterar o que
+  validam (presenca do link e da navegacao para o Setor).
+
+Regras relacionadas: nenhuma RN de negocio afetada — ajuste e exclusivamente
+de apresentacao (texto), sem mudanca de dado, permissao ou fluxo (RN-033,
+RN-035, RN-052 continuam validas e inalteradas).
+
+Dependencias: nenhuma.
+
+Tipo de feature: `frontend-layout` (somente texto/apresentacao; link e
+navegacao permanecem os mesmos) — validacao visual do usuario, sem QA.
+
+Agente recomendado para executar:
+- `dev`.
+
+### PO-083 - Escola some da tela de Setor "Implantacao"/"Qualidade" quando RE e RI ali estiverem concluidos
+
+Status: `🔍 Aguardando QA` (implementado pelo Dev em 2026-08-14)
+
+**Entrega do Dev (2026-08-14):**
+- `apps/leads/services.py` (`filtrar_escolas_lastmile`): quando `setor_nome`
+  e "Implantacao" ou "Qualidade" (`SETORES_OCULTAM_ESCOLA_CONCLUIDA`), a
+  consulta passa a excluir a Escola cujas RedeExterna/RedeInterna vinculadas
+  a esse Setor especifico estejam todas "Concluido" — Mapa Calor nunca entra
+  no criterio, e uma Escola presente so via Mapa Calor nao e afetada.
+- Nenhuma mudanca em `views.py`, model ou template — o filtro entra na
+  mesma consulta que ja alimenta `setor_detail` e o grid global (que
+  continua sem o filtro, por nao passar `setor_nome`).
+- 7 testes novos (`EscolaSomeDoSetorQuandoConcluidaTests`,
+  `apps/leads/tests.py`) cobrindo: desaparecimento com RE+RI concluidos;
+  permanencia com uma subatividade pendente; avaliacao por Setor quando
+  RE/RI estao em Setores diferentes; Escola so com Mapa Calor nao afetada;
+  Setor fora da regra continua mostrando; grid global nunca filtra; regra
+  funciona por nome mesmo com Setor "Qualidade" criado so no teste (nao
+  seedado no catalogo real).
+- Suite completa de `apps.leads` e `apps.escolas` (309 testes) executada no
+  container `speed_sistema` contra o MySQL real, sem falha; `manage.py
+  check` sem erro. Container reiniciado para o gunicorn carregar o
+  `services.py` atualizado.
+- **Pendencia:** nenhuma. Setor "Qualidade" continua nao cadastrado no
+  catalogo real — quando for criado pela tela de Setores, a regra passa a
+  valer para ele automaticamente, sem novo deploy.
+
+Origem: usuario pediu, em 2026-08-14: "quero que após ser concluído as
+subatividades RE e RI dentro do setor de implantação ou qualidade, a escola
+desapareça do setor e fique apenas dentro do lastmile/endereços."
+
+Contexto: Orquestrador consultou o catalogo real de Setores (somente
+leitura, via `manage.py shell`) e confirmou que hoje existem Lastmile,
+Suprimentos, Implantacao, Pos venda, Suporte (RE/RI/MC) e Compras (so RI) —
+"Qualidade" ainda nao esta cadastrado. Perguntado, usuario confirmou 4
+pontos (RN-063): "Qualidade" sera cadastrado depois pela tela de Setores ja
+existente, sem bloquear esta entrega; a regra vale so para "Implantacao" e
+"Qualidade", nao para os demais Setores; quando RE e RI estao em Setores
+diferentes, o desaparecimento e avaliado por Setor individualmente; Mapa
+Calor nao entra no criterio de conclusao (mesma convencao da RN-062/PO-081).
+
+Criterios de aceite (RN-063):
+- na tela do Setor "Implantacao" ou "Qualidade" (`setor_detail`), uma Escola
+  deixa de aparecer quando pelo menos uma de RedeExterna/RedeInterna dela
+  esta vinculada a esse Setor e todas as vinculadas a esse Setor tem
+  `status.nome == "Concluido"`;
+- Escola vinculada a esse Setor somente via Mapa Calor (sem RE/RI ali) nao e
+  afetada — continua aparecendo;
+- Mapa Calor nunca influencia o criterio, concluido ou nao;
+- a Escola nunca desaparece do grid global de Enderecos Lastmile
+  (`enderecos_lastmile_view`), nem dos demais Setores (Lastmile,
+  Suprimentos, Pos venda, Suporte, Compras), que continuam sem este filtro;
+- nenhuma mudanca na edicao de Setor/Status (RN-026/033/035) nem na
+  estrutura das linhas de RE/RI/MC ja exibidas (RN-027/028).
+
+Regras relacionadas: RN-063 (nova); RN-025, RN-026, RN-027, RN-033, RN-035,
+RN-062 (docs/business_rules.md).
+
+Dependencias: nenhuma. Setor "Qualidade" nao precisa existir no catalogo
+para a entrega ser concluida — a regra roda por nome.
+
+Tipo de feature: `backend-only` (filtro adicional na consulta que alimenta
+`setor_detail` — sem tela nova, mas muda quais Escolas aparecem — QA
+obrigatorio).
+
+Agente recomendado para executar:
+- `dev`.
+
+### PO-084 - Falha tecnica no envio de e-mail mostra mensagem generica; detalhe tecnico so no log do servidor
+
+Status: `🔍 Aguardando QA` (implementado pelo Dev em 2026-08-14)
+
+**Entrega do Dev (2026-08-14):**
+- Criada `MENSAGEM_ERRO_TECNICO_ENVIO_EMAIL` (`apps/core_admin/quotes_views.py`),
+  reaproveitada por `apps/core_admin/escola_email_views.py` — mesma
+  mensagem genérica nos dois pontos de envio (Escola/RE/RI/Mapa Calor e
+  Cotação), tanto na resposta à tela quanto no `RegistroHistorico` de
+  falha. `logger.exception` continua intacto, capturando o erro completo
+  antes da mensagem genérica ser montada.
+- Erros de validação de entrada (remetente não configurado, e-mail
+  inválido, "to" vazio) não foram alterados — continuam com a mensagem
+  específica.
+- Testes novos: 1 em `EscolaEnviarEmailTests` e 2 em
+  `MinhasCotacoesEnviarEmailTests` (`apps/core_admin/tests.py`), simulando
+  falha técnica via mock de `EmailMessage.send` e confirmando que nem a
+  tela nem o histórico mostram o texto técnico, além de um teste
+  confirmando que o erro de validação continua específico.
+- Suíte completa de `apps.core_admin` (170 testes) executada no container
+  `speed_sistema` contra o MySQL real: 1 falha, pré-existente e sem relação
+  (`AutomacaoMenuTests`, já documentada em entregas anteriores). `manage.py
+  check` sem erro.
+- **Bug pré-existente encontrado (fora do escopo desta PO):**
+  `Proposal.codigo_exibicao` (`apps/partners/models.py`) quebra
+  (`ValueError: localtime() cannot be applied to a naive datetime`) quando
+  a proposta não tem `data_emissao`/`data_ativacao` e o ambiente roda com
+  `USE_TZ=False` — falta o mesmo guard (`if settings.USE_TZ else
+  date.today()`) já usado por `montar_codigo_proposta`, poucas linhas
+  acima. Não corrigi por estar fora do escopo desta PO; registrando para o
+  Orquestrador avaliar se abre uma PO própria.
+- **Pendência:** nenhuma da PO-084 em si.
+
+Origem: usuario reportou, em 2026-08-14, apos configurar o SMTP (envio ja
+funcionando): ao testar o envio pela tela de Rede Interna (RI), a falha
+tecnica apareceu por completo na tela e no historico gravado — a resposta
+SMTP "554 SendAsDenied" do Exchange, com todo o diagnostico interno do
+servidor. Pediu que, em caso de erro tecnico, aparecesse so uma mensagem
+simples pedindo para contatar o administrador do sistema.
+
+Contexto: Orquestrador leu o codigo (`apps/core_admin/escola_email_views.py`
+e `apps/core_admin/quotes_views.py`) e confirmou que os dois pontos de envio
+de e-mail do sistema (Escola/RE/RI/Mapa Calor e Cotacao) tem o mesmo padrao:
+o bloco que envia de fato (`email.send()`) ja chama `logger.exception` com o
+erro completo, mas depois expoe `str(exc)` bruto tanto na mensagem
+devolvida a tela quanto no `RegistroHistorico` de falha (RN-029) — por isso
+o texto tecnico apareceu para o usuario de negocio.
+
+Criterios de aceite (RN-064):
+- ao falhar o envio propriamente dito (erro do backend SMTP, nao erro de
+  validacao de entrada), a mensagem mostrada na tela e a gravada no
+  historico de falha passam a ser a mesma mensagem generica, orientando a
+  entrar em contato com o administrador do sistema, sem o texto da
+  excecao;
+- erros de validacao de entrada (remetente nao configurado, e-mail
+  invalido, anexo acima do limite) continuam com a mensagem especifica
+  atual — sao acionaveis pelo proprio usuario, nao fazem parte desta
+  mudanca;
+- `logger.exception` continua registrando o erro completo no log do
+  servidor, sem nenhuma perda de detalhe para o time tecnico;
+- aplicado nos dois pontos: `_enviar_email_nivel`
+  (`apps/core_admin/escola_email_views.py`, usado por Escola/RE/RI/Mapa
+  Calor) e `minhas_cotacoes_enviar_email`
+  (`apps/core_admin/quotes_views.py`).
+
+Regras relacionadas: RN-064 (nova); RN-029, RN-042, RN-043
+(docs/business_rules.md).
+
+Dependencias: nenhuma.
+
+Tipo de feature: `backend-only` (muda o comportamento de uma falha ja
+existente, sem tela nova — QA obrigatorio: precisa confirmar que o log do
+servidor continua completo e que os erros de validacao nao viraram
+genericos por engano).
+
+Agente recomendado para executar:
+- `dev`.
+
+### PO-085 - Card com quantidade de RE e RI "para atendimento" na tela de Setor
+
+Status: `🔍 Aguardando QA` (implementado pelo Dev em 2026-08-14)
+
+**Entrega do Dev (2026-08-14):**
+- Criado `services.contar_rede_externa_interna_por_setor` (`apps/leads/
+  services.py`), chamado por `_render_enderecos_lastmile`
+  (`apps/leads/views.py`) somente quando `setor_atual` esta presente —
+  agregado numa unica consulta (`Count` com `filter`) sobre o mesmo
+  queryset ja filtrado de `filtrar_escolas_lastmile`, sem consulta extra
+  por escola.
+- Novo card em `apps/leads/templates/leads/enderecos_lastmile.html`, ao
+  lado do card "Total de Escolas" ja existente, mesmo estilo visual,
+  exibido somente dentro de `{% if setor_atual %}` — RE e RI lado a lado.
+- Contagem bruta (sem filtrar por `status.nome`), reflete os filtros de
+  busca (`q`, `cidade`, `estado`) da propria tela, e nunca inclui Mapa
+  Calor — conforme RN-065.
+- Testes novos: `CardReRiPorSetorTests` (5 testes,
+  `apps/leads/tests.py`) cobrindo contagem bruta sem olhar Status, filtro
+  de busca refletido na contagem, ausencia do card no grid global,
+  Mapa Calor fora da contagem, e ausencia de consulta extra por escola.
+  Suite completa de `apps.leads` (220 testes) executada no container
+  `speed_sistema` contra o MySQL real: OK.
+- Validacao visual em navegador: nao executada (sem ferramenta de
+  navegador disponivel neste ambiente) — a tela foi conferida via
+  `assertContains`/`response.context` nos testes automatizados, incluindo
+  o markup do novo card.
+- **Pendencia:** validacao visual em navegador segue pendente; QA/usuario
+  pode confirmar quando abrir a tela.
+
+Objetivo:
+Usuario pediu, em 2026-08-14: "Eu tenho um card dentro de lastmile/enderecos
+com o total de escolas, eu queria esse mesmo card dentro dos setores, porem
+eu quero a quantidade de RE e RI dentro daquele setor para atendimento." Ou
+seja, replicar na tela de Setor (`setor_detail`, que reaproveita o mesmo grid
+de `enderecos_lastmile.html` via PO-053/ADR-017) o card "Total de Escolas"
+hoje exibido no topo da tela (`apps/leads/templates/leads/
+enderecos_lastmile.html`, linhas 29-32), trocando a metrica por quantidade de
+Rede Externa (RE) e Rede Interna (RI, RN-023) vinculadas aquele Setor.
+
+Contexto ja investigado pelo Orquestrador (somente leitura):
+- RE/RI (`RedeExterna`/`RedeInterna`) tem `setor` (FK) e `status` (FK para
+  `SetorStatus`, catalogo de texto livre por Setor, RN-025) — nao existe
+  hoje nenhum status fixo/universal chamado "para atendimento" no catalogo;
+- o unico criterio de "concluido" hoje existente no sistema e a comparacao
+  textual `status.nome == "Concluido"`, ja usada por RN-062 (bolinha de
+  conectividade) e RN-063 (Escola some do Setor quando RE/RI la estao
+  concluidos) — as duas tratam "nao concluido" como sinonimo de "ainda
+  pendente/precisa de acao";
+- o card "Total de Escolas" atual conta `paginator.count`, ou seja, ja
+  reflete os filtros de busca (`q`, `cidade`, `estado`) aplicados no
+  formulario GET da propria tela — nao e um total absoluto do banco.
+
+Decisao do usuario (2026-08-14), resolvendo os 4 pontos levantados pelo
+Orquestrador:
+1. criterio de contagem: contagem bruta — toda RE e toda RI vinculada ao
+   Setor, independente do Status (alternativa "a"; descartadas: "b" — so
+   RE/RI com Status diferente de "Concluido" — e "c" — so RE/RI com um
+   status especifico tipo "a fazer");
+2. layout: um unico card, com RE e RI lado a lado, mesmo estilo visual do
+   card "Total de Escolas" (nao dois cards separados);
+3. filtros de busca: a contagem respeita os filtros (`q`, `cidade`,
+   `estado`) ja aplicados na tela, mesmo comportamento do card atual;
+4. Mapa Calor: confirmado fora da contagem — somente RE e RI.
+
+Criterios de aceite (RN-065):
+- card exibido somente na tela de Setor (`setor_atual` presente, dentro de
+  `setor_detail`) — nao aparece no grid global de Enderecos Lastmile
+  (`enderecos_lastmile_view`), que mantem so o card "Total de Escolas";
+- um unico card, mesmo estilo visual do card "Total de Escolas" ja
+  existente, com dois numeros lado a lado: quantidade de RE e quantidade de
+  RI vinculadas aquele Setor;
+- quantidade de RE = contagem de `RedeExterna` cujo `setor.nome` seja o
+  Setor da tela, dentro do queryset ja filtrado por `q`/`cidade`/`estado`
+  (mesmo queryset usado para `total_enderecos`); quantidade de RI = mesma
+  logica para `RedeInterna`;
+- a contagem NAO filtra por `status.nome` — RE/RI com qualquer Status
+  (inclusive "Concluido") entram; nao ha leitura de "pendente" aqui,
+  diferente da convencao usada em RN-062/RN-063;
+- Mapa Calor nunca entra em nenhum dos dois numeros;
+- os dois numeros mudam conforme os filtros de busca da propria tela
+  (`q`, `cidade`, `estado`), igual ao card "Total de Escolas" ja existente.
+
+Regras relacionadas: RN-065 (nova), RN-023, RN-025, RN-043
+(docs/business_rules.md).
+
+Dependencias: nenhuma.
+
+Tipo de feature: `fullstack` (nova contagem de RE/RI por Setor a partir do
+queryset ja filtrado, alem do card no template — QA obrigatorio).
+
+Agente recomendado para executar:
+- `dev`.
+
+### PO-086 - Filtros de Responsavel, Subatividade (RE/RI/Mapa Calor) e Status na Tela de Setor
+
+Status: `🔍 Aguardando QA` (implementado pelo Dev em 2026-08-17)
+
+**Entrega do Dev (2026-08-17):**
+- Criada a tela de Setor com filtros por Subatividade (RE, RI, Mapa Calor —
+  selecao multipla), Responsavel e Status, exclusivos da Tela de Setor —
+  nao aparecem no grid global de Enderecos Lastmile.
+- `services.filtrar_escolas_lastmile` ganhou os parametros novos, aplicados
+  somente quando `setor_nome` esta presente; `_render_enderecos_lastmile`
+  monta as opcoes de Responsavel (reaproveitando `responsavel_opcoes_por_setor`,
+  RN-060) e de Status (novo `services.status_opcoes_por_nome_setor`,
+  escopado ao catalogo do Setor da tela).
+- Isolamento confirmado com o exemplo do usuario: Responsavel/Status
+  avaliam somente as subatividades vinculadas ao Setor da tela, nunca uma
+  subatividade da mesma Escola vinculada a outro Setor.
+- Testes novos (`FiltrosTelaSetorTests`, `apps/leads/tests.py`): caminho
+  principal de cada filtro isolado, OR entre tipos marcados, combinacao
+  dos tres filtros por E, isolamento por Setor da tela (cenario do
+  exemplo), ausencia dos filtros no grid global (mesmo via querystring
+  forcada) e ausencia de consulta extra por escola (N+1).
+- Suite completa de `apps.leads` e `apps.escolas` (327 testes) executada
+  no container `speed_sistema` contra o MySQL real: OK. `manage.py check`
+  sem erro.
+- Tela verificada via requisicao HTTP autenticada no `speed_sistema`
+  (apos restart para carregar o codigo novo): filtros aplicados e
+  combinados corretamente, valores selecionados preservados apos submit,
+  ausentes no grid global. Validacao visual em navegador (renderizacao
+  grafica) nao executada — sem Playwright/navegador disponivel neste
+  ambiente; verificado o HTML servido e o comportamento funcional real.
+- **Pendencia:** aguardando QA.
+
+Objetivo:
+Usuario pediu, em 2026-08-16: "Eu quero agora dentro das subatividades,
+filtros por responsavel, re,ri ou mapa de calor, status." Ou seja, adicionar
+ao grid de Enderecos Lastmile (Escola + RE/RI/Mapa Calor, RN-043) filtros
+por Responsavel, por tipo de subatividade (RE/RI/Mapa Calor) e por Status.
+
+Contexto ja investigado pelo Orquestrador (somente leitura):
+- RE, RI e MapaCalor herdam de `ProcessoRedeBase`
+  (`apps/escolas/models.py:10`), com os campos `setor` (FK Setor), `status`
+  (FK SetorStatus — catalogo de texto livre por Setor, RN-025), `parceiro`
+  e `responsavel` (FK usuario, RN-052/ADR-027);
+- a grade (uma linha por Escola, com sublinha de RE/RI/MC) e renderizada
+  por `_render_enderecos_lastmile` (`apps/leads/views.py:321`), usada tanto
+  pelo grid global (`enderecos_lastmile_view`, sem `setor_atual`) quanto
+  pela Tela de Setor (`setor_detail`, com `setor_atual`);
+- o filtro atual e feito por
+  `services.filtrar_escolas_lastmile(q, cidade, estado, sort, setor_nome)`
+  (`apps/leads/services.py:1117`) — texto livre, cidade, UF e, quando
+  `setor_nome` esta presente, restringe a escolas com RE/RI/MC vinculada
+  aquele Setor. Nao existe hoje filtro por Responsavel, por tipo de
+  subatividade nem por Status;
+- o formulario GET (`q`, `cidade`, `estado`, `sort`) fica em
+  `apps/leads/templates/leads/enderecos_lastmile.html`, a partir da linha
+  49;
+- RN-060 ja modela "Responsavel elegivel por Setor" via
+  `AcessoSetor`/`responsavel_opcoes_por_setor` — referencia possivel para
+  popular as opcoes de Responsavel do filtro novo;
+- RN-025 confirma que o catalogo de Status e texto livre por Setor (cada
+  Setor pode ter nomes de Status diferentes) — relevante para decidir como
+  montar as opcoes de Status do filtro, principalmente no grid global (sem
+  um Setor unico de contexto).
+
+Decisao do usuario (2026-08-16), resolvendo 4 dos 5 pontos levantados pelo
+Orquestrador:
+1. escopo de tela: filtros novos valem somente na Tela de Setor
+   (`setor_detail`) — nao aparecem no grid global de Enderecos Lastmile;
+2. filtro de tipo de subatividade (RE/RI/Mapa Calor): restringe quais
+   Escolas aparecem — so mostra Escola que tem o(s) tipo(s) marcado(s)
+   vinculado(s) aquele Setor; as demais somem da lista (alternativa "a";
+   descartada "b" — manter todas as Escolas so ocultando a sublinha);
+3. selecao do filtro de tipo: multipla (pode marcar RE e RI juntos, por
+   exemplo);
+4. escopo de Responsavel e Status: consideram qualquer subatividade da
+   Escola (RE, RI ou Mapa Calor) vinculada aquele Setor, independente do
+   que estiver marcado no filtro de tipo — nao ficam restritos ao(s)
+   tipo(s) selecionado(s) no ponto 2.
+
+O 5o ponto (combinacao logica entre os filtros) foi resolvido pelo
+Orquestrador como decisao tecnica reversivel e de baixo risco (CLAUDE.md
+secao 9), nao pelo usuario: todos os filtros (tipo + Responsavel + Status +
+`q`/cidade/estado ja existentes) se combinam por E — mesmo padrao ja usado
+pelos filtros existentes da tela. Revisavel se o usuario discordar depois.
+
+Consequencia direta da decisao 1: como so ha um Setor de contexto na tela,
+as opcoes do filtro de Status vem do catalogo `SetorStatus` (RN-025) do
+proprio Setor da tela (`setor_atual`) — nao ha necessidade de decidir entre
+listar Status de todos os Setores ou combinar com um Setor selecionado a
+parte, como cogitado na alternativa "b" do ponto 4 original.
+
+Confirmacao definitiva do usuario (2026-08-17), fechando a ultima duvida do
+ponto 4: os filtros de Responsavel e Status avaliam somente as
+subatividades (RE/RI/MC) que pertencem ao Setor da tela — o mesmo universo
+ja exibido como linha nessa tela (RN-028) — nunca subatividade da mesma
+Escola vinculada a outro Setor. Exemplo usado para confirmar: Escola X com
+RE no Setor "Implantacao" (Responsavel Joao) e RI no Setor "Qualidade"
+(Responsavel Maria); na tela do Setor "Implantacao", filtrar por
+Responsavel="Maria" nao traz a Escola X, porque a RI onde Maria e
+responsavel pertence a outro Setor e nem aparece nessa tela. Nenhuma
+pendencia de decisao em aberto.
+
+Criterios de aceite (RN-066):
+- os tres filtros (tipo, Responsavel, Status) aparecem somente na Tela de
+  Setor (`setor_detail`, `setor_atual` presente); o grid global de
+  Enderecos Lastmile nao ganha nenhum dos tres;
+- filtro de tipo: selecao multipla entre RE, RI e Mapa Calor; com um ou
+  mais tipos marcados, a Escola so aparece se pelo menos um dos tipos
+  marcados tiver a subatividade correspondente vinculada ao Setor da tela
+  (OR entre os tipos marcados dentro deste filtro); nenhum tipo marcado
+  mantem o comportamento atual (sem esse filtro);
+- filtro de Responsavel: opcoes de usuario reaproveitam a mesma lista
+  elegivel por Setor ja calculada pela RN-060
+  (`responsavel_opcoes_por_setor`) para o Setor da tela; restringe a
+  Escola as que tem, entre as subatividades (RE/RI/MC) vinculadas ao Setor
+  da tela, pelo menos uma com aquele Responsavel atribuido — independente
+  do filtro de tipo;
+- filtro de Status: opcoes vem do catalogo `SetorStatus` do Setor da tela
+  (RN-025); restringe a Escola as que tem, entre as subatividades
+  vinculadas ao Setor da tela, pelo menos uma com aquele Status —
+  independente do filtro de tipo, mesmo criterio do Responsavel;
+- combinacao entre os tres filtros novos e os ja existentes (`q`, cidade,
+  estado, filtro de Setor da propria tela) e sempre por E;
+- nenhum dos tres filtros altera a listagem, edicao ou permissao ja
+  existentes de Setor/Status/Responsavel/Parceiro nas linhas de RE/RI/MC
+  (RN-026/033/052/060) — atuam somente na composicao da lista de Escolas
+  exibida.
+
+Regras relacionadas: RN-066 (nova), RN-023, RN-025, RN-027, RN-028, RN-043,
+RN-052, RN-060 (docs/business_rules.md).
+
+Dependencias: nenhuma.
+
+Tipo de feature: `fullstack` (mudanca em `services.filtrar_escolas_lastmile`
+e/ou `_render_enderecos_lastmile` para os 3 filtros novos, mais o
+formulario de filtro no template, exibido somente com `setor_atual` — QA
+obrigatorio).
+
+Agente recomendado para executar:
+- `dev`.
+
+### PO-087 - Filtro por cor do indicador de conectividade (verde/amarelo/vermelho) no grid global de Endereços Lastmile
+
+Status: `🔍 Aguardando QA` (implementado pelo Dev em 2026-08-17)
+
+**Entrega do Dev (2026-08-17):**
+- Criado o filtro de cor do indicador de conectividade (Conectada/
+  Parcialmente conectada/Desconectada), exclusivo do grid global de
+  Endereços Lastmile — não aparece na Tela de Setor.
+- Seleção múltipla por checkbox (verde/amarelo/vermelho), mesmo padrão
+  visual do filtro "Subatividade" já existente.
+- Critério traduzido para consulta no banco (RN-062/RN-067): verde = RE e
+  RI concluídos; amarelo = exatamente um dos dois; vermelho = nenhum
+  concluído, incluindo RE/RI ainda não cadastrado.
+- Combinação com busca, Município e UF por E; combinação entre as cores
+  marcadas por OU.
+- Testes novos (13, `apps/leads/tests.py`) cobrindo cada cor isolada,
+  seleção múltipla, XOR do amarelo, RE/RI inexistente, combinação com os
+  filtros existentes, exclusividade da Tela de Setor e paginação. Suíte
+  completa de `apps.leads`/`apps.escolas` (340 testes) e `manage.py check`
+  executados no container `speed_sistema` contra o banco real: OK.
+- Validação visual em navegador: não executada com ferramenta de captura
+  (sem Playwright configurado neste ambiente, mesma limitação já
+  registrada em entregas anteriores) — renderização do HTML conferida via
+  `assertContains`/`response.context` nos testes automatizados e via
+  requisição HTTP autenticada de leitura (dropdown fechado por padrão,
+  rótulos corretos, ausente na Tela de Setor); recomenda-se o usuário
+  confirmar a aparência e a interação do dropdown na tela real.
+
+Origem: usuário pediu, em 2026-08-17: "na tela de projetos/Endereços, eu
+preciso de um filtro que seria status, eu preciso ver só os verdes, os
+vermelhos e os amarelos, que são conectados, desconectados e pacialmente
+conectados."
+
+Contexto já investigado pelo Orquestrador (somente leitura):
+- a bolinha de conectividade (RN-062) já existe hoje somente na coluna
+  "Status" do grid global de Endereços Lastmile (`enderecos_lastmile_view`,
+  template `apps/leads/templates/leads/enderecos_lastmile.html`) — não
+  aparece na Tela de Setor (`setor_detail`);
+- a cor vem de `Escola.indicador_conectividade`
+  (`apps/escolas/models.py:188-210`), property Python calculada a partir de
+  `rede_externa`/`rede_interna` (RE/RI, RN-023): verde quando as duas têm
+  `status.nome == "Concluido"`; amarelo quando exatamente uma; vermelho
+  quando nenhuma (inclui RE/RI ainda não criada para a escola). Mapa Calor
+  nunca entra nesse cálculo;
+- não é campo persistido — filtrar por ela no banco exige traduzir o mesmo
+  critério para `Q()` (mesmo padrão já usado por RN-063/RN-065/RN-066
+  dentro de `services.filtrar_escolas_lastmile`,
+  `apps/leads/services.py:1145`), preservando a paginação via QuerySet;
+  filtrar em Python após a busca arriscaria paginação incorreta e N+1
+  (CLAUDE.md seção 7);
+- o formulário GET (`q`, `cidade`, `estado`, mais os 3 filtros exclusivos da
+  Tela de Setor da RN-066) fica em
+  `apps/leads/templates/leads/enderecos_lastmile.html`, a partir da linha
+  49.
+
+Decisão do usuário (2026-08-17), fechando os 2 pontos levantados pelo
+Orquestrador:
+1. escopo de tela: filtro somente no grid global de Endereços Lastmile
+   (mesmo alcance da bolinha hoje) — RN-062 permanece como está, sem
+   estender a bolinha nem o filtro à Tela de Setor;
+2. seleção múltipla das cores — pode marcar mais de uma cor ao mesmo tempo
+   (ex.: verde e amarelo juntos, deixando só vermelho fora), mesmo padrão
+   já usado pelo filtro de tipo de subatividade (RE/RI/Mapa Calor) da
+   RN-066.
+
+Decisão técnica já resolvida pelo Orquestrador (reversível e de baixo
+risco, CLAUDE.md seção 9, mesmo padrão do ponto 5 da RN-066): a combinação
+do filtro novo com os filtros de busca já existentes (`q`, cidade, estado)
+é por E.
+
+Critérios de aceite (RN-067):
+- filtro exclusivo do grid global de Endereços Lastmile
+  (`enderecos_lastmile_view`, sem `setor_atual`) — não aparece na Tela de
+  Setor; RN-062 não é alterada;
+- seleção múltipla entre as 3 cores (verde, amarelo, vermelho), por
+  checkbox, mesma convenção visual do campo "Subatividade" (RE/RI/Mapa
+  Calor) já existente na Tela de Setor (RN-066);
+- com uma ou mais cores marcadas, a Escola só aparece se
+  `indicador_conectividade["cor"]` corresponder a pelo menos uma das cores
+  marcadas (OR entre as cores marcadas); nenhuma cor marcada mantém o
+  comportamento atual (sem esse filtro);
+- combinação com os filtros de busca já existentes (`q`, cidade, estado) é
+  por E;
+- a implementação traduz o critério de cor da RN-062 para `Q()` dentro de
+  `services.filtrar_escolas_lastmile` (verde = RE e RI "Concluido"; amarelo
+  = exatamente uma; vermelho = nenhuma, incluindo RE/RI inexistente), sem
+  quebrar a paginação nem introduzir consulta N+1; aplicado somente quando
+  `setor_nome` estiver ausente (grid global).
+
+Regras relacionadas: RN-067 (nova, fechada); RN-062, RN-066
+(docs/business_rules.md).
+
+Dependências: nenhuma.
+
+Tipo de feature: `backend-only` (novo parâmetro de filtro em
+`services.filtrar_escolas_lastmile` traduzindo `indicador_conectividade`
+para `Q()`, mais o formulário de filtro multiplo no template já existente
+do grid global — QA obrigatório).
+
+Agente recomendado para executar:
+- `dev`.
+
+### PO-088 - Administracao > Importacao: modelo de planilha e importacao em massa de Provedores, com CNPJ obrigatorio e unico
+
+Status: `Planejada`
+
+Origem: usuario pediu, em 2026-08-17, dentro do menu de Administracao, na
+parte de Importacao, um local para baixar uma planilha modelo em Excel,
+preenche-la com dados de Provedor e importar em massa; Provedor deve ter
+CNPJ obrigatorio e unico no banco.
+
+Contexto ja investigado pelo Orquestrador (somente leitura):
+- "Provedor" e o model `partners.Partner`, com tela propria de listagem e
+  cadastro (`provedores_list`/`provedores_create`/`provedores_edit`,
+  RN-045/RN-046) dentro do menu Projeto — reaproveita o `PartnerForm` ja
+  existente;
+- o campo de documento hoje se chama `cnpj_cpf`, aceita CNPJ ou CPF, e e
+  opcional (`blank=True, null=True`), com `unique=True` ja aplicado na
+  coluna; e compartilhado com a tela de Parceiro (grupo Parceiro), que usa
+  o mesmo `PartnerForm`;
+- a tela "Administracao > Importacao" ja existe
+  (`core_admin/importacao_exportacao.html`, PO-071), hoje com um card de
+  exportacao de Setores e Escolas — a feature nova entra como um segundo
+  card na mesma tela, sem menu novo;
+- ja existe precedente completo de importacao em planilha com modelo para
+  download, leitura tolerante (`.xlsx`/`.csv`), auditoria via
+  `IntegrationAudit` e relatorio de resultado por linha — importacao de
+  Leads (`apps/core_admin/import_services.py`,
+  `services.montar_template_leads_bytes`), a ser reaproveitado como base
+  desta fatia.
+
+Antes de fechar a regra do CNPJ, o Orquestrador levantou 3 pontos de
+ambiguidade (CLAUDE.md secao 9, "dados persistidos"/"regra de negocio"),
+por `cnpj_cpf` ser compartilhado com a tela de Parceiro:
+1. a obrigatoriedade vale so para Provedor ou para todo `Partner`
+   (Provedor e Parceiro);
+2. como tratar Provedor/Parceiro ja cadastrado hoje sem CNPJ;
+3. o campo deve exigir CNPJ especificamente ou continuar aceitando CPF.
+
+Usuario decidiu os 3, pelas opcoes recomendadas: (1) obrigatoriedade so no
+fluxo de Provedor, sem alterar a tela nem a coluna de Parceiro; (2) sem
+migracao retroativa — vale so para cadastros/importacoes novas; (3) exigir
+CNPJ especificamente, rejeitando CPF neste fluxo.
+
+Criterios de aceite (RN-068, RN-069):
+- novo card em "Administracao > Importacao" (`importacao_exportacao.html`)
+  para Provedores, no mesmo padrao visual dos cards existentes;
+- botao "Baixar Modelo" gera `.xlsx` so com a linha de cabecalho (Razao
+  Social, CNPJ, Nome Fantasia, Contato, E-mail, Telefone, Status), sem
+  nenhuma linha de dado;
+- upload da planilha preenchida importa uma linha por Provedor; CNPJ
+  obrigatorio e no formato valido (14 digitos) em toda linha, sem aceitar
+  CPF neste fluxo;
+- CNPJ unico entre todos os `Partner` (Provedor e Parceiro, reaproveitando
+  o `unique=True` ja existente na coluna `cnpj_cpf`); linha com CNPJ
+  ja cadastrado ou em formato invalido e rejeitada individualmente, com o
+  motivo do erro, sem interromper as demais linhas;
+- linha sem erro cria um novo Provedor; CNPJ que ja existe no sistema fica
+  marcado como ignorado/duplicado no resultado, sem sobrescrever o
+  registro existente (upsert fica fora do escopo desta fatia);
+- resultado da importacao (sucessos, ignorados, erros por linha) fica
+  disponivel ao usuario ao final, mesmo padrao ja usado pela importacao de
+  Leads;
+- cadastro manual de Provedor (`provedores_create`/`provedores_edit`)
+  tambem passa a exigir CNPJ valido, mesma regra da importacao;
+- cadastro de Parceiro (grupo Parceiro) nao muda — `cnpj_cpf` continua
+  opcional, aceitando CNPJ ou CPF;
+- acesso ao novo card e a importacao restrito ao grupo Administrador,
+  mesmo padrao das demais telas de Administracao.
+
+Regras relacionadas: RN-068 (nova), RN-069 (nova), RN-045, RN-046, RN-050
+(docs/business_rules.md).
+
+Dependencias: nenhuma — reaproveita telas e servicos ja existentes
+(PO-045/046 para o cadastro de Provedor, PO-071 para a tela de
+Importacao e Exportacao, `import_services.py` da importacao de Leads como
+base tecnica).
+
+Tipo de feature: `fullstack` (model `Partner`/validacao de formulario,
+novo servico de importacao e geracao de modelo `.xlsx`, mais card e rota
+novos na tela de Administracao — QA obrigatorio).
 
 Agente recomendado para executar:
 - `dev`.

@@ -34,6 +34,7 @@ from apps.integracoes.ixc.services.resolver_os_atendimento_ixc import (
     normalizar_proxima_tarefa_id,
     normalizar_tem_anexo,
 )
+from scripts.integracoes.ixc_finalizacao_service import IXCConsultaIndisponivelError
 from scripts.integracoes.ixc_ticket_arquivo_service import _sessao_painel_ixc
 
 
@@ -216,6 +217,56 @@ class DesativacaoAtendimentoIXCTests(SimpleTestCase):
         self.assertEqual(atendimento_id, "5313")
         self.assertIn("ja esta finalizado", mensagem)
 
+    @patch("apps.integracoes.ixc.services.desativar_atendimento_ixc.buscar_atendimento_ixc_por_id")
+    def test_executar_desativacao_falha_de_comunicacao_nao_diz_nao_encontrado(
+        self,
+        mock_buscar_atendimento,
+    ):
+        # Bug corrigido: uma falha ao consultar o IXC (timeout, HTTP != 200) nao
+        # pode ser relatada como "atendimento nao encontrado" — sao causas
+        # diferentes e a segunda esconde a real (ex.: instabilidade do IXC).
+        mock_buscar_atendimento.side_effect = IXCConsultaIndisponivelError(
+            "falha ao consultar 'su_ticket' no IXC (HTTP 500)"
+        )
+
+        status, mensagem, atendimento_id = executar_desativacao_atendimento(
+            {
+                "Atendimento_ID": 5313,
+                "Confirmar_Desativacao": "SIM",
+            }
+        )
+
+        self.assertFalse(status)
+        self.assertEqual(atendimento_id, "5313")
+        self.assertIn("Nao foi possivel confirmar", mensagem)
+        self.assertNotIn("nao encontrado", mensagem)
+
+    @patch("apps.integracoes.ixc.services.desativar_atendimento_ixc.listar_os_para_desativacao")
+    @patch("apps.integracoes.ixc.services.desativar_atendimento_ixc.buscar_atendimento_ixc_por_id")
+    def test_executar_desativacao_atendimento_nao_confirmado_mas_com_os_vinculada(
+        self, mock_buscar_atendimento, mock_listar_os
+    ):
+        # Confirmado em producao (2026-08-28): a API do IXC pode nao retornar um
+        # atendimento que existe e esta ativo no painel. A mensagem nao pode afirmar
+        # que o atendimento "nao existe mais" — so que nao foi possivel confirmar via
+        # API, mantendo o usuario ciente da O.S. ainda vinculada.
+        mock_buscar_atendimento.return_value = {}
+        mock_listar_os.return_value = [{"id": "6408", "status": "A"}]
+
+        status, mensagem, atendimento_id = executar_desativacao_atendimento(
+            {
+                "Atendimento_ID": 5327,
+                "Confirmar_Desativacao": "SIM",
+            }
+        )
+
+        self.assertFalse(status)
+        self.assertEqual(atendimento_id, "5327")
+        self.assertIn("Nao foi possivel confirmar", mensagem)
+        self.assertIn("6408", mensagem)
+        self.assertNotIn("nao existe mais", mensagem)
+        self.assertNotIn("removido", mensagem)
+
     @patch("apps.integracoes.ixc.services.desativar_atendimento_ixc.listar_os_para_desativacao")
     @patch("apps.integracoes.ixc.services.desativar_atendimento_ixc.buscar_atendimento_ixc_por_id")
     def test_executar_desativacao_informa_quando_nao_encontra_os(
@@ -293,9 +344,13 @@ class ResolucaoOsAtendimentoIXCTests(SimpleTestCase):
         self.assertEqual(os_fechadas, "")
         self.assertIn("Confirmar_Resolucao", mensagem)
 
+    @patch("apps.integracoes.ixc.services.resolver_os_atendimento_ixc.listar_os_para_desativacao")
     @patch("apps.integracoes.ixc.services.resolver_os_atendimento_ixc.buscar_atendimento_ixc_por_id")
-    def test_executar_resolucao_bloqueia_atendimento_nao_encontrado(self, mock_buscar_atendimento):
+    def test_executar_resolucao_bloqueia_atendimento_nao_encontrado(
+        self, mock_buscar_atendimento, mock_listar_os
+    ):
         mock_buscar_atendimento.return_value = {}
+        mock_listar_os.return_value = []
 
         status, mensagem, atendimento_id, os_fechadas = executar_resolucao_os_atendimento_ixc(
             {
@@ -311,6 +366,36 @@ class ResolucaoOsAtendimentoIXCTests(SimpleTestCase):
         self.assertEqual(atendimento_id, "5313")
         self.assertEqual(os_fechadas, "")
         self.assertIn("nao encontrado", mensagem)
+
+    @patch("apps.integracoes.ixc.services.resolver_os_atendimento_ixc.listar_os_para_desativacao")
+    @patch("apps.integracoes.ixc.services.resolver_os_atendimento_ixc.buscar_atendimento_ixc_por_id")
+    def test_executar_resolucao_atendimento_nao_confirmado_mas_com_os_vinculada(
+        self, mock_buscar_atendimento, mock_listar_os
+    ):
+        # Confirmado em producao (2026-08-28): a API do IXC pode nao retornar um
+        # atendimento que existe e esta ativo no painel. Nesse caso a mensagem nao
+        # pode afirmar que o atendimento "nao existe mais" — so que nao foi possivel
+        # confirmar via API, mantendo o usuario ciente da O.S. ainda vinculada.
+        mock_buscar_atendimento.return_value = {}
+        mock_listar_os.return_value = [{"id": "6408", "status": "A"}]
+
+        status, mensagem, atendimento_id, os_fechadas = executar_resolucao_os_atendimento_ixc(
+            {
+                "Atendimento_ID": 5327,
+                "Confirmar_Resolucao": "SIM",
+                "Tem_Anexo": "NAO",
+                "Fechar_Todas_OS": "SIM",
+            },
+            zip_arquivos=None,
+        )
+
+        self.assertFalse(status)
+        self.assertEqual(atendimento_id, "5327")
+        self.assertEqual(os_fechadas, "")
+        self.assertIn("Nao foi possivel confirmar", mensagem)
+        self.assertIn("6408", mensagem)
+        self.assertNotIn("nao existe mais", mensagem)
+        self.assertNotIn("removido", mensagem)
 
     @patch("apps.integracoes.ixc.services.resolver_os_atendimento_ixc.anexar_arquivo_ticket_ixc")
     @patch("apps.integracoes.ixc.services.resolver_os_atendimento_ixc.localizar_anexo_no_zip")
@@ -515,6 +600,137 @@ class ResolucaoOsAtendimentoIXCTests(SimpleTestCase):
         )
 
         self.assertIsNone(mock_finalizar_os.call_args.kwargs["id_proxima_tarefa"])
+
+    @patch("apps.integracoes.ixc.services.resolver_os_atendimento_ixc.finalizar_os_existente")
+    @patch("apps.integracoes.ixc.services.resolver_os_atendimento_ixc.listar_os_para_desativacao")
+    @patch("apps.integracoes.ixc.services.resolver_os_atendimento_ixc.buscar_atendimento_ixc_por_id")
+    def test_executar_resolucao_com_fechar_todas_os_aplica_proxima_tarefa_so_na_primeira_os(
+        self,
+        mock_buscar_atendimento,
+        mock_listar_os,
+        mock_finalizar_os,
+    ):
+        """RN-070: a automacao nao pode se impor sobre O.S. que o workflow do IXC
+        abrir depois (ex.: bifurcacao em O.S. de mais de um setor) reaproveitando o
+        Proxima_Tarefa_ID informado para a O.S. atual."""
+        mock_buscar_atendimento.side_effect = [
+            {"id": "5313", "su_status": "EP"},
+            {"id": "5313", "status": "A"},
+        ]
+        mock_listar_os.side_effect = [
+            [
+                {"id": "6394", "status": "A"},
+                {"id": "6401", "status": "A"},
+            ],
+            [],
+        ]
+        mock_finalizar_os.side_effect = [
+            {"ok": True, "os_atualizada": {"id": "6394", "status": "F"}},
+            {"ok": True, "os_atualizada": {"id": "6401", "status": "F"}},
+        ]
+
+        status, mensagem, atendimento_id, os_fechadas = executar_resolucao_os_atendimento_ixc(
+            {
+                "Atendimento_ID": 5313,
+                "Confirmar_Resolucao": "SIM",
+                "Tem_Anexo": "NAO",
+                "Fechar_Todas_OS": "SIM",
+                "Proxima_Tarefa_ID": 147,
+            },
+            zip_arquivos=None,
+        )
+
+        self.assertTrue(status)
+        self.assertEqual(os_fechadas, "6394, 6401")
+        self.assertEqual(mock_finalizar_os.call_args_list[0].kwargs["id_proxima_tarefa"], "147")
+        self.assertIsNone(mock_finalizar_os.call_args_list[1].kwargs["id_proxima_tarefa"])
+
+    @patch("apps.integracoes.ixc.services.resolver_os_atendimento_ixc.resolver_proxima_tarefa_automatica")
+    @patch("apps.integracoes.ixc.services.resolver_os_atendimento_ixc.finalizar_os_existente")
+    @patch("apps.integracoes.ixc.services.resolver_os_atendimento_ixc.listar_os_para_desativacao")
+    @patch("apps.integracoes.ixc.services.resolver_os_atendimento_ixc.buscar_atendimento_ixc_por_id")
+    def test_executar_resolucao_resolve_proxima_tarefa_automaticamente_por_os(
+        self,
+        mock_buscar_atendimento,
+        mock_listar_os,
+        mock_finalizar_os,
+        mock_resolver_automatico,
+    ):
+        """RN-071: sem Proxima_Tarefa_ID na planilha, cada O.S. tem sua propria
+        tarefa resolvida sozinha a partir do workflow do IXC — o usuario nao
+        precisa descobrir nenhum ID manualmente."""
+        mock_buscar_atendimento.side_effect = [
+            {"id": "5313", "su_status": "EP"},
+            {"id": "5313", "status": "A"},
+        ]
+        mock_listar_os.side_effect = [
+            [
+                {"id": "6394", "status": "A", "id_wfl_tarefa": "150"},
+                {"id": "6401", "status": "A", "id_wfl_tarefa": "148"},
+            ],
+            [],
+        ]
+        mock_resolver_automatico.side_effect = [("148", None), (None, None)]
+        mock_finalizar_os.side_effect = [
+            {"ok": True, "os_atualizada": {"id": "6394", "status": "F"}},
+            {"ok": True, "os_atualizada": {"id": "6401", "status": "F"}},
+        ]
+
+        status, mensagem, atendimento_id, os_fechadas = executar_resolucao_os_atendimento_ixc(
+            {
+                "Atendimento_ID": 5313,
+                "Confirmar_Resolucao": "SIM",
+                "Tem_Anexo": "NAO",
+                "Fechar_Todas_OS": "SIM",
+            },
+            zip_arquivos=None,
+        )
+
+        self.assertTrue(status)
+        self.assertEqual(os_fechadas, "6394, 6401")
+        self.assertEqual(mock_finalizar_os.call_args_list[0].kwargs["id_proxima_tarefa"], "148")
+        self.assertIsNone(mock_finalizar_os.call_args_list[1].kwargs["id_proxima_tarefa"])
+        mock_resolver_automatico.assert_any_call("150")
+        mock_resolver_automatico.assert_any_call("148")
+
+    @patch("apps.integracoes.ixc.services.resolver_os_atendimento_ixc.resolver_proxima_tarefa_automatica")
+    @patch("apps.integracoes.ixc.services.resolver_os_atendimento_ixc.finalizar_os_existente")
+    @patch("apps.integracoes.ixc.services.resolver_os_atendimento_ixc.listar_os_para_desativacao")
+    @patch("apps.integracoes.ixc.services.resolver_os_atendimento_ixc.buscar_atendimento_ixc_por_id")
+    def test_executar_resolucao_bloqueia_quando_proxima_tarefa_e_ambigua(
+        self,
+        mock_buscar_atendimento,
+        mock_listar_os,
+        mock_finalizar_os,
+        mock_resolver_automatico,
+    ):
+        """RN-071: se o sistema nao consegue resolver sozinho a proxima tarefa
+        (decisao real de negocio, ainda sem mapeamento confirmado), a O.S. nao e
+        tocada e o erro explica as opcoes em vez de adivinhar."""
+        mock_buscar_atendimento.return_value = {"id": "5313", "su_status": "EP"}
+        mock_listar_os.return_value = [{"id": "6394", "status": "A", "id_wfl_tarefa": "146"}]
+        mock_resolver_automatico.return_value = (
+            None,
+            "a tarefa atual 'Realizar Contratacao' (ID 146) exige escolher a proxima tarefa "
+            "entre mais de uma opcao. Opcoes encontradas no IXC: 147 (Realizar Implantacao), "
+            "150 (Realizar Implantacao EACE). Informe Proxima_Tarefa_ID na planilha.",
+        )
+
+        status, mensagem, atendimento_id, os_fechadas = executar_resolucao_os_atendimento_ixc(
+            {
+                "Atendimento_ID": 5313,
+                "Confirmar_Resolucao": "SIM",
+                "Tem_Anexo": "NAO",
+                "Fechar_Todas_OS": "SIM",
+            },
+            zip_arquivos=None,
+        )
+
+        self.assertFalse(status)
+        self.assertEqual(os_fechadas, "")
+        self.assertIn("6394", mensagem)
+        self.assertIn("Opcoes encontradas no IXC", mensagem)
+        mock_finalizar_os.assert_not_called()
 
     def test_executar_resolucao_bloqueia_proxima_tarefa_invalida(self):
         status, mensagem, atendimento_id, os_fechadas = executar_resolucao_os_atendimento_ixc(
@@ -1184,11 +1400,25 @@ class LocalizarAnexoNoZipTests(SimpleTestCase):
         self.assertIsNone(conteudo)
         self.assertIn("Nenhum arquivo chamado", erro)
 
-    def test_erro_quando_arquivo_nao_e_pdf(self):
+    def test_erro_quando_arquivo_nao_e_formato_aceito(self):
         zip_arquivos = _zip_com_pdf("comunicado.docx")
         conteudo, nome_real, erro = localizar_anexo_no_zip(zip_arquivos, "comunicado.docx")
         self.assertIsNone(conteudo)
-        self.assertIn("nao e um PDF", erro)
+        self.assertIn("nao e um formato aceito", erro)
+
+    def test_aceita_planilha_excel_xlsx(self):
+        zip_arquivos = _zip_com_pdf("proposta.xlsx", conteudo=b"conteudo do excel")
+        conteudo, nome_real, erro = localizar_anexo_no_zip(zip_arquivos, "proposta.xlsx")
+        self.assertIsNone(erro)
+        self.assertEqual(nome_real, "proposta.xlsx")
+        self.assertEqual(conteudo, b"conteudo do excel")
+
+    def test_aceita_planilha_csv(self):
+        zip_arquivos = _zip_com_pdf("dados.csv", conteudo=b"col1,col2\n1,2")
+        conteudo, nome_real, erro = localizar_anexo_no_zip(zip_arquivos, "dados.csv")
+        self.assertIsNone(erro)
+        self.assertEqual(nome_real, "dados.csv")
+        self.assertEqual(conteudo, b"col1,col2\n1,2")
 
     def test_erro_quando_nenhum_zip_foi_informado(self):
         conteudo, nome_real, erro = localizar_anexo_no_zip(None, "comunicado.pdf")
@@ -1249,6 +1479,35 @@ class ExecutarResolucaoOsAtendimentoIxcTests(SimpleTestCase):
         mock_anexar.assert_called_once()
         self.assertEqual(mock_anexar.call_args.args[0], "5313")
         mock_finalizar.assert_called_once()
+
+    def test_tem_anexo_sim_aceita_excel_com_content_type_correto(
+        self, mock_anexar, mock_buscar_atendimento, mock_listar_os, mock_finalizar
+    ):
+        mock_buscar_atendimento.return_value = {"id": "5313", "status": "A", "su_status": "EP"}
+        mock_listar_os.side_effect = [[{"id": "6394"}], []]
+        mock_anexar.return_value = {"ok": True}
+        mock_finalizar.return_value = {"ok": True}
+        zip_arquivos = _zip_com_pdf("proposta.xlsx", conteudo=b"conteudo do excel")
+
+        status, mensagem, atendimento_id, os_fechadas = executar_resolucao_os_atendimento_ixc(
+            {
+                "Atendimento_ID": 5313,
+                "Confirmar_Resolucao": "SIM",
+                "Tem_Anexo": "SIM",
+                "Fechar_Todas_OS": "SIM",
+                "Nome_Anexo": "proposta.xlsx",
+            },
+            zip_arquivos=zip_arquivos,
+        )
+
+        self.assertTrue(status)
+        mock_anexar.assert_called_once()
+        arquivo_enviado = mock_anexar.call_args.args[1]
+        self.assertEqual(arquivo_enviado.name, "proposta.xlsx")
+        self.assertEqual(
+            arquivo_enviado.content_type,
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
 
     def test_tem_anexo_sim_sem_nome_no_zip_nao_fecha_nenhuma_os(
         self, mock_anexar, mock_buscar_atendimento, mock_listar_os, mock_finalizar
@@ -1365,6 +1624,59 @@ class ExecutarResolucaoOsAtendimentoIxcTests(SimpleTestCase):
         mock_listar_os.assert_not_called()
         mock_finalizar.assert_not_called()
         mock_anexar.assert_not_called()
+
+    def test_falha_de_comunicacao_ao_buscar_atendimento_nao_diz_nao_encontrado(
+        self, mock_anexar, mock_buscar_atendimento, mock_listar_os, mock_finalizar
+    ):
+        # Bug corrigido: uma falha ao consultar o IXC (timeout, HTTP != 200) nao
+        # pode ser relatada como "atendimento nao encontrado" — sao causas
+        # diferentes e a segunda esconde a real (ex.: instabilidade do IXC).
+        mock_buscar_atendimento.side_effect = IXCConsultaIndisponivelError(
+            "falha ao consultar 'su_ticket' no IXC (HTTP 500)"
+        )
+
+        status, mensagem, atendimento_id, os_fechadas = executar_resolucao_os_atendimento_ixc(
+            {
+                "Atendimento_ID": 5313,
+                "Confirmar_Resolucao": "SIM",
+                "Tem_Anexo": "NAO",
+                "Fechar_Todas_OS": "SIM",
+            },
+            zip_arquivos=None,
+        )
+
+        self.assertFalse(status)
+        self.assertEqual(atendimento_id, "5313")
+        self.assertIn("Nao foi possivel confirmar", mensagem)
+        self.assertNotIn("nao encontrado", mensagem)
+        self.assertEqual(os_fechadas, "")
+        mock_listar_os.assert_not_called()
+        mock_finalizar.assert_not_called()
+
+    def test_falha_de_comunicacao_ao_listar_os_mantem_progresso_parcial(
+        self, mock_anexar, mock_buscar_atendimento, mock_listar_os, mock_finalizar
+    ):
+        mock_buscar_atendimento.return_value = {"id": "5313", "status": "A", "su_status": "EP"}
+        mock_listar_os.side_effect = [
+            [{"id": "6394"}],
+            IXCConsultaIndisponivelError("falha ao consultar 'su_oss_chamado' no IXC (HTTP 503)"),
+        ]
+        mock_finalizar.return_value = {"ok": True}
+
+        status, mensagem, atendimento_id, os_fechadas = executar_resolucao_os_atendimento_ixc(
+            {
+                "Atendimento_ID": 5313,
+                "Confirmar_Resolucao": "SIM",
+                "Tem_Anexo": "NAO",
+                "Fechar_Todas_OS": "SIM",
+            },
+            zip_arquivos=None,
+        )
+
+        self.assertFalse(status)
+        self.assertIn("Nao foi possivel confirmar", mensagem)
+        self.assertIn("6394", mensagem)
+        self.assertEqual(os_fechadas, "6394")
 
 
 def _dados_abertura_atendimento(**overrides):

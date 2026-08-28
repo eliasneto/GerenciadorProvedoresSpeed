@@ -6,8 +6,10 @@ from apps.integracoes.ixc.services.desativar_atendimento_ixc import (
     listar_os_para_desativacao,
 )
 from scripts.integracoes.ixc_finalizacao_service import (
+    IXCConsultaIndisponivelError,
     finalizar_os_existente,
     normalizar_texto,
+    resolver_proxima_tarefa_automatica,
     resolver_usuario_ixc_por_email,
     resumir_erro_finalizacao,
 )
@@ -20,6 +22,17 @@ VALORES_NAO = {"NAO", "NÃO", "N", "FALSE", "0"}
 MENSAGEM_PADRAO_RESOLUCAO = "O.S. solucionada administrativamente. Atendimento permanece ativo."
 LIMITE_MAXIMO_RODADAS_FECHAMENTO = 20
 STATUS_ATENDIMENTO_EM_PROGRESSO = "EP"
+
+# RN-008: alem de PDF, o anexo tambem aceita planilha (Excel/CSV) — solicitado
+# pelo usuario em 2026-08-28. Cada extensao mapeia para o content-type enviado
+# ao IXC junto com o arquivo.
+CONTENT_TYPES_ANEXO_PERMITIDOS = {
+    ".pdf": "application/pdf",
+    ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    ".xls": "application/vnd.ms-excel",
+    ".csv": "text/csv",
+}
+DESCRICAO_FORMATOS_ANEXO_PERMITIDOS = "PDF, Excel (.xlsx/.xls) ou CSV"
 
 COLUNAS_OBRIGATORIAS_RESOLUCAO_OS_ATENDIMENTO_IXC = [
     "Atendimento_ID",
@@ -38,10 +51,10 @@ COLUNAS_OPCIONAIS_RESOLUCAO_OS_ATENDIMENTO_IXC = [
     "Email_Colaborador",
 ]
 
-# Tarefas de decisao conhecidas do workflow do IXC (RN-019). Lista de referencia
-# para a aba de ajuda da planilha — nao e uma validacao: o IXC e quem aceita ou
-# recusa o ID informado em Proxima_Tarefa_ID. Ampliar conforme novas tarefas de
-# decisao forem identificadas pelo usuario.
+# Tarefas de decisao conhecidas do workflow do IXC. Lista de referencia para a
+# aba de ajuda da planilha — desde RN-071 a automacao resolve a proxima tarefa
+# sozinha na maioria dos casos (consultando o workflow do IXC); esta lista serve
+# so de contexto/consulta, nao e mais usada para exigir preenchimento manual.
 TAREFAS_DECISAO_CONHECIDAS_RESOLUCAO_OS_ATENDIMENTO_IXC = [
     {"ID": "147", "Tarefa": "Realizar Implantacao"},
     {"ID": "150", "Tarefa": "Realizar Implantacao EACE"},
@@ -79,10 +92,10 @@ INSTRUCOES_RESOLUCAO_OS_ATENDIMENTO_IXC = [
     },
     {
         "Campo": "Nome_Anexo",
-        "Descricao": "Nome do arquivo PDF (dentro do ZIP importado) a anexar neste atendimento.",
+        "Descricao": "Nome do arquivo (dentro do ZIP importado) a anexar neste atendimento.",
         "Tipo de dado": "Texto",
         "Obrigatorio?": "Somente quando Tem_Anexo = SIM",
-        "Regras / Exemplo": "Deve corresponder a um arquivo PDF dentro do ZIP. Ex.: contrato_cliente123.pdf",
+        "Regras / Exemplo": "Deve corresponder a um arquivo PDF, Excel (.xlsx/.xls) ou CSV dentro do ZIP. Ex.: contrato_cliente123.pdf",
     },
     {
         "Campo": "Mais_de_um_anexo",
@@ -93,17 +106,17 @@ INSTRUCOES_RESOLUCAO_OS_ATENDIMENTO_IXC = [
     },
     {
         "Campo": "Nome_Anexo_2",
-        "Descricao": "Nome do segundo arquivo PDF (dentro do ZIP importado) a anexar neste atendimento.",
+        "Descricao": "Nome do segundo arquivo (dentro do ZIP importado) a anexar neste atendimento.",
         "Tipo de dado": "Texto",
         "Obrigatorio?": "Somente quando Mais_de_um_anexo = SIM e houver um segundo arquivo",
-        "Regras / Exemplo": "Deve corresponder a um arquivo PDF dentro do ZIP. Ignorado se Mais_de_um_anexo = NAO.",
+        "Regras / Exemplo": "Deve corresponder a um arquivo PDF, Excel (.xlsx/.xls) ou CSV dentro do ZIP. Ignorado se Mais_de_um_anexo = NAO.",
     },
     {
         "Campo": "Nome_Anexo_3",
-        "Descricao": "Nome do terceiro arquivo PDF (dentro do ZIP importado) a anexar neste atendimento.",
+        "Descricao": "Nome do terceiro arquivo (dentro do ZIP importado) a anexar neste atendimento.",
         "Tipo de dado": "Texto",
         "Obrigatorio?": "Somente quando Mais_de_um_anexo = SIM e houver um terceiro arquivo",
-        "Regras / Exemplo": "Deve corresponder a um arquivo PDF dentro do ZIP. Ignorado se Mais_de_um_anexo = NAO.",
+        "Regras / Exemplo": "Deve corresponder a um arquivo PDF, Excel (.xlsx/.xls) ou CSV dentro do ZIP. Ignorado se Mais_de_um_anexo = NAO.",
     },
     {
         "Campo": "Mensagem",
@@ -115,13 +128,19 @@ INSTRUCOES_RESOLUCAO_OS_ATENDIMENTO_IXC = [
     {
         "Campo": "Proxima_Tarefa_ID",
         "Descricao": (
-            "ID da proxima tarefa do workflow no IXC, exigido quando a O.S. abrir uma tela de "
-            "decisao (ex.: Realizar Implantacao, Realizar Implantacao EACE, Nao Atende Requisitos "
-            "Tecnicos). Consulte a aba Tarefas_Decisao_IXC para ver os IDs conhecidos."
+            "Normalmente NAO precisa ser preenchido: quando a O.S. exige escolher a proxima "
+            "tarefa do workflow, o sistema resolve isso sozinho consultando o proprio IXC "
+            "(RN-071). So preencha se o sistema bloquear a linha pedindo essa informacao — a "
+            "mensagem de erro traz as opcoes de proxima tarefa encontradas no IXC."
         ),
         "Tipo de dado": "Numero inteiro",
-        "Obrigatorio?": "Somente quando a O.S. exigir escolha de proxima tarefa",
-        "Regras / Exemplo": "Use apenas o ID numerico da tarefa. Ex.: 147. Se a O.S. nao exigir decisao, deixe vazio.",
+        "Obrigatorio?": "Nao — so quando o sistema pedir explicitamente na mensagem de erro",
+        "Regras / Exemplo": (
+            "Use apenas o ID numerico da tarefa indicado na mensagem de erro. Vale somente para "
+            "a O.S. atual do atendimento: qualquer O.S. aberta depois pelo proprio workflow do "
+            "IXC (inclusive quando o IXC abre O.S. para mais de um setor ao solucionar) e "
+            "resolvida automaticamente, sem reaproveitar este valor (RN-071)."
+        ),
     },
     {
         "Campo": "Informar_Colaborador",
@@ -191,6 +210,12 @@ def _normalizar_nome_comparacao(nome):
     return limpar_texto(nome).strip().casefold()
 
 
+def _extensao_arquivo(nome_arquivo):
+    if "." not in nome_arquivo:
+        return ""
+    return "." + nome_arquivo.rsplit(".", 1)[-1].lower()
+
+
 def localizar_anexo_no_zip(zip_arquivos, nome_anexo):
     if not zip_arquivos:
         return None, None, "Nenhum arquivo ZIP de anexos foi importado nesta execucao."
@@ -202,8 +227,13 @@ def localizar_anexo_no_zip(zip_arquivos, nome_anexo):
         nome_base = nome_no_zip.rsplit("/", 1)[-1]
         if _normalizar_nome_comparacao(nome_base) != nome_normalizado:
             continue
-        if not nome_base.lower().endswith(".pdf"):
-            return None, nome_base, f"O arquivo '{nome_base}' encontrado no ZIP nao e um PDF."
+        if _extensao_arquivo(nome_base) not in CONTENT_TYPES_ANEXO_PERMITIDOS:
+            return (
+                None,
+                nome_base,
+                f"O arquivo '{nome_base}' encontrado no ZIP nao e um formato aceito "
+                f"({DESCRICAO_FORMATOS_ANEXO_PERMITIDOS}).",
+            )
         return zip_arquivos.read(nome_no_zip), nome_base, None
 
     return None, None, f"Nenhum arquivo chamado '{nome_anexo}' foi encontrado no ZIP de anexos."
@@ -216,7 +246,9 @@ def _anexar_um_arquivo_ao_atendimento(atendimento_id, nome_anexo, zip_arquivos, 
 
     arquivo_extraido = BytesIO(conteudo_anexo)
     arquivo_extraido.name = nome_real_anexo
-    arquivo_extraido.content_type = "application/pdf"
+    arquivo_extraido.content_type = CONTENT_TYPES_ANEXO_PERMITIDOS.get(
+        _extensao_arquivo(nome_real_anexo), "application/octet-stream"
+    )
 
     resultado_anexo = anexar_arquivo_ticket_ixc(atendimento_id, arquivo_extraido, descricao=mensagem)
     if resultado_anexo.get("ok"):
@@ -229,6 +261,17 @@ def _anexar_um_arquivo_ao_atendimento(atendimento_id, nome_anexo, zip_arquivos, 
         or "Falha ao anexar o documento no IXC."
     )
     return False, detalhe
+
+
+def _resolver_proxima_tarefa_para_os(os_atual, proxima_tarefa_manual):
+    """RN-071: o valor manual (Proxima_Tarefa_ID) so tem prioridade quando
+    informado para a O.S. atual do usuario (chamador passa `None` para
+    qualquer O.S. que nao seja essa). Nos demais casos, resolve sozinho a
+    proxima tarefa a partir do workflow do IXC, sem o usuario precisar
+    descobrir esse ID manualmente. Retorna (id_proxima_tarefa, erro)."""
+    if proxima_tarefa_manual:
+        return proxima_tarefa_manual, None
+    return resolver_proxima_tarefa_automatica(os_atual.get("id_wfl_tarefa"))
 
 
 def _falha_fechamento_os(atendimento_id, os_id, resultado, resultados, tem_anexo):
@@ -316,127 +359,193 @@ def executar_resolucao_os_atendimento_ixc(dados, zip_arquivos=None, usuario_sist
                 "",
             )
 
-    atendimento = buscar_atendimento_ixc_por_id(atendimento_id)
-    if not atendimento:
-        return False, f"Atendimento {atendimento_id} nao encontrado no IXC.", atendimento_id, ""
-
-    status_atendimento = normalizar_texto(atendimento.get("su_status")).upper()
-    if status_atendimento != STATUS_ATENDIMENTO_EM_PROGRESSO:
-        return (
-            False,
-            (
-                f"Atendimento {atendimento_id} nao pode ter O.S. fechada: o status do atendimento "
-                f"e diferente de 'Em progresso' (codigo IXC: {status_atendimento or '--'})."
-            ),
-            atendimento_id,
-            "",
-        )
-
-    mensagem = limpar_texto(linha.get("Mensagem")) or MENSAGEM_PADRAO_RESOLUCAO
-
-    if tem_anexo:
-        nome_anexo = limpar_texto(linha.get("Nome_Anexo"))
-        if not nome_anexo:
-            return (
-                False,
-                "Nome_Anexo e obrigatorio quando Tem_Anexo = SIM.",
-                atendimento_id,
-                "",
-            )
-
-        nomes_anexo = [nome_anexo]
-        if mais_de_um_anexo:
-            for campo_anexo_extra in ("Nome_Anexo_2", "Nome_Anexo_3"):
-                nome_anexo_extra = limpar_texto(linha.get(campo_anexo_extra))
-                if nome_anexo_extra:
-                    nomes_anexo.append(nome_anexo_extra)
-
-        for nome_anexo_atual in nomes_anexo:
-            anexo_ok, erro_anexo = _anexar_um_arquivo_ao_atendimento(
-                atendimento_id, nome_anexo_atual, zip_arquivos, mensagem
-            )
-            if not anexo_ok:
+    resultados = []
+    try:
+        atendimento = buscar_atendimento_ixc_por_id(atendimento_id)
+        if not atendimento:
+            # Confirmado em 2026-08-28: ha atendimentos que existem e estao "Em progresso"
+            # no painel do IXC, mas a consulta via API (mesmo por id, id_cliente ou
+            # id_login) nao retorna o registro — inconsistencia da propria API do IXC,
+            # nao um caso confirmado de atendimento removido. Por seguranca (RN-014
+            # exige confirmar o atendimento antes de fechar a O.S.), a linha continua
+            # bloqueada, mas a mensagem nao afirma que o atendimento nao existe mais.
+            os_vinculadas = listar_os_para_desativacao(atendimento_id)
+            if os_vinculadas:
+                os_ids_vinculadas = ", ".join(normalizar_texto(os_atual.get("id")) for os_atual in os_vinculadas)
                 return (
                     False,
                     (
-                        f"Nao foi possivel anexar o documento '{nome_anexo_atual}' ao atendimento "
-                        f"{atendimento_id}: {erro_anexo} Nenhuma O.S. foi fechada."
+                        f"Nao foi possivel confirmar o atendimento {atendimento_id} pela API do IXC "
+                        f"(o registro pode existir e estar ativo no painel — ja observamos essa "
+                        f"inconsistencia entre painel e API). Ha O.S. aberta vinculada a esse "
+                        f"atendimento: {os_ids_vinculadas}. Nenhuma acao foi feita; confirme "
+                        "manualmente no IXC antes de repetir."
                     ),
                     atendimento_id,
                     "",
                 )
+            return False, f"Atendimento {atendimento_id} nao encontrado no IXC.", atendimento_id, ""
 
-    resultados = []
-    esgotou_sem_limite = False
+        status_atendimento = normalizar_texto(atendimento.get("su_status")).upper()
+        if status_atendimento != STATUS_ATENDIMENTO_EM_PROGRESSO:
+            return (
+                False,
+                (
+                    f"Atendimento {atendimento_id} nao pode ter O.S. fechada: o status do atendimento "
+                    f"e diferente de 'Em progresso' (codigo IXC: {status_atendimento or '--'})."
+                ),
+                atendimento_id,
+                "",
+            )
 
-    if fechar_todas_os:
-        for _rodada in range(LIMITE_MAXIMO_RODADAS_FECHAMENTO):
+        mensagem = limpar_texto(linha.get("Mensagem")) or MENSAGEM_PADRAO_RESOLUCAO
+
+        if tem_anexo:
+            nome_anexo = limpar_texto(linha.get("Nome_Anexo"))
+            if not nome_anexo:
+                return (
+                    False,
+                    "Nome_Anexo e obrigatorio quando Tem_Anexo = SIM.",
+                    atendimento_id,
+                    "",
+                )
+
+            nomes_anexo = [nome_anexo]
+            if mais_de_um_anexo:
+                for campo_anexo_extra in ("Nome_Anexo_2", "Nome_Anexo_3"):
+                    nome_anexo_extra = limpar_texto(linha.get(campo_anexo_extra))
+                    if nome_anexo_extra:
+                        nomes_anexo.append(nome_anexo_extra)
+
+            for nome_anexo_atual in nomes_anexo:
+                anexo_ok, erro_anexo = _anexar_um_arquivo_ao_atendimento(
+                    atendimento_id, nome_anexo_atual, zip_arquivos, mensagem
+                )
+                if not anexo_ok:
+                    return (
+                        False,
+                        (
+                            f"Nao foi possivel anexar o documento '{nome_anexo_atual}' ao atendimento "
+                            f"{atendimento_id}: {erro_anexo} Nenhuma O.S. foi fechada."
+                        ),
+                        atendimento_id,
+                        "",
+                    )
+
+        esgotou_sem_limite = False
+
+        if fechar_todas_os:
+            # RN-071: Proxima_Tarefa_ID (quando preenchido) so tem prioridade na O.S.
+            # atual do atendimento — a que o usuario efetivamente viu ao preencher a
+            # planilha. Qualquer O.S. aberta depois pelo proprio workflow do IXC nas
+            # rodadas seguintes (inclusive quando o IXC bifurca a solucao em O.S. de
+            # mais de um setor) tem sua proxima tarefa resolvida sozinha, a partir do
+            # workflow do IXC — o usuario nao precisa descobrir esse ID manualmente.
+            proxima_tarefa_aplicada = False
+            for _rodada in range(LIMITE_MAXIMO_RODADAS_FECHAMENTO):
+                os_abertas = listar_os_para_desativacao(atendimento_id)
+                if not os_abertas:
+                    esgotou_sem_limite = True
+                    break
+
+                for os_atual in os_abertas:
+                    os_id = normalizar_texto(os_atual.get("id"))
+                    proxima_tarefa_manual = proxima_tarefa_id if not proxima_tarefa_aplicada else None
+                    proxima_tarefa_aplicada = True
+                    id_proxima_tarefa_desta_os, erro_proxima_tarefa = _resolver_proxima_tarefa_para_os(
+                        os_atual, proxima_tarefa_manual
+                    )
+                    if erro_proxima_tarefa:
+                        os_fechadas_ate_aqui = ", ".join(
+                            item_id for item_id, item_resultado in resultados if item_resultado.get("ok")
+                        )
+                        trecho_sucesso = (
+                            f" O.S. ja solucionadas antes: {os_fechadas_ate_aqui}." if os_fechadas_ate_aqui else ""
+                        )
+                        return (
+                            False,
+                            f"O.S. {os_id}: {erro_proxima_tarefa}{trecho_sucesso}",
+                            atendimento_id,
+                            os_fechadas_ate_aqui,
+                        )
+                    resultado = finalizar_os_existente(
+                        os_id,
+                        mensagem=mensagem,
+                        finaliza_atendimento=False,
+                        usuario_sistema=usuario_sistema,
+                        id_proxima_tarefa=id_proxima_tarefa_desta_os,
+                        email_ixc=email_colaborador,
+                    )
+                    resultados.append((os_id, resultado))
+
+                    if not resultado.get("ok"):
+                        return _falha_fechamento_os(atendimento_id, os_id, resultado, resultados, tem_anexo)
+        else:
+            # Fechar_Todas_OS = NAO: fecha somente a O.S. atual (a mais antiga em aberto),
+            # sem repetir a busca para perseguir novas tarefas do workflow (RN-010 nao se aplica aqui).
             os_abertas = listar_os_para_desativacao(atendimento_id)
-            if not os_abertas:
-                esgotou_sem_limite = True
-                break
-
-            for os_atual in os_abertas:
+            esgotou_sem_limite = True
+            if os_abertas:
+                os_atual = os_abertas[0]
                 os_id = normalizar_texto(os_atual.get("id"))
+                id_proxima_tarefa_desta_os, erro_proxima_tarefa = _resolver_proxima_tarefa_para_os(
+                    os_atual, proxima_tarefa_id or None
+                )
+                if erro_proxima_tarefa:
+                    return False, f"O.S. {os_id}: {erro_proxima_tarefa}", atendimento_id, ""
+
                 resultado = finalizar_os_existente(
                     os_id,
                     mensagem=mensagem,
                     finaliza_atendimento=False,
                     usuario_sistema=usuario_sistema,
-                    id_proxima_tarefa=proxima_tarefa_id or None,
+                    id_proxima_tarefa=id_proxima_tarefa_desta_os,
                     email_ixc=email_colaborador,
                 )
                 resultados.append((os_id, resultado))
 
                 if not resultado.get("ok"):
                     return _falha_fechamento_os(atendimento_id, os_id, resultado, resultados, tem_anexo)
-    else:
-        # Fechar_Todas_OS = NAO: fecha somente a O.S. atual (a mais antiga em aberto),
-        # sem repetir a busca para perseguir novas tarefas do workflow (RN-010 nao se aplica aqui).
-        os_abertas = listar_os_para_desativacao(atendimento_id)
-        esgotou_sem_limite = True
-        if os_abertas:
-            os_atual = os_abertas[0]
-            os_id = normalizar_texto(os_atual.get("id"))
-            resultado = finalizar_os_existente(
-                os_id,
-                mensagem=mensagem,
-                finaliza_atendimento=False,
-                usuario_sistema=usuario_sistema,
-                id_proxima_tarefa=proxima_tarefa_id or None,
-                email_ixc=email_colaborador,
+
+        if not resultados:
+            mensagem_sem_os = (
+                f"Documento anexado ao atendimento {atendimento_id}. Nenhuma O.S. aberta encontrada para fechar."
+                if tem_anexo
+                else f"Atendimento {atendimento_id} nao possui O.S. aberta para fechar."
             )
-            resultados.append((os_id, resultado))
+            return True, mensagem_sem_os, atendimento_id, ""
 
-            if not resultado.get("ok"):
-                return _falha_fechamento_os(atendimento_id, os_id, resultado, resultados, tem_anexo)
+        os_ids_fechadas = ", ".join(item_id for item_id, _ in resultados)
 
-    if not resultados:
-        mensagem_sem_os = (
-            f"Documento anexado ao atendimento {atendimento_id}. Nenhuma O.S. aberta encontrada para fechar."
-            if tem_anexo
-            else f"Atendimento {atendimento_id} nao possui O.S. aberta para fechar."
+        if not esgotou_sem_limite:
+            # O laco rodou LIMITE_MAXIMO_RODADAS_FECHAMENTO vezes sem encontrar uma rodada
+            # com lista vazia; o IXC pode ter criado uma nova O.S. na ultima rodada, entao
+            # precisamos checar de novo antes de decidir entre sucesso e falha (RN-010).
+            if listar_os_para_desativacao(atendimento_id):
+                return (
+                    False,
+                    (
+                        f"Atendimento {atendimento_id}: limite de {LIMITE_MAXIMO_RODADAS_FECHAMENTO} rodadas de "
+                        f"fechamento atingido e ainda ha O.S. aberta. O.S. fechadas até aqui: {os_ids_fechadas}."
+                    ),
+                    atendimento_id,
+                    os_ids_fechadas,
+                )
+
+        atendimento_atualizado = buscar_atendimento_ixc_por_id(atendimento_id)
+    except IXCConsultaIndisponivelError as exc:
+        os_fechadas_ate_aqui = ", ".join(item_id for item_id, item_resultado in resultados if item_resultado.get("ok"))
+        trecho_sucesso = f" O.S. ja fechadas antes da falha: {os_fechadas_ate_aqui}." if os_fechadas_ate_aqui else ""
+        return (
+            False,
+            (
+                f"Nao foi possivel confirmar dados do atendimento {atendimento_id} no IXC: {exc}."
+                f"{trecho_sucesso} Tente novamente mais tarde."
+            ),
+            atendimento_id,
+            os_fechadas_ate_aqui,
         )
-        return True, mensagem_sem_os, atendimento_id, ""
 
-    os_ids_fechadas = ", ".join(item_id for item_id, _ in resultados)
-
-    if not esgotou_sem_limite:
-        # O laco rodou LIMITE_MAXIMO_RODADAS_FECHAMENTO vezes sem encontrar uma rodada
-        # com lista vazia; o IXC pode ter criado uma nova O.S. na ultima rodada, entao
-        # precisamos checar de novo antes de decidir entre sucesso e falha (RN-010).
-        if listar_os_para_desativacao(atendimento_id):
-            return (
-                False,
-                (
-                    f"Atendimento {atendimento_id}: limite de {LIMITE_MAXIMO_RODADAS_FECHAMENTO} rodadas de "
-                    f"fechamento atingido e ainda ha O.S. aberta. O.S. fechadas até aqui: {os_ids_fechadas}."
-                ),
-                atendimento_id,
-                os_ids_fechadas,
-            )
-
-    atendimento_atualizado = buscar_atendimento_ixc_por_id(atendimento_id)
     atendimento_ainda_ativo = normalizar_texto(atendimento_atualizado.get("status")).upper() != "F"
     aviso_atendimento = (
         ""

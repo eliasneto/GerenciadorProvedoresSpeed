@@ -11,6 +11,15 @@ USUARIO_IXC_PADRAO = os.getenv("IXC_DEFAULT_USER_ID", "76")
 TECNICO_IXC_PADRAO = os.getenv("IXC_DEFAULT_TECNICO_ID", "84")
 
 
+class IXCConsultaIndisponivelError(Exception):
+    """A chamada ao IXC falhou (timeout, erro de rede, HTTP != 200, resposta
+    invalida) — diferente de uma consulta que respondeu OK e simplesmente nao
+    encontrou o registro. Bug corrigido: antes, esses dois casos eram tratados
+    da mesma forma (retorno vazio), e uma falha temporaria de comunicacao com
+    o IXC era relatada ao usuario como "atendimento/O.S. nao encontrado",
+    escondendo a causa real (ex.: instabilidade do IXC, timeout)."""
+
+
 def normalizar_texto(valor):
     return str(valor or "").strip()
 
@@ -39,8 +48,9 @@ def buscar_os_por_id(os_id):
         "sortorder": "desc",
     }
     status_code, body = client.listar("su_oss_chamado", payload)
-    if status_code != 200 or not isinstance(body, dict):
-        return {}
+    if status_code != 200 or not isinstance(body, dict) or "raw" in body:
+        detalhe = (body.get("message") if isinstance(body, dict) else None) or f"HTTP {status_code}"
+        raise IXCConsultaIndisponivelError(f"falha ao consultar a O.S. {os_id} no IXC ({detalhe})")
     registros = body.get("registros") or []
     return registros[0] if registros else {}
 
@@ -59,6 +69,120 @@ def buscar_registros_fechamento_os(os_id, limite=5):
     if status_code != 200 or not isinstance(body, dict):
         return []
     return body.get("registros") or []
+
+
+# RN-071: quando a tarefa atual do workflow (`wfl_tarefa.decisao = "S"`) tem mais de
+# uma tarefa ativa candidata na mesma sequencia seguinte, o IXC nao permite decidir
+# sozinho qual ramo seguir (sao caminhos de negocio diferentes, ex.: concluido vs.
+# parceiro declinou). So entra aqui uma tarefa atual (id_wfl_tarefa) apos o valor
+# certo ter sido confirmado com dado real do IXC — nunca um palpite.
+MAPEAMENTO_PROXIMA_TAREFA_CONHECIDA = {
+    # Realizar Implantacao EACE -> Processo Cotacao Finalizada (confirmado em
+    # 2026-08-24 batendo com 3 atendimentos reais fechados manualmente: 6894, 6846, 6845).
+    "150": "148",
+}
+
+
+def buscar_tarefa_workflow_ixc(tarefa_id):
+    tarefa_id = normalizar_texto(tarefa_id)
+    if not tarefa_id:
+        return {}
+    payload = {
+        "qtype": "id",
+        "query": tarefa_id,
+        "oper": "=",
+        "page": "1",
+        "rp": "1",
+    }
+    status_code, body = IXCClient().listar("wfl_tarefa", payload)
+    if status_code != 200 or not isinstance(body, dict):
+        return {}
+    registros = body.get("registros") or []
+    return registros[0] if registros else {}
+
+
+def listar_candidatos_proxima_tarefa(id_processo, sequencia):
+    id_processo = normalizar_texto(id_processo)
+    sequencia = normalizar_texto(sequencia)
+    if not id_processo or not sequencia:
+        return []
+    payload = {
+        "qtype": "id_processo",
+        "query": id_processo,
+        "oper": "=",
+        "page": "1",
+        "rp": "50",
+    }
+    status_code, body = IXCClient().listar("wfl_tarefa", payload)
+    if status_code != 200 or not isinstance(body, dict):
+        return []
+    registros = body.get("registros") or []
+    return [
+        registro
+        for registro in registros
+        if normalizar_texto(registro.get("sequencia")) == sequencia
+        and normalizar_texto(registro.get("ativo")).upper() == "S"
+    ]
+
+
+def resolver_proxima_tarefa_automatica(id_wfl_tarefa_atual):
+    """RN-071: resolve sozinho o `id_proxima_tarefa` a enviar no fechamento da O.S.,
+    sem depender do usuario descobrir esse valor manualmente no IXC.
+
+    Consulta a propria definicao do workflow do IXC (`wfl_tarefa`): se a tarefa
+    atual nao for uma tarefa de decisao (`decisao != "S"`), nada precisa ser
+    informado (comportamento inalterado). Se for, procura a sequencia seguinte do
+    mesmo processo; havendo uma unica tarefa ativa candidata, usa-a automaticamente
+    — quem decide se isso abre 1 ou mais O.S. depois e sempre o IXC (RN-071), nao
+    esta funcao. Havendo mais de uma candidata (decisao de negocio real, ex.:
+    concluido vs. declinado), so resolve automaticamente se o par ja estiver
+    confirmado em `MAPEAMENTO_PROXIMA_TAREFA_CONHECIDA`; caso contrario, retorna
+    erro explicito com as opcoes encontradas, em vez de adivinhar.
+
+    Retorna (id_proxima_tarefa, erro). `id_proxima_tarefa` vem `None` quando a
+    tarefa atual nao exige decisao. `erro` vem preenchido quando a tarefa exige
+    decisao mas o sistema nao consegue resolver sozinho qual o ramo certo — nesse
+    caso a O.S. nao deve ser fechada.
+    """
+    id_wfl_tarefa_atual = normalizar_texto(id_wfl_tarefa_atual)
+    if not id_wfl_tarefa_atual:
+        return None, None
+
+    tarefa_atual = buscar_tarefa_workflow_ixc(id_wfl_tarefa_atual)
+    if not tarefa_atual:
+        return None, None
+
+    if normalizar_texto(tarefa_atual.get("decisao")).upper() != "S":
+        return None, None
+
+    descricao_atual = normalizar_texto(tarefa_atual.get("descricao")) or id_wfl_tarefa_atual
+    sequencia_alvo = normalizar_texto(tarefa_atual.get("id_proxima_tarefa"))
+    id_processo = normalizar_texto(tarefa_atual.get("id_processo"))
+
+    candidatos = listar_candidatos_proxima_tarefa(id_processo, sequencia_alvo)
+    if not candidatos:
+        return None, (
+            f"a tarefa atual '{descricao_atual}' (ID {id_wfl_tarefa_atual}) exige decisao de "
+            f"proxima tarefa, mas nenhuma tarefa ativa foi encontrada no workflow do IXC para "
+            f"a sequencia seguinte. Verifique o processo {id_processo or '--'} no IXC."
+        )
+
+    if len(candidatos) == 1:
+        return normalizar_texto(candidatos[0].get("id")), None
+
+    id_mapeado = MAPEAMENTO_PROXIMA_TAREFA_CONHECIDA.get(id_wfl_tarefa_atual)
+    if id_mapeado and any(normalizar_texto(c.get("id")) == id_mapeado for c in candidatos):
+        return id_mapeado, None
+
+    opcoes = ", ".join(
+        f"{normalizar_texto(c.get('id'))} ({normalizar_texto(c.get('descricao'))})" for c in candidatos
+    )
+    return None, (
+        f"a tarefa atual '{descricao_atual}' (ID {id_wfl_tarefa_atual}) exige escolher a "
+        f"proxima tarefa entre mais de uma opcao e o sistema ainda nao sabe qual usar "
+        f"automaticamente. Opcoes encontradas no IXC: {opcoes}. Informe Proxima_Tarefa_ID "
+        f"na planilha com o ID correto para esta O.S."
+    )
 
 
 def buscar_usuarios_ixc(qtype, query, rp="10"):
@@ -339,7 +463,13 @@ def finalizar_os_existente(
     email_ixc=None,
     id_proxima_tarefa=None,
 ):
-    detalhes_os = buscar_os_por_id(os_id)
+    try:
+        detalhes_os = buscar_os_por_id(os_id)
+    except IXCConsultaIndisponivelError as exc:
+        return {
+            "ok": False,
+            "message": f"Nao foi possivel confirmar a O.S. {os_id} no IXC: {exc}. Nenhuma alteracao foi feita.",
+        }
     if not detalhes_os:
         return {
             "ok": False,
@@ -375,7 +505,17 @@ def finalizar_os_existente(
     )
     endpoint = "su_oss_chamado_fechar"
     status_code, body = IXCClient().escrever(endpoint, payload)
-    os_atualizada = buscar_os_por_id(os_id)
+    try:
+        os_atualizada = buscar_os_por_id(os_id)
+    except IXCConsultaIndisponivelError as exc:
+        return {
+            "ok": False,
+            "message": (
+                f"O fechamento da O.S. {os_id} foi enviado ao IXC (HTTP {status_code}), mas nao foi "
+                f"possivel confirmar o status atualizado: {exc}. Verifique manualmente no IXC antes "
+                "de repetir a operacao."
+            ),
+        }
     registros_fechamento = buscar_registros_fechamento_os(os_id, limite=1)
     registro_fechamento = registros_fechamento[0] if registros_fechamento else {}
     sucesso_api = (
