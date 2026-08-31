@@ -166,7 +166,12 @@ def processar_cotacao_import(arquivo, usuario):
 
 def processar_atendimento_import(arquivo, usuario):
     """Retorna (output: BytesIO, filename: str)."""
-    df = _ler_planilha_com_fallback(arquivo)
+    # Usa ler_dataframe_upload (nao _ler_planilha_com_fallback) porque o modelo
+    # baixado em download_modelo_atendimento grava os cabecalhos obrigatorios com
+    # sufixo "*" (ex.: "Cliente_ID*"). Sem a normalizacao, linha.get("Cliente_ID")
+    # nunca encontra a coluna, indices_com_cliente fica vazio e a planilha volta
+    # sem erro mas sem nenhum atendimento processado.
+    df = ler_dataframe_upload(arquivo)
 
     itens_importados = dataframe_to_records(df)
     registrar_auditoria_integracao(
@@ -290,7 +295,7 @@ def processar_atendimento_import(arquivo, usuario):
 
 def processar_cadastro_clientes_ixc(arquivo, usuario):
     """Retorna (output: BytesIO, filename: str)."""
-    df = ler_dataframe_upload(arquivo)
+    df = _ler_planilha_com_fallback(arquivo)
     itens_importados = dataframe_to_records(df)
     registrar_auditoria_integracao(
         integration=CADASTRO_CLIENTE_IXC_INTEGRATION,

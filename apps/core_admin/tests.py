@@ -5,6 +5,7 @@ from io import BytesIO, StringIO
 from pathlib import Path
 from unittest.mock import Mock, patch
 
+import openpyxl
 import pandas as pd
 from django.contrib import admin
 from django.contrib.auth import get_user_model
@@ -45,6 +46,7 @@ from apps.backoffice.views import (
     atendimento_import,
     cadastrar_clientes_ixc,
     cotacao_import,
+    download_modelo_atendimento,
     download_template_cadastro_cliente_ixc,
 )
 from django.core.exceptions import PermissionDenied
@@ -768,6 +770,67 @@ class CoreAdminViewsTests(SimpleTestCase):
             response["Content-Disposition"],
         )
         mock_executar.assert_not_called()
+
+    @patch("apps.backoffice.views.registrar_auditoria_integracao")
+    @patch("apps.backoffice.services.registrar_auditoria_integracao")
+    @patch("apps.backoffice.services.executar_abertura_atendimento")
+    def test_atendimento_import_processa_planilha_gerada_pelo_modelo_oficial(
+        self, mock_executar, mock_auditoria, mock_auditoria_view
+    ):
+        """Regressao: o modelo oficial (download_modelo_atendimento) grava os
+        cabecalhos obrigatorios com sufixo "*" (ex.: "Cliente_ID*"). Se a
+        planilha reimportada nao normalizar esse sufixo, todo registro e
+        silenciosamente ignorado: a planilha "volta" sem erro, mas nenhum
+        atendimento e enviado ao IXC."""
+        mock_executar.return_value = (True, "Atendimento aberto com sucesso! ID: 999")
+
+        request_modelo = self.factory.post("/backoffice/atendimento/modelo/")
+        request_modelo.user = self.user
+        modelo_response = download_modelo_atendimento(request_modelo)
+
+        workbook = openpyxl.load_workbook(BytesIO(modelo_response.content))
+        planilha = workbook["Modelo_OS"]
+        cabecalhos = [celula.value for celula in planilha[1]]
+        # Confirma o formato real do modelo antes de validar o fluxo de importacao.
+        self.assertIn("Cliente_ID*", cabecalhos)
+
+        valores = {
+            "Cliente_ID*": "123",
+            "Login_ID*": "456",
+            "Contrato_ID*": "789",
+            "Filial_ID*": "1",
+            "Assunto_ID*": "2",
+            "Departamento_ID*": "3",
+            "Tipo_Processo*": "Avulso",
+            "Workflow_ID": "",
+            "Assunto_Descricao*": "Assunto teste",
+            "Descricao*": "Descricao teste",
+        }
+        planilha.append([valores.get(cabecalho, "") for cabecalho in cabecalhos])
+
+        buffer = BytesIO()
+        workbook.save(buffer)
+        buffer.seek(0)
+        arquivo = SimpleUploadedFile(
+            "Atendimento.xlsx",
+            buffer.read(),
+            content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+
+        request = self.factory.post(
+            "/backoffice/atendimento/importar/",
+            {"arquivo_atendimento": arquivo},
+        )
+        request.user = self.user
+
+        response = atendimento_import(request)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(
+            "attachment; filename=Relatorio_OS_IXC.xlsx",
+            response["Content-Disposition"],
+        )
+        mock_executar.assert_called_once()
 
 
 class ImportProspectsViewTests(TestCase):
