@@ -684,7 +684,7 @@ Status: `🔍 Aguardando QA` (implementado pelo Dev em 2026-08-28, segunda rodad
 - Corrigido: essas funcoes agora levantam `IXCConsultaIndisponivelError` quando a chamada falha, distinguindo esse caso de uma consulta que respondeu OK e simplesmente nao achou nada (esse ultimo caso continua sendo tratado como "nao encontrado", sem mudanca). `executar_resolucao_os_atendimento_ixc`, `executar_desativacao_atendimento` e `finalizar_os_existente` passam a capturar o erro e retornar mensagem clara ("Nao foi possivel confirmar ... no IXC: <motivo>. Tente novamente."), preservando o progresso ja feito (O.S. ja fechadas antes da falha continuam reportadas).
 - O exemplo do usuario (atendimento 6436) nao pode ser reproduzido ao vivo porque o atendimento ja aparece finalizado no IXC hoje; a causa raiz foi confirmada por leitura de codigo e coberta com testes automatizados simulando a falha de comunicacao.
 - Testes novos em `apps/backoffice/tests.py` e `scripts/integracoes/tests.py`. Suite completa das classes sem dependencia de banco (`apps.backoffice.tests`, `scripts.integracoes.tests` e demais apps afetados) executada: 142 testes, 0 falhas (2 erros pre-existentes e sem relacao, em `ExplorarTabelaTests`, por encoding de emoji no console Windows).
-- **Pendencia para o Orquestrador:** registrar em `business_rules.md` a regra de que falha de comunicacao com o IXC nunca pode ser relatada como "nao encontrado" nas automacoes de fechamento/desativacao de O.S. (proposta: RN-072) — fora do escopo do Dev alterar `business_rules.md` diretamente.
+- **Pendencia para o Orquestrador — resolvida em 2026-09-10:** RN-072 registrada em `business_rules.md`, cobrindo tambem o caso de inconsistencia da API do IXC descrito na segunda rodada.
 
 Objetivo:
 Usuario relatou que, ao rodar a automacao de fechamento de O.S. em massa no
@@ -712,9 +712,7 @@ Criterios de aceite:
   bloqueada indefinidamente nesse caso, ja que a automacao nao tem como
   confirmar o atendimento com seguranca.
 
-Regras relacionadas: RN-001, RN-002, RN-010, RN-014 (docs/business_rules.md);
-nova regra a registrar pelo Orquestrador (proposta: RN-072, incluindo o caso
-de inconsistencia da API do IXC descrito na segunda rodada).
+Regras relacionadas: RN-001, RN-002, RN-010, RN-014, RN-072 (docs/business_rules.md).
 
 Tipo de feature: `backend-only` (QA obrigatorio).
 
@@ -731,7 +729,7 @@ Status: `🔍 Aguardando QA` (implementado pelo Dev em 2026-08-28)
 - Confirmado que o endpoint do IXC (`su_ticket_arquivos`, usado por `anexar_arquivo_ticket_ixc`) ja e generico quanto a tipo de arquivo — a restricao a PDF era somente uma regra nossa (RN-008), nao uma limitacao do IXC.
 - Textos de ajuda da planilha (`Nome_Anexo`, `Nome_Anexo_2`, `Nome_Anexo_3`) e o texto de apoio na tela de upload (`resolver_os_atendimento_ixc.html`) atualizados para nao falar mais so em PDF.
 - Testes novos em `apps/backoffice/tests.py`: aceitacao de `.xlsx` e `.csv` dentro do ZIP, `content-type` correto por extensao, e mensagem de erro atualizada para extensao nao suportada. Suite completa das classes sem dependencia de banco reexecutada: 145 testes, 0 falhas.
-- **Pendencia para o Orquestrador:** atualizar RN-008 em `business_rules.md` (hoje diz "apenas PDF e aceito") para refletir os novos formatos aceitos (PDF, Excel `.xlsx`/`.xls` e CSV) — fora do escopo do Dev alterar `business_rules.md` diretamente.
+- **Pendencia para o Orquestrador — resolvida em 2026-09-10:** RN-008 atualizada em `business_rules.md` para refletir os novos formatos aceitos (PDF, Excel `.xlsx`/`.xls` e CSV).
 
 Objetivo:
 O anexo obrigatorio/condicional da automacao de resolucao de O.S. em massa
@@ -751,8 +749,40 @@ Criterios de aceite:
   formatos aceitos;
 - o comportamento para PDF nao muda (retrocompatibilidade).
 
-Regras relacionadas: RN-006, RN-008, RN-009 (docs/business_rules.md) —
-RN-008 precisa ser atualizada pelo Orquestrador para citar os novos formatos.
+Regras relacionadas: RN-006, RN-008 (atualizada), RN-009 (docs/business_rules.md).
+
+Tipo de feature: `backend-only` (QA obrigatorio).
+
+Agente recomendado para executar:
+- `dev` (correcao ja implementada; aguardando QA).
+
+### PO-092 - Corrigir aborto da busca de O.S. do atendimento por qtype invalido (falha 100% na resolucao de O.S. desde 28/08)
+
+Status: `🔍 Aguardando QA` (implementado pelo Dev em 2026-09-10)
+
+**Entrega do Dev (2026-09-10):**
+- Investigado relato de producao: a automacao de Resolucao de O.S. do Atendimento falhou 100% das linhas em pelo menos duas execucoes reais (confirmado no banco de producao: execucoes id=14,16,20,22 em 28/08 e id=43,45,47 em 10/09, todas com total=203, erros=203). Confirmado ao vivo contra o IXC (servidor de producao) que, dos 4 valores de `qtype` usados por `buscar_os_atendimento_ixc` para consultar `su_oss_chamado` ("id_ticket", "id_atendimento", "id_su_ticket", "id_chamado"), somente "id_ticket" e valido — os outros 3 fazem o IXC responder HTTP 200 com uma pagina HTML de erro em vez de JSON.
+- Causa raiz: desde a correcao da PO-090 (28/08), `_listar_registros` passou a levantar `IXCConsultaIndisponivelError` sempre que a resposta do IXC nao e JSON valido (correcao necessaria e ainda valida, ver PO-090/RN-014). O laco de `buscar_os_atendimento_ixc`, porem, percorria os 4 qtypes sem tratar essa excecao por item — o segundo qtype (sempre invalido) abortava a busca inteira mesmo quando o primeiro ("id_ticket") ja tinha encontrado a O.S. certa. Isso corresponde exatamente ao inicio das falhas em massa observadas em producao a partir de 28/08 (mesmo dia da PO-090).
+- Corrigido: `buscar_os_atendimento_ixc` mantem apenas o qtype confirmado como valido ("id_ticket") e o laco agora tolera falha de um qtype isolado sem abortar os demais — mas continua propagando a falha quando nenhum qtype confirma resultado, para nao voltar a tratar indisponibilidade do IXC como "nao encontrado" (mesmo cuidado da PO-090).
+- Testes novos em `apps/backoffice/tests.py` reproduzindo o cenario real (um qtype retornando pagina de erro/HTML enquanto outro retorna a O.S. valida — a busca continua, nao aborta) e o cenario em que todos os qtypes falham (a excecao ainda e propagada). Suite completa das classes sem dependencia de banco reexecutada: 89 testes, 0 falhas.
+- **Pendencia para o Orquestrador — resolvida em 2026-09-10:** RN-073 registrada em `business_rules.md` (RN-072 ficou reservada para a regra de mensagem da PO-090; esta e uma regra tecnica distinta, sobre qual `qtype` e valido).
+
+Objetivo:
+A automacao "Resolucao de O.S. do Atendimento" estava falhando 100% das
+linhas em determinados arquivos desde pelo menos 28/08/2026. O objetivo e
+eliminar o aborto indevido da busca de O.S. vinculada ao atendimento quando
+um dos valores de `qtype` testados e invalido para a API do IXC.
+
+Criterios de aceite:
+- um qtype invalido (IXC responde HTML em vez de JSON) para `su_oss_chamado`
+  nao aborta a busca quando outro qtype ja retornou a O.S. correta;
+- quando nenhum qtype confirma resultado (todos falham), a falha de
+  comunicacao continua sendo propagada, nunca tratada como "nenhuma O.S.
+  encontrada" (mesma exigencia da PO-090);
+- os qtypes usados por `buscar_os_atendimento_ixc` ficam restritos aos
+  confirmados como validos pela API do IXC ("id_ticket").
+
+Regras relacionadas: RN-014, RN-072, RN-073, PO-090.
 
 Tipo de feature: `backend-only` (QA obrigatorio).
 

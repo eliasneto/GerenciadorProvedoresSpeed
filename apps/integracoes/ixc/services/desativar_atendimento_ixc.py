@@ -58,14 +58,34 @@ def buscar_atendimento_ixc_por_id(atendimento_id):
     return {}
 
 
+# RN-072: "id_ticket" e o unico qtype confirmado como valido para a tabela
+# su_oss_chamado do IXC (testado ao vivo em producao em 2026-09-10). Os demais
+# valores usados aqui antes ("id_atendimento", "id_su_ticket", "id_chamado")
+# fazem o IXC responder HTTP 200 com uma pagina HTML de erro em vez de JSON —
+# removidos por serem invalidos. O laco abaixo tambem tolera falha de um qtype
+# isolado sem abortar os demais (bug corrigido: antes, o qtype invalido no meio
+# do laco levantava IXCConsultaIndisponivelError e abortava a busca inteira
+# mesmo quando "id_ticket" ja tinha encontrado a O.S. certa), mas continua sem
+# tratar falha de comunicacao como "nenhum registro encontrado": se nenhum
+# qtype retornar registro e houve falha, o erro e propagado.
+QTYPES_OS_ATENDIMENTO = ("id_ticket",)
+
+
 def buscar_os_atendimento_ixc(atendimento_id):
-    qtypes = ("id_ticket", "id_atendimento", "id_su_ticket", "id_chamado")
     registros_por_id = {}
-    for qtype in qtypes:
-        for registro in _listar_registros("su_oss_chamado", qtype, atendimento_id):
+    ultima_falha = None
+    for qtype in QTYPES_OS_ATENDIMENTO:
+        try:
+            registros = _listar_registros("su_oss_chamado", qtype, atendimento_id)
+        except IXCConsultaIndisponivelError as exc:
+            ultima_falha = exc
+            continue
+        for registro in registros:
             os_id = limpar_texto(registro.get("id"))
             if os_id:
                 registros_por_id[os_id] = registro
+    if not registros_por_id and ultima_falha:
+        raise ultima_falha
     return list(registros_por_id.values())
 
 

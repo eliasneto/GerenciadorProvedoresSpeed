@@ -1,5 +1,5 @@
 # Regras de Negocio - GerenciadorProvedoresSpeed
-_Ultima atualizacao: 2026-08-24_
+_Ultima atualizacao: 2026-09-10_
 
 ## Automacoes IXC - Resolucao de O.S. de atendimento
 
@@ -67,12 +67,12 @@ _Ultima atualizacao: 2026-08-24_
 **Status:** Ativa
 
 ### RN-008 - Correspondencia de anexo por nome de arquivo dentro do ZIP
-**Descricao:** Quando `Tem_Anexo = Sim`, o documento a anexar e localizado dentro de um arquivo ZIP importado junto com a planilha, casando pelo nome informado na coluna `Nome_Anexo` daquela linha.
-**Contexto:** Cada atendimento (cliente) pode ter um documento PDF diferente; o usuario importa todos os documentos de uma vez em um unico ZIP e referencia cada um pelo nome na planilha.
-**Criterios:** `Nome_Anexo` deve corresponder a um arquivo dentro do ZIP; apenas PDF e aceito; se o nome informado nao existir no ZIP ou nao for PDF, a linha falha com mensagem explicita e nenhuma O.S. daquele atendimento e tocada; um mesmo arquivo do ZIP pode ser referenciado por mais de uma linha.
+**Descricao:** Quando `Tem_Anexo = Sim`, o documento a anexar e localizado dentro de um arquivo ZIP importado junto com a planilha, casando pelo nome informado na coluna `Nome_Anexo` daquela linha. Alem de PDF, o anexo tambem aceita planilha (Excel `.xlsx`/`.xls` ou CSV) — solicitado pelo usuario em 28/08/2026 para anexar propostas comerciais em formato de planilha.
+**Contexto:** Cada atendimento (cliente) pode ter um documento diferente para anexar; o usuario importa todos os documentos de uma vez em um unico ZIP e referencia cada um pelo nome na planilha. Confirmado que a restricao a PDF era regra nossa, nao limitacao do endpoint do IXC (`su_ticket_arquivos`), que ja e generico quanto a tipo de arquivo.
+**Criterios:** `Nome_Anexo` deve corresponder a um arquivo dentro do ZIP; o arquivo aceito e `.pdf`, `.xlsx`, `.xls` ou `.csv`; se o nome informado nao existir no ZIP ou tiver extensao nao suportada, a linha falha com mensagem explicita citando os formatos aceitos e nenhuma O.S. daquele atendimento e tocada; o `content-type` enviado ao IXC e calculado a partir da extensao do arquivo (nao mais fixo em `application/pdf`); um mesmo arquivo do ZIP pode ser referenciado por mais de uma linha; comportamento para PDF sem alteracao (retrocompatibilidade).
 **Excecoes:** nenhuma conhecida.
-**Impacto tecnico:** nova funcao de extracao/busca de arquivo dentro do ZIP em memoria, sem persistir o PDF em disco (RN-009).
-**Features relacionadas:** PO-013, ADR-003.
+**Impacto tecnico:** `localizar_anexo_no_zip` (extracao/busca de arquivo dentro do ZIP em memoria, sem persistir em disco, RN-009) e `anexar_arquivo_ticket_ixc`; textos de ajuda da planilha e da tela de upload atualizados para nao falar mais so em PDF.
+**Features relacionadas:** PO-013, PO-091, ADR-003.
 **Status:** Ativa
 
 ### RN-009 - Documentos nao sao persistidos no sistema
@@ -964,9 +964,37 @@ O backup e do banco MySQL de origem do DashboardEACE (Jira mirror), consumido pe
 **Features relacionadas:** PO-089, RN-019 (substituida), RN-070 (substituida), RN-010, ADR-004.
 **Status:** Ativa
 
+### RN-072 - Falha de comunicacao com o IXC nunca e relatada como "nao encontrado" nas automacoes de fechamento/desativacao de O.S.
+**Descricao:** Uma falha ao consultar o IXC (timeout, HTTP diferente de 200, resposta invalida/nao-JSON) nunca pode ser relatada ao usuario como se o atendimento ou a O.S. nao existissem. O sistema distingue "IXC respondeu OK e nao achou o registro" (continua "nao encontrado", sem mudanca) de "a consulta ao IXC falhou" (mensagem propria, orientando tentar novamente, sem perder o progresso ja feito).
+**Contexto:** Usuario relatou, em 28/08/2026, que a automacao de fechamento de O.S. em massa no servidor reportou "Atendimento X nao encontrado no IXC" para atendimentos que existiam de fato (ex.: atendimento 6436, ja finalizado no IXC). Investigacao do Dev confirmou que qualquer falha de comunicacao com o IXC era tratada exatamente igual a "nao encontrado" (retornando lista/dict vazio nos dois casos), escondendo a causa real. Uma segunda rodada no mesmo dia, com o atendimento 5327 (usuario contestou com print do painel do IXC), identificou adicionalmente que um atendimento pode existir e estar ativo no IXC sem que a API (webservice v1) o retorne por nenhum caminho testado (id, id_cliente, id_login, GET direto) — inconsistencia da propria API do IXC, nao remocao do registro.
+**Criterios:**
+- falha de comunicacao com o IXC (timeout, HTTP diferente de 200, resposta nao-JSON) nunca e relatada como "atendimento/O.S. nao encontrado" — mensagem propria orienta tentar novamente;
+- O.S. ja fechadas antes da falha continuam sendo reportadas ao usuario (progresso parcial nao se perde);
+- quando o IXC responde OK (HTTP 200, JSON valido) e simplesmente nao acha o registro, o comportamento de "nao encontrado" continua sem alteracao;
+- quando o IXC responde OK sem retornar o atendimento, mas ha O.S. aberta vinculada a ele, a mensagem nao afirma que o atendimento deixou de existir — informa que nao foi possivel confirmar via API e lista a(s) O.S. vinculada(s), sem fechar nada automaticamente.
+**Excecoes:** quando o atendimento existe e esta ativo no painel do IXC, mas a API nunca o retorna por nenhum caminho testado (inconsistencia confirmada da propria API do IXC, nao do nosso codigo), a linha fica bloqueada indefinidamente ate confirmacao manual — em aberto, dependente de decisao de negocio/fornecedor (avaliar contato com o suporte do IXC sobre atendimentos criados em lote via API que o painel mostra mas o webservice nao retorna).
+**Impacto tecnico:** `buscar_atendimento_ixc_por_id`, `listar_os_para_desativacao`, `buscar_os_atendimento_ixc` (`apps/integracoes/ixc/services/desativar_atendimento_ixc.py`) e `buscar_os_por_id` (`scripts/integracoes/ixc_finalizacao_service.py`) levantam `IXCConsultaIndisponivelError` em vez de retornar lista/dict vazio; `executar_resolucao_os_atendimento_ixc`, `executar_desativacao_atendimento` e `finalizar_os_existente` capturam o erro e retornam mensagem distinta da de "nao encontrado".
+**Features relacionadas:** PO-090, RN-001, RN-002, RN-010, RN-014.
+**Status:** Ativa
+
+### RN-073 - buscar_os_atendimento_ixc consulta su_oss_chamado exclusivamente pelo qtype "id_ticket"
+**Descricao:** A busca de O.S. vinculada a um atendimento (tabela `su_oss_chamado` do IXC) usa exclusivamente o `qtype` "id_ticket". Os demais valores antes testados (`id_atendimento`, `id_su_ticket`, `id_chamado`) nao sao campos validos da API do IXC para essa tabela e sempre retornam uma pagina de erro (HTML, HTTP 200) em vez de JSON.
+**Contexto:** Investigacao do Dev em 10/09/2026, a partir de relato de falha de 100% das linhas em duas execucoes reais em producao (28/08 e 10/09, ambas 203 linhas processadas e 203 com erro), confirmou ao vivo contra a API do IXC que so "id_ticket" e valido para `su_oss_chamado`. Um `qtype` invalido no meio do laco de busca — que passou a levantar `IXCConsultaIndisponivelError` para resposta nao-JSON depois da correcao da RN-072/PO-090 — abortava a busca inteira mesmo quando "id_ticket" ja tinha encontrado a O.S. certa.
+**Criterios:**
+- `buscar_os_atendimento_ixc` usa somente `qtype = "id_ticket"` ao consultar `su_oss_chamado`;
+- o laco de busca tolera falha de um `qtype` isolado sem abortar os demais (ainda relevante caso outro `qtype` valido venha a ser adicionado no futuro, apos confirmacao real contra a API);
+- quando a consulta com "id_ticket" falha (falha de comunicacao, RN-072), a excecao continua sendo propagada — nunca tratada como "nenhuma O.S. encontrada".
+**Excecoes:** nenhuma conhecida. Se o IXC vier a expor outro campo valido de busca por atendimento em `su_oss_chamado`, avaliar inclusao somente apos confirmacao real contra a API (mesmo cuidado que revelou este bug).
+**Impacto tecnico:** `buscar_os_atendimento_ixc` (`apps/integracoes/ixc/services/desativar_atendimento_ixc.py`).
+**Features relacionadas:** PO-092, RN-072, RN-014.
+**Status:** Ativa
+
 ## Historico de Alteracoes
 | Data | Regra | Alteracao |
 |---|---|---|
+| 2026-09-10 | RN-073 criada; PO-092 | Dev corrigiu a automacao de Resolucao de O.S., que falhava 100% das linhas desde 28/08 em determinados arquivos: `buscar_os_atendimento_ixc` testava 3 `qtype` invalidos contra `su_oss_chamado` (so "id_ticket" e valido), e o `qtype` invalido abortava a busca mesmo quando "id_ticket" ja tinha achado a O.S. Regra registrada pelo Orquestrador a pedido do Dev (pendencia da PO-092) |
+| 2026-09-10 | RN-008 atualizada; PO-091 | Dev implementou aceitacao de anexo em Excel (.xlsx/.xls) e CSV, alem de PDF, na resolucao de O.S. em massa (endpoint do IXC ja era generico quanto a tipo de arquivo). Regra atualizada pelo Orquestrador a pedido do Dev (pendencia da PO-091) |
+| 2026-09-10 | RN-072 criada; PO-090 | Dev corrigiu mensagem enganosa de atendimento/O.S. "nao encontrado" quando a causa real era falha de comunicacao com o IXC (relatado em 28/08). Regra registrada pelo Orquestrador a pedido do Dev (pendencia da PO-090, proposta havia ficado sem registro formal) |
 | 2026-08-24 | RN-071 criada; RN-070 e RN-019 substituidas | Dev investigou (com autorizacao do usuario) o atendimento real 7827 no IXC e confirmou que a premissa de RN-070 estava errada: a tarefa 150 exige sim `id_proxima_tarefa` explicito (valor correto: 148); o IXC e quem decide sozinho abrir 1 ou 2 O.S. a partir dai. O problema real era a planilha nao informar ao usuario qual ID usar, nao a automacao se impor. Usuario pediu correcao para o sistema resolver esse ID sozinho, sem o usuario precisar descobri-lo no IXC. RN-019 (coluna manual) e RN-070 (nao enviar o campo) substituidas por RN-071 (resolucao automatica). PO-089 com criterios revisados, devolvida a Em andamento |
 | 2026-08-24 | RN-070 criada; RN-019 anotada (excecao) | Usuario relatou que um fluxo do IXC bifurca automaticamente em duas O.S. (uma por setor) ao ser solucionado, e que a automacao (RN-019/PO-040) estava forcando a escolha de um unico setor via `Proxima_Tarefa_ID`, gerando erro. Orquestrador perguntou se o fluxo tem ID de tarefa identificavel (usuario respondeu que nao sabe, fica com o Dev) e qual o comportamento esperado (usuario confirmou: nunca enviar `Proxima_Tarefa_ID` nesse caso, deixando o IXC seguir sozinho). RN-019 nao foi substituida — ganhou excecao apontando para RN-070. PO-089 criada |
 | 2026-08-17 | RN-068, RN-069 criadas | Usuario pediu, dentro de Administracao > Importacao, um modelo de planilha Excel para importar Provedores em massa, com CNPJ obrigatorio e unico. Orquestrador levantou 3 pontos de ambiguidade sobre a obrigatoriedade do CNPJ (escopo Provedor/Parceiro, dados legados, CNPJ ou CPF) antes de fechar a regra; usuario decidiu os 3 pelas opcoes recomendadas (so Provedor, sem migracao retroativa, exigir CNPJ especificamente). PO-088 criada |

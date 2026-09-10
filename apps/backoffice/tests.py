@@ -20,6 +20,7 @@ from apps.integracoes.ixc.services.cadastrar_cliente_ixc import (
     verificar_duplicidade_ixc,
 )
 from apps.integracoes.ixc.services.desativar_atendimento_ixc import (
+    buscar_os_atendimento_ixc,
     executar_desativacao_atendimento,
     listar_os_para_desativacao,
     normalizar_confirmacao_desativacao,
@@ -324,6 +325,54 @@ class DesativacaoAtendimentoIXCTests(SimpleTestCase):
         registros = listar_os_para_desativacao("5313")
 
         self.assertEqual([registro["id"] for registro in registros], ["6399", "6401"])
+
+    def test_qtypes_os_atendimento_mantem_apenas_o_valor_valido(self):
+        # Bug corrigido (producao, execucoes de 28/08 e 10/09 com 203/203 erros):
+        # "id_atendimento", "id_su_ticket" e "id_chamado" nao sao qtypes validos
+        # para su_oss_chamado no IXC (confirmado ao vivo) e nao devem voltar aqui.
+        from apps.integracoes.ixc.services.desativar_atendimento_ixc import (
+            QTYPES_OS_ATENDIMENTO,
+        )
+
+        self.assertEqual(QTYPES_OS_ATENDIMENTO, ("id_ticket",))
+
+    @patch("apps.integracoes.ixc.services.desativar_atendimento_ixc._listar_registros")
+    def test_buscar_os_atendimento_ignora_qtype_invalido_sem_abortar_busca(
+        self, mock_listar_registros
+    ):
+        # Reproduz o bug real: um qtype invalido no meio do laco (IXC responde
+        # HTML em vez de JSON) nao pode abortar a busca inteira quando outro
+        # qtype ja encontrou a O.S. certa.
+        def _listar_registros_fake(endpoint, qtype, query, limite="10"):
+            if qtype == "id_ticket":
+                return [{"id": "6401", "status": "A"}]
+            raise IXCConsultaIndisponivelError(
+                f"falha ao consultar '{endpoint}' no IXC (HTTP 200)"
+            )
+
+        mock_listar_registros.side_effect = _listar_registros_fake
+
+        with patch(
+            "apps.integracoes.ixc.services.desativar_atendimento_ixc.QTYPES_OS_ATENDIMENTO",
+            ("id_ticket", "id_qtype_invalido"),
+        ):
+            registros = buscar_os_atendimento_ixc("5313")
+
+        self.assertEqual([registro["id"] for registro in registros], ["6401"])
+
+    @patch("apps.integracoes.ixc.services.desativar_atendimento_ixc._listar_registros")
+    def test_buscar_os_atendimento_propaga_falha_quando_nenhum_qtype_confirma(
+        self, mock_listar_registros
+    ):
+        # RN-072 continua valida: se nenhum qtype conseguir confirmar (todos
+        # falham), a falha de comunicacao deve ser propagada, nunca tratada
+        # silenciosamente como "nenhuma O.S. encontrada".
+        mock_listar_registros.side_effect = IXCConsultaIndisponivelError(
+            "falha ao consultar 'su_oss_chamado' no IXC (HTTP 500)"
+        )
+
+        with self.assertRaises(IXCConsultaIndisponivelError):
+            buscar_os_atendimento_ixc("5313")
 
 
 class ResolucaoOsAtendimentoIXCTests(SimpleTestCase):
