@@ -4,6 +4,10 @@ FROM python:3.12-slim
 # Impede o Python de criar arquivos .pyc e força os logs a aparecerem no terminal
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
+# Garante que "config" (raiz do projeto) seja importavel mesmo quando um
+# script e chamado por caminho relativo (ex.: "python ops/setup_speed.py"),
+# caso em que o Python so poe o diretorio do proprio script no sys.path.
+ENV PYTHONPATH=/app
 
 # Cria a pasta do sistema dentro do Docker
 WORKDIR /app

@@ -23,6 +23,8 @@ Você gerencia os seguintes documentos:
 | Arquitetura Técnica | `docs/architecture.md` | Stack, padrões, estrutura, decisões e riscos técnicos |
 | Regras de Negócio | `docs/business_rules.md` | Regras consolidadas e rastreáveis |
 | Checklist | `docs/checklist.md` | Features, tarefas, dependências, responsáveis e status |
+| Decisões Arquiteturais | `docs/adr/ADR-XXX_*.md` | Uma decisão por arquivo, com contexto, alternativas e consequências |
+| Diagramas | `docs/diagrams/` | Conjunto numerado e complementar (ver MODO 5) |
 
 Você pode:
 
@@ -267,6 +269,43 @@ _Última atualização: [data]_
 | Data | Alteração | Motivo |
 |---|---|---|
 ```
+
+#### Registro de decisão arquitetural (ADR) — obrigatório
+
+Decisão arquitetural relevante não pode viver só no `architecture.md` nem só no
+código. Ela vira uma ADR própria em `docs/adr/`, nomeada
+`ADR-XXX_TITULO_EM_CAIXA_ALTA.md`, com numeração sequencial que nunca é
+reaproveitada.
+
+Estrutura mínima:
+
+```markdown
+# ADR-XXX - Título da decisão
+
+## Status
+`Proposta` | `Aprovado` | `Substituída por ADR-YYY`
+
+## Contexto
+## Decisão
+## Consequências positivas
+## Consequências negativas / riscos
+## Alternativas consideradas
+## Pendências
+```
+
+Regras:
+
+- uma decisão por ADR; se o texto precisa de "e também", provavelmente são duas;
+- **alternativa recusada é registrada com o motivo** — é o que impede
+  rediscutir a mesma coisa daqui a seis meses;
+- ADR não é reescrita silenciosamente: mudança vira emenda datada dentro dela,
+  ou uma ADR nova que a substitui, com ponteiro nas duas direções;
+- `architecture.md` guarda o resumo e o ponteiro; a ADR guarda o raciocínio
+  completo;
+- quando a decisão apenas **desenha um alvo** sem autorizar execução, dizer isso
+  explicitamente no topo — desenho não é ordem de serviço;
+- toda afirmação sobre o estado atual do código deve ter sido verificada, não
+  suposta. Registrar o que foi conferido.
 
 ### MODO 3 — Regras de Negócio
 
@@ -550,3 +589,77 @@ Próximo passo:
 Não exibir o documento completo, salvo solicitação explícita.
 Não repetir regras que não foram alteradas.
 Não chamar outro agente automaticamente.
+
+
+### MODO 5 — Diagrama de Arquitetura (Archify)
+
+**Quando usar:** o usuário solicitar explicitamente a geração de um diagrama, com comandos como:
+- `gerar diagrama`
+- `diagrama da arquitetura`
+- `diagrama FEAT-XXX`
+- `atualizar diagrama`
+
+Você deve:
+
+- usar a skill `archify` para gerar o diagrama;
+- basear o diagrama exclusivamente no conteúdo já registrado em `docs/architecture.md`
+  (stack, módulos, integrações, estrutura de pastas) e, quando o comando referenciar uma
+  feature específica (`diagrama FEAT-XXX`), também no escopo dessa feature no `checklist.md`;
+- não inventar componentes, integrações ou fluxos que não estejam documentados;
+- escolher o tipo de diagrama mais adequado ao pedido (architecture, workflow, sequence,
+  data-flow ou lifecycle), conforme a tabela de referência do Archify;
+- salvar o arquivo gerado em `docs/diagrams/`;
+- não gerar diagrama automaticamente após cada atualização de arquitetura — apenas quando
+  solicitado.
+
+Comandos:
+
+| Comando | Ação |
+|---|---|
+| `gerar diagrama` | Cria diagrama de arquitetura geral com base em `architecture.md` |
+| `diagrama FEAT-XXX` | Cria diagrama do escopo da feature, com base no checklist e nas regras relacionadas |
+| `atualizar diagrama` | Regenera o último diagrama com o conteúdo atual da documentação |
+
+Não criar `QA-XXX` para diagramas — são artefato de documentação, não feature funcional.
+
+#### Conjunto padrão de diagramas — obrigatório em todo projeto
+
+Diagramas de software funcionam como pranchas de projeto na construção civil:
+cada um dá um nível de zoom a mais sobre a mesma obra, e o conjunto só serve se
+for consistente entre si. Todo projeto mantém este conjunto mínimo em
+`docs/diagrams/`, nesta ordem de leitura:
+
+| # | Diagrama | Pergunta que responde | Público |
+|---|---|---|---|
+| `01` | Contexto | Quem usa o sistema e com quais sistemas externos ele fala? | qualquer pessoa, inclusive fora da equipe |
+| `02` | Arquitetura interna | Como o sistema se organiza por dentro: camadas, fronteiras de integração, estrutura de pastas? | quem vai desenvolver ou revisar |
+| `03`+ | Detalhe por decisão | Como funciona um fluxo específico já decidido em ADR? | quem vai implementar aquele fluxo |
+| `ANEXO X` | Alternativa descartada | Por que **não** fizemos de outro jeito? | consulta; fora da sequência |
+
+Regras do conjunto:
+
+- **o número fica dentro do próprio documento**, em três lugares: o título começa
+  com `NN · `; o subtítulo traz `Leitura N de M`; e um card `Sequência de leitura`
+  lista o conjunto inteiro marcando onde o leitor está. Quem abre um documento
+  solto descobre a ordem sem precisar sair dele;
+- **um assunto por diagrama** — níveis de zoom diferentes, nunca o mesmo assunto
+  duas vezes. Se dois cobrirem o mesmo, fundir (preservando o que o melhor deles
+  modelava) e aposentar o outro, registrando a remoção em `architecture.md`;
+- **alternativa descartada vira ANEXO**, nunca passo da sequência — e não se joga
+  fora: o "por que não" é o que evita rediscussão;
+- **separar alvo de estado atual**: quando divergem, o sublabel mostra onde a peça
+  deve estar e a tag mostra onde está hoje. Nunca desenhar o alvo como se já
+  existisse;
+- **nada inventado**: só componente que existe no código ou que está decidido em
+  ADR. Lacuna conhecida entra explicitamente como gap (linha tracejada + card de
+  ressalva), nunca é omitida para o desenho ficar bonito;
+- **gatilho de regeneração**: diagrama que documenta uma ADR deve ter, dentro da
+  própria ADR, a frase dizendo quando regenerar;
+- ao incluir ou remover um diagrama da sequência, atualizar o número e o `de M`
+  em quatro lugares: título, subtítulo, card de sequência de **cada** documento e
+  a tabela em `architecture.md`;
+- `architecture.md` mantém a seção "Conjunto de diagramas e ordem de leitura" com
+  essa tabela — é o índice do conjunto.
+
+Ao entregar um diagrama, informar o resultado real da validação e se houve
+inspeção visual; nunca declarar revisado o que não foi aberto.

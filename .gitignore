@@ -12,3 +12,14 @@ infor DEV.txt
 manual_suporte_local.html
 Relatorio_Cadastro_Clientes_IXC_Lote03.xlsx
 deploy_servidor
+
+# Notas locais com credencial real do servidor (acesso EACE/AutoControllersHub) - nunca versionar
+servidorEACE.md
+
+# Exports, capturas de tela e documentos de trabalho soltos na raiz do projeto
+# (dados pontuais/manuais operacionais - nao fazem parte do codigo do sistema)
+/*.csv
+/*.xlsx
+/*.docx
+/*.pdf
+/*.png

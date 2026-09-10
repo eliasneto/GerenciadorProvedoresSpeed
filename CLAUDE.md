@@ -129,6 +129,10 @@ QA deve revisar prioritariamente o diff, os testes, os critérios de aceite e as
 - Commits: português no formato definido.
 - Sem abreviações obscuras.
 - Não gerar documentação extensa quando um registro curto for suficiente.
+- Documentos longos (`docs/BACKLOG.md`, `docs/business_rules.md` e
+  equivalentes) evitam tabelas grandes: tabela só para comparação curta,
+  dado numérico ou status consolidado; critérios de aceite, histórico e
+  resultado de execução vão em texto corrido ou lista.
 
 ---
 
