@@ -94,6 +94,12 @@ def _emails_from_proxy_addresses(values):
     return emails
 
 
+def _selecionar_nome(attrs):
+    first_name = _decode_ldap_value((attrs.get("displayName") or [""])[0])
+    last_name = _decode_ldap_value((attrs.get("sn") or [""])[0])
+    return first_name[:150], last_name[:150]
+
+
 def _selecionar_melhor_email(attrs):
     mail = _decode_ldap_value((attrs.get("mail") or [""])[0])
     upn = _decode_ldap_value((attrs.get("userPrincipalName") or [""])[0])
@@ -160,6 +166,12 @@ class ADDirectoryClient:
             return ""
         return _selecionar_melhor_email(attrs)
 
+    def buscar_nome(self, username):
+        _, attrs = self.buscar_usuario(username)
+        if not attrs:
+            return "", ""
+        return _selecionar_nome(attrs)
+
     def buscar_usuario(self, username):
         if not self.ready():
             return None, {}
@@ -181,7 +193,7 @@ class ADDirectoryClient:
                 self.search_base,
                 ldap.SCOPE_SUBTREE,
                 filtro,
-                ["cn", "displayName", "mail", "userPrincipalName", "proxyAddresses", "sAMAccountName"],
+                ["cn", "displayName", "sn", "mail", "userPrincipalName", "proxyAddresses", "sAMAccountName"],
             )
             for dn, attrs in resultados:
                 if not dn or not attrs:
@@ -228,3 +240,46 @@ def sincronizar_email_usuario_no_login(sender, user, request, **kwargs):
             logger.info("E-mail do usuario %s sincronizado do AD para %s.", user.username, resultado)
     except Exception:
         logger.exception("Falha ao sincronizar e-mail do AD para o usuario %s.", getattr(user, "username", "-"))
+
+
+def sincronizar_nome_usuario(user, client=None):
+    """PO-080: preenche first_name/last_name a partir do AD (displayName/sn).
+
+    Sem isso, as telas que exibem "quem fez a acao" caem no fallback
+    `usuario.username`, mostrando o login completo sincronizado do AD (com
+    dominio) em vez do nome da pessoa.
+    """
+    if not user or not getattr(user, "username", None):
+        return False, "usuario_invalido"
+
+    client = client or ADDirectoryClient()
+    if not client.ready():
+        return False, "ldap_indisponivel"
+
+    first_name_ad, last_name_ad = client.buscar_nome(user.username)
+    if not first_name_ad and not last_name_ad:
+        return False, "nome_nao_encontrado"
+
+    campos_atualizados = []
+    if first_name_ad and user.first_name != first_name_ad:
+        user.first_name = first_name_ad
+        campos_atualizados.append("first_name")
+    if last_name_ad and user.last_name != last_name_ad:
+        user.last_name = last_name_ad
+        campos_atualizados.append("last_name")
+
+    if not campos_atualizados:
+        return False, "nome_ja_atualizado"
+
+    user.save(update_fields=campos_atualizados)
+    return True, f"{user.first_name} {user.last_name}".strip()
+
+
+@receiver(user_logged_in)
+def sincronizar_nome_usuario_no_login(sender, user, request, **kwargs):
+    try:
+        atualizado, resultado = sincronizar_nome_usuario(user)
+        if atualizado:
+            logger.info("Nome do usuario %s sincronizado do AD para %s.", user.username, resultado)
+    except Exception:
+        logger.exception("Falha ao sincronizar nome do AD para o usuario %s.", getattr(user, "username", "-"))

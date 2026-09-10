@@ -2,11 +2,15 @@ from django.contrib.auth import get_user_model
 from django.core.management.base import BaseCommand
 from django.db.models import Q
 
-from apps.integracoes.ad.ad_sync import ADDirectoryClient, sincronizar_email_usuario
+from apps.integracoes.ad.ad_sync import (
+    ADDirectoryClient,
+    sincronizar_email_usuario,
+    sincronizar_nome_usuario,
+)
 
 
 class Command(BaseCommand):
-    help = "Sincroniza o e-mail dos usuarios locais com o AD."
+    help = "Sincroniza o e-mail e o nome (PO-080) dos usuarios locais com o AD."
 
     def add_arguments(self, parser):
         parser.add_argument(
@@ -78,13 +82,19 @@ class Command(BaseCommand):
         try:
             for user in queryset:
                 total += 1
-                atualizado, resultado = sincronizar_email_usuario(user, client=client)
-                if atualizado:
+                email_atualizado, resultado_email = sincronizar_email_usuario(user, client=client)
+                nome_atualizado, resultado_nome = sincronizar_nome_usuario(user, client=client)
+
+                if email_atualizado:
+                    self.stdout.write(self.style.SUCCESS(f"{user.username}: e-mail atualizado para {resultado_email}"))
+                if nome_atualizado:
+                    self.stdout.write(self.style.SUCCESS(f"{user.username}: nome atualizado para {resultado_nome}"))
+
+                if email_atualizado or nome_atualizado:
                     atualizados += 1
-                    self.stdout.write(self.style.SUCCESS(f"{user.username}: e-mail atualizado para {resultado}"))
                 else:
                     ignorados += 1
-                    self.stdout.write(f"{user.username}: {resultado}")
+                    self.stdout.write(f"{user.username}: e-mail={resultado_email} | nome={resultado_nome}")
         finally:
             client.close()
 
