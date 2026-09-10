@@ -18,6 +18,7 @@ from decimal import Decimal, InvalidOperation
 
 import pandas as pd
 from django.conf import settings
+from django.contrib.auth import get_user_model
 from django.contrib.contenttypes.models import ContentType
 from django.core.files.storage import FileSystemStorage
 from django.db import transaction
@@ -27,7 +28,7 @@ from django.utils import timezone
 
 from apps.clientes.models import Endereco
 from apps.escolas.models import (
-    Campo, CampoValor, CotacaoParceiro, Escola, MapaCalor, RedeExterna, RedeInterna, Setor, SetorEscopo,
+    Campo, CampoValor, CotacaoParceiro, Escola, MapaCalor, RedeExterna, RedeInterna, Setor, SetorEscopo, SetorStatus,
 )
 from apps.core.integration_audit import dataframe_to_records, registrar_auditoria_integracao
 from apps.core.models import RegistroHistorico
@@ -1055,7 +1056,117 @@ def usuario_pode_acessar_setor(usuario, nome_setor):
     return nome_setor in nomes_setor_concedidos(usuario)
 
 
-def filtrar_escolas_lastmile(q='', cidade='', estado='', sort='nome', setor_nome=None):
+def usuarios_responsavel_opcoes(setor):
+    """RN-060: usuarios elegiveis para o campo Responsavel de uma
+    subatividade (RedeExterna/RedeInterna/MapaCalor, RN-052/ADR-027)
+    atribuida a `setor`. Sem Setor definido (`setor=None`), nao ha
+    filtro — devolve todos os usuarios ativos, mesmo comportamento de
+    antes desta regra. Com Setor definido, restringe aos usuarios ativos
+    com `AcessoSetor` concedido para aquele nome (RN-055/ADR-028), mais
+    o(s) superusuario(s) — mesma excecao ja usada pela RN-055. Um Setor
+    sem ninguem com acesso concedido devolve so os superusuarios (pode
+    ser uma lista vazia)."""
+    ativos = get_user_model().objects.filter(is_active=True)
+
+    if setor is None:
+        return ativos.order_by('first_name', 'last_name', 'username')
+
+    usuarios_com_acesso = AcessoSetor.objects.filter(setor_nome=setor.nome).values_list('usuario_id', flat=True)
+    return ativos.filter(
+        Q(is_superuser=True) | Q(pk__in=usuarios_com_acesso)
+    ).order_by('first_name', 'last_name', 'username')
+
+
+def responsavel_opcoes_por_setor(setores):
+    """RN-060: pre-calcula, para uma colecao de Setor (RN-025), a lista de
+    usuarios elegiveis para Responsavel de cada um — usado pelo grid de
+    Enderecos Lastmile para montar a opcao correta em cada linha sem
+    disparar uma consulta de `AcessoSetor` por linha (N+1, CLAUDE.md
+    secao 7). Devolve um dict `{setor_id: [usuarios]}`; setores com o
+    mesmo nome (RN-025, espelhados entre Processos) compartilham a mesma
+    lista, calculada uma unica vez por nome."""
+    setores = list(setores)
+    if not setores:
+        return {}
+
+    nomes = {setor.nome for setor in setores}
+    ativos = list(get_user_model().objects.filter(is_active=True).order_by('first_name', 'last_name', 'username'))
+
+    ids_com_acesso_por_nome = {}
+    for usuario_id, setor_nome in AcessoSetor.objects.filter(setor_nome__in=nomes).values_list('usuario_id', 'setor_nome'):
+        ids_com_acesso_por_nome.setdefault(setor_nome, set()).add(usuario_id)
+
+    opcoes_por_nome = {
+        nome: [
+            usuario for usuario in ativos
+            if usuario.is_superuser or usuario.id in ids_com_acesso_por_nome.get(nome, set())
+        ]
+        for nome in nomes
+    }
+    return {setor.id: opcoes_por_nome[setor.nome] for setor in setores}
+
+
+#: RN-063: nomes de Setor onde a Escola some da tela do proprio Setor assim
+#: que RedeExterna/RedeInterna vinculadas a ele estiverem "Concluido"
+#: (Mapa Calor nunca entra no criterio, mesma convencao da RN-062). Nao
+#: exige que o Setor ja exista no catalogo — "Qualidade" ainda nao esta
+#: cadastrado no momento desta regra.
+SETORES_OCULTAM_ESCOLA_CONCLUIDA = {"Implantacao", "Qualidade"}
+
+
+#: RN-066: codigos aceitos pelo filtro de tipo de subatividade (checkbox
+#: multiplo, exclusivo da Tela de Setor) e o campo de `ProcessoRedeBase`
+#: (relacao reversa a partir de `Escola`) que cada codigo representa.
+_RELACAO_POR_TIPO_SUBATIVIDADE = {
+    're': 'rede_externa',
+    'ri': 'rede_interna',
+    'mc': 'mapa_calor',
+}
+
+
+def _q_cor_indicador_conectividade(cor):
+    """RN-067: traduz para `Q()` o mesmo criterio de cor calculado pela
+    property `Escola.indicador_conectividade` (RN-062), usado pelo filtro
+    de cor (checkbox multiplo, exclusivo do grid global). RE/RI sem
+    registro para a Escola contam como "nao concluida" — a negacao
+    (`~Q(...)`) sobre uma relacao OneToOne reversa ja inclui a checagem de
+    nulidade necessaria (Django adiciona `IS NOT NULL` na comparacao
+    negada), entao nao e preciso tratar a ausencia do registro a parte."""
+    re_concluida = Q(rede_externa__status__nome="Concluido")
+    ri_concluida = Q(rede_interna__status__nome="Concluido")
+
+    if cor == 'verde':
+        return re_concluida & ri_concluida
+    if cor == 'amarelo':
+        return (re_concluida & ~ri_concluida) | (~re_concluida & ri_concluida)
+    if cor == 'vermelho':
+        return ~re_concluida & ~ri_concluida
+    return None
+
+
+def status_opcoes_por_nome_setor(setor_nome):
+    """RN-066: nomes distintos de `SetorStatus` (RN-025) cadastrados em
+    qualquer `Setor` (de qualquer Processo — RE, RI e MC compartilham o
+    mesmo vocabulario de nome de Setor, PO-050) que tenha esse nome —
+    opcoes do filtro de Status da Tela de Setor. Nao lista Status de
+    outros Setores. Comparacao por nome (nao por id do catalogo) porque o
+    mesmo nome de Setor tem uma linha de `Setor` (e portanto um catalogo
+    de `SetorStatus` proprio) por Processo (RE/RI/MC) — mesmo vocabulario
+    espelhado usado pelo indicador de conectividade (RN-062)."""
+    if not setor_nome:
+        return []
+
+    return list(
+        SetorStatus.objects.filter(setor__nome=setor_nome)
+        .order_by('nome').values_list('nome', flat=True).distinct()
+    )
+
+
+def filtrar_escolas_lastmile(
+    q='', cidade='', estado='', setor_nome=None,
+    tipos_subatividade=None, responsavel_id=None, status_nome=None,
+    cores_conectividade=None,
+):
     """Tela global de Enderecos Lastmile (ADR-011): fonte de dados trocada
     de `Endereco` (sincronizado do IXC, ADR-008) para `Escola`
     (DashboardEACE, ADR-010). Sem filtro de elegibilidade — mostra todas as
@@ -1066,6 +1177,30 @@ def filtrar_escolas_lastmile(q='', cidade='', estado='', sort='nome', setor_nome
     vinculada a um Setor com esse nome, em qualquer Processo (RE, RI e MC
     compartilham o mesmo vocabulario de nomes de Setor, PO-050) — usado
     pela tela de Setor.
+
+    RN-063: quando `setor_nome` esta em `SETORES_OCULTAM_ESCOLA_CONCLUIDA`,
+    a Escola tambem some dessa listagem se toda RedeExterna/RedeInterna
+    vinculada a esse Setor especifico ja estiver "Concluido" — avaliado por
+    Setor, sem olhar onde a outra subatividade esta. Mapa Calor nunca entra
+    nesse criterio. Nao afeta o grid global (`setor_nome=None`) nem os
+    demais Setores.
+
+    RN-066: `tipos_subatividade` (codigos 're'/'ri'/'mc'), `responsavel_id`
+    e `status_nome` sao filtros exclusivos da Tela de Setor — so tem
+    efeito quando `setor_nome` esta presente (o grid global nunca os
+    recebe da view, mas o parametro tambem e ignorado aqui como segunda
+    camada de protecao). Os tres avaliam somente as subatividades
+    vinculadas a `setor_nome` (nunca a mesma Escola vinculada a outro
+    Setor): tipo e um OR entre os codigos marcados; Responsavel e Status
+    sao avaliados cada um a parte (independente do tipo marcado) e
+    combinados por E com os demais filtros ativos.
+
+    RN-067: `cores_conectividade` (codigos 'verde'/'amarelo'/'vermelho') e
+    o filtro exclusivo do grid global — so tem efeito quando `setor_nome`
+    esta ausente (mesma segunda camada de protecao do RN-066, invertida:
+    aqui o parametro e ignorado se `setor_nome` vier presente). OR entre
+    as cores marcadas; traduz o mesmo criterio de
+    `Escola.indicador_conectividade` (RN-062) para `Q()`.
     """
     escolas = Escola.objects.select_related(
         'rede_externa', 'rede_externa__setor', 'rede_externa__status', 'rede_externa__responsavel',
@@ -1084,6 +1219,65 @@ def filtrar_escolas_lastmile(q='', cidade='', estado='', sort='nome', setor_nome
             | Q(mapa_calor__setor__nome=setor_nome)
         )
 
+        if setor_nome in SETORES_OCULTAM_ESCOLA_CONCLUIDA:
+            re_aqui = Q(rede_externa__setor__nome=setor_nome)
+            ri_aqui = Q(rede_interna__setor__nome=setor_nome)
+            re_pendente_aqui = re_aqui & ~Q(rede_externa__status__nome="Concluido")
+            ri_pendente_aqui = ri_aqui & ~Q(rede_interna__status__nome="Concluido")
+
+            # RN-063: exclui quando RE e/ou RI estao vinculados a este
+            # Setor (pelo menos um dos dois) e nenhum dos vinculados aqui
+            # ainda esta pendente — Escola presente so via Mapa Calor (sem
+            # RE/RI neste Setor) nao cai nesta exclusao.
+            escolas = escolas.exclude(
+                (re_aqui | ri_aqui) & ~re_pendente_aqui & ~ri_pendente_aqui
+            )
+
+        if tipos_subatividade:
+            # RN-066: OR entre os tipos marcados — a Escola aparece se
+            # pelo menos um tipo marcado tiver a subatividade
+            # correspondente vinculada a este Setor.
+            tipo_q = Q()
+            for tipo in tipos_subatividade:
+                relacao = _RELACAO_POR_TIPO_SUBATIVIDADE.get(tipo)
+                if relacao:
+                    tipo_q |= Q(**{f"{relacao}__setor__nome": setor_nome})
+            if tipo_q:
+                escolas = escolas.filter(tipo_q)
+
+        if responsavel_id:
+            # RN-066: pelo menos uma subatividade vinculada a este Setor
+            # tem esse Responsavel — independe do filtro de tipo acima.
+            escolas = escolas.filter(
+                Q(rede_externa__setor__nome=setor_nome, rede_externa__responsavel_id=responsavel_id)
+                | Q(rede_interna__setor__nome=setor_nome, rede_interna__responsavel_id=responsavel_id)
+                | Q(mapa_calor__setor__nome=setor_nome, mapa_calor__responsavel_id=responsavel_id)
+            )
+
+        if status_nome:
+            # RN-066: pelo menos uma subatividade vinculada a este Setor
+            # tem esse Status (por nome — RN-062 ja usa o mesmo criterio
+            # de comparacao, o catalogo de Status e espelhado por nome de
+            # Setor entre os Processos RE/RI/MC) — independe do tipo.
+            escolas = escolas.filter(
+                Q(rede_externa__setor__nome=setor_nome, rede_externa__status__nome=status_nome)
+                | Q(rede_interna__setor__nome=setor_nome, rede_interna__status__nome=status_nome)
+                | Q(mapa_calor__setor__nome=setor_nome, mapa_calor__status__nome=status_nome)
+            )
+
+    if not setor_nome and cores_conectividade:
+        # RN-067: OR entre as cores marcadas — a Escola aparece se
+        # `indicador_conectividade["cor"]` corresponder a pelo menos uma
+        # delas. Segunda camada de protecao: ignorado quando `setor_nome`
+        # esta presente, mesmo que o parametro venha preenchido.
+        cor_q = Q()
+        for cor in cores_conectividade:
+            criterio = _q_cor_indicador_conectividade(cor)
+            if criterio:
+                cor_q |= criterio
+        if cor_q:
+            escolas = escolas.filter(cor_q)
+
     if q:
         escolas = escolas.filter(
             Q(nome__icontains=q) |
@@ -1100,16 +1294,25 @@ def filtrar_escolas_lastmile(q='', cidade='', estado='', sort='nome', setor_nome
     if estado:
         escolas = escolas.filter(uf__iexact=estado)
 
-    if sort == 'cidade':
-        escolas = escolas.order_by('municipio', 'nome', 'id')
-    elif sort == 'uf':
-        escolas = escolas.order_by('uf', 'nome', 'id')
-    elif sort == 'inep':
-        escolas = escolas.order_by('inep', 'id')
-    else:
-        escolas = escolas.order_by('nome', 'id')
+    escolas = escolas.order_by('nome', 'id')
 
     return escolas
+
+
+def contar_rede_externa_interna_por_setor(escolas, setor_nome):
+    """RN-065: quantidade de RedeExterna e de RedeInterna vinculadas a
+    `setor_nome`, dentro do queryset de `escolas` ja filtrado (mesmo
+    queryset usado para `total_enderecos`/`paginator.count`, portanto ja
+    reflete `q`/`cidade`/`estado`). Contagem bruta, sem olhar `status`
+    (RN-025) — Mapa Calor nunca entra aqui (RN-043).
+
+    Agregado numa unica consulta (evita N+1, CLAUDE.md secao 7): nao
+    itera escola por escola."""
+    agregado = escolas.aggregate(
+        total_re=Count('rede_externa', filter=Q(rede_externa__setor__nome=setor_nome)),
+        total_ri=Count('rede_interna', filter=Q(rede_interna__setor__nome=setor_nome)),
+    )
+    return agregado['total_re'], agregado['total_ri']
 
 
 def historico_rede(rede):
@@ -1570,6 +1773,34 @@ def salvar_campos_rede(rede, tipo, setor_atual, dados_post, usuario=None):
                 _registrar_historico_campo(rede, usuario, campos_por_id[campo_id], anterior, valor)
 
     return []
+
+
+def campos_obrigatorios_pendentes(rede, setor_origem_nome, setor_destino_nome):
+    """PO-079/RN-061/ADR-031: nomes dos Campos (RN-031) que bloqueiam a
+    troca do Setor `setor_origem_nome` para `setor_destino_nome` — regras
+    cadastradas na tela "Campos" (`CampoObrigatoriedadeTransicao`) para
+    algum Campo do Setor de origem, cujo `CampoValor` ainda esta vazio
+    (`None`, nunca preenchido) para esta instancia de RedeExterna/
+    RedeInterna/MapaCalor. Lista vazia libera a troca. So faz sentido
+    chamar quando ja existe um Setor de origem real (troca, nao primeira
+    atribuicao) — o chamador (RN-033: `enviado_a_outro_setor`) ja garante
+    isso."""
+    campos_regra = list(
+        Campo.objects.filter(setor_nome=setor_origem_nome, regras_obrigatoriedade__setor_destino_nome=setor_destino_nome)
+        .exclude(tipo=Campo.TIPO_CALCULADO)
+    )
+    if not campos_regra:
+        return []
+
+    valores = {}
+    if rede.pk:
+        content_type = ContentType.objects.get_for_model(type(rede))
+        valores = {
+            valor.campo_id: valor.valor
+            for valor in CampoValor.objects.filter(content_type=content_type, object_id=rede.pk, campo__in=campos_regra)
+        }
+
+    return [campo.nome for campo in campos_regra if valores.get(campo.id) is None]
 
 
 def campos_grid_escola(escola):

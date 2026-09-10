@@ -18,10 +18,12 @@ from django.core.exceptions import (
     TooManyFilesSent,
     ValidationError,
 )
+from django.contrib.auth import get_user_model
 from django.db.models import Count
 from django.http import Http404, HttpResponse, JsonResponse, UnreadablePostError
 from django.http.multipartparser import MultiPartParserError
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 from django.utils import timezone
 from django.utils.datastructures import MultiValueDictKeyError
 
@@ -34,19 +36,25 @@ from apps.core.automacoes_registry import (
     usuario_pode_acessar_automacao,
 )
 from apps.core_admin.models import ConfiguracaoEmailEnvio
-from apps.escolas.models import Campo, Processo, Setor, SetorEscopo, SetorStatus
+from apps.escolas.models import Campo, CampoObrigatoriedadeTransicao, Processo, Setor, SetorEscopo, SetorStatus
+from apps.leads.models import AcessoSetor
 
 from . import services
 from .forms import (
+    AcessoForm,
     BackupRestoreForm,
     CampoForm,
+    CampoObrigatoriedadeTransicaoForm,
     ExcelUploadForm,
+    GRUPOS_MODULO,
     ProcessoForm,
     SetorEscopoForm,
     SetorForm,
     SetorStatusForm,
     SMTPTestForm,
 )
+
+User = get_user_model()
 
 
 logger = logging.getLogger(__name__)
@@ -668,6 +676,18 @@ def processo_setor_status_excluir(request, processo_pk, setor_pk, status_pk):
     return redirect('processo_detail', pk=processo.pk)
 
 
+def _campos_com_contadores():
+    """PO-057/PO-061/PO-079: queryset de `Campo` para a tela "Campos",
+    anotado com o total de `CampoValor` e de regras de obrigatoriedade
+    (RN-061) de cada um — usado tanto na lista quanto na confirmacao de
+    exclusao. `distinct=True` nos dois `Count` evita inflar a contagem pelo
+    join combinado das duas relacoes reversas."""
+    return Campo.objects.annotate(
+        total_valores=Count('valores', distinct=True),
+        total_regras=Count('regras_obrigatoriedade', distinct=True),
+    ).prefetch_related('regras_obrigatoriedade').order_by('setor_nome', 'nome')
+
+
 @user_passes_test(grupo_Administrador_required)
 @login_required
 def campos_list(request):
@@ -680,11 +700,9 @@ def campos_list(request):
         messages.success(request, f"Campo '{campo.nome}' criado com sucesso.")
         return redirect('campos_list')
 
-    campos = Campo.objects.annotate(total_valores=Count('valores')).order_by('setor_nome', 'nome')
-
     return render(request, "core_admin/campos_list.html", {
         "form": form,
-        "campos": campos,
+        "campos": _campos_com_contadores(),
     })
 
 
@@ -694,7 +712,8 @@ def campo_editar(request, pk):
     """PO-061/ADR-021: edicao de um Campo (RN-036). Reaproveita o mesmo
     form da criacao (PO-057/RN-031). Troca de tipo e permitida mesmo com
     CampoValor ja gravados para o Campo, sem limpeza automatica dos
-    valores existentes."""
+    valores existentes. PO-079/RN-061/ADR-031: tambem exibe e permite
+    gerenciar as regras de obrigatoriedade por transicao deste Campo."""
     campo = get_object_or_404(Campo, pk=pk)
     form = CampoForm(request.POST or None, instance=campo)
 
@@ -703,12 +722,12 @@ def campo_editar(request, pk):
         messages.success(request, f"Campo '{campo.nome}' atualizado com sucesso.")
         return redirect('campos_list')
 
-    campos = Campo.objects.annotate(total_valores=Count('valores')).order_by('setor_nome', 'nome')
-
     return render(request, "core_admin/campos_list.html", {
         "form": form,
-        "campos": campos,
+        "campos": _campos_com_contadores(),
         "campo_em_edicao": campo,
+        "regras_obrigatoriedade": campo.regras_obrigatoriedade.order_by('setor_destino_nome'),
+        "regra_obrigatoriedade_form": CampoObrigatoriedadeTransicaoForm(campo=campo),
     })
 
 
@@ -721,7 +740,10 @@ def campo_excluir(request, pk):
     os valores vinculados sao apagados junto, sem migracao nova.
     PO-063/RN-039/ADR-024: Campo usado como base de algum Campo tipo
     Calculado e protegido (`on_delete=PROTECT`) — a exclusao e bloqueada
-    para o valor calculado nao sumir silenciosamente."""
+    para o valor calculado nao sumir silenciosamente. PO-079/RN-061/ADR-031:
+    regras de obrigatoriedade do Campo (`CampoObrigatoriedadeTransicao`)
+    tambem ja sao `on_delete=CASCADE` — excluidas junto, informadas no
+    mesmo aviso das demais perdas."""
     campo = get_object_or_404(Campo, pk=pk)
 
     if request.method == "POST":
@@ -735,16 +757,70 @@ def campo_excluir(request, pk):
         else:
             nome_campo = campo.nome
             total_valores = campo.valores.count()
+            total_regras = campo.regras_obrigatoriedade.count()
             campo.delete()
+            perdas = []
             if total_valores:
-                messages.success(
-                    request,
-                    f"Campo '{nome_campo}' excluído, junto com {total_valores} valor(es) preenchido(s).",
-                )
+                perdas.append(f"{total_valores} valor(es) preenchido(s)")
+            if total_regras:
+                perdas.append(f"{total_regras} regra(s) de obrigatoriedade")
+            if perdas:
+                messages.success(request, f"Campo '{nome_campo}' excluído, junto com {' e '.join(perdas)}.")
             else:
                 messages.success(request, f"Campo '{nome_campo}' excluído com sucesso.")
 
     return redirect('campos_list')
+
+
+@user_passes_test(grupo_Administrador_required)
+@login_required
+def campo_obrigatoriedade_criar(request, campo_pk):
+    """PO-079/RN-061/ADR-031: adiciona uma regra de obrigatoriedade por
+    transicao (Setor de destino) a um Campo ja cadastrado. Campo do tipo
+    Calculado nunca e preenchido manualmente, entao nao pode receber regra
+    (bloqueado aqui, alem do `clean()` do model)."""
+    campo = get_object_or_404(Campo, pk=campo_pk)
+
+    if request.method == "POST":
+        if campo.tipo == Campo.TIPO_CALCULADO:
+            messages.error(request, "Um Campo do tipo Calculado não pode ter regra de obrigatoriedade.")
+        else:
+            form = CampoObrigatoriedadeTransicaoForm(request.POST, campo=campo)
+            if form.is_valid():
+                regra = form.save(commit=False)
+                regra.campo = campo
+                try:
+                    regra.full_clean()
+                except ValidationError:
+                    messages.error(request, f"Já existe uma regra para o Setor '{regra.setor_destino_nome}' neste campo.")
+                else:
+                    regra.save()
+                    messages.success(
+                        request,
+                        f"Campo '{campo.nome}' agora é obrigatório para enviar ao Setor '{regra.setor_destino_nome}'.",
+                    )
+            else:
+                messages.error(request, "Selecione um Setor de destino válido.")
+
+    return redirect('campo_editar', pk=campo.pk)
+
+
+@user_passes_test(grupo_Administrador_required)
+@login_required
+def campo_obrigatoriedade_excluir(request, campo_pk, regra_pk):
+    """PO-079/RN-061/ADR-031: remove uma regra de obrigatoriedade por
+    transicao de um Campo."""
+    campo = get_object_or_404(Campo, pk=campo_pk)
+    regra = get_object_or_404(CampoObrigatoriedadeTransicao, pk=regra_pk, campo=campo)
+
+    if request.method == "POST":
+        setor_destino_nome = regra.setor_destino_nome
+        regra.delete()
+        messages.success(
+            request, f"Campo '{campo.nome}' deixou de ser obrigatório para enviar ao Setor '{setor_destino_nome}'.",
+        )
+
+    return redirect('campo_editar', pk=campo.pk)
 
 
 def _setores_com_escopo():
@@ -793,4 +869,54 @@ def setor_escopo_editar(request, pk):
         "form": form,
         "setores": _setores_com_escopo(),
         "escopo_em_edicao": escopo,
+    })
+
+
+@user_passes_test(grupo_Administrador_required)
+@login_required
+def acesso_list(request):
+    """PO-077/RN-058/RN-059/ADR-030: tela "Acesso" da Administracao —
+    concede/revoga, por usuario selecionado, pertencimento aos 6
+    grupos/modulos do menu e Setores individuais (RN-055), em um
+    formulario so, sem depender do Django Admin nativo."""
+    usuario_id = request.POST.get('usuario_id') or request.GET.get('usuario') or ''
+    usuario_selecionado = None
+    if usuario_id.isdigit():
+        usuario_selecionado = get_object_or_404(User, pk=usuario_id)
+    else:
+        usuario_id = ''
+
+    if request.method == "POST":
+        form = AcessoForm(request.POST)
+        if form.is_valid():
+            usuario_alterado = form.save()
+            messages.success(
+                request,
+                f"Acesso de '{usuario_alterado.get_full_name() or usuario_alterado.username}' atualizado com sucesso.",
+            )
+            return redirect(f"{reverse('acesso_list')}?usuario={usuario_alterado.pk}")
+    else:
+        form = AcessoForm(initial={
+            "usuario_id": usuario_selecionado.pk if usuario_selecionado else None,
+            "grupos": list(usuario_selecionado.groups.values_list('name', flat=True)) if usuario_selecionado else [],
+            "setores": list(
+                AcessoSetor.objects.filter(usuario=usuario_selecionado).values_list('setor_nome', flat=True)
+            ) if usuario_selecionado else [],
+        })
+
+    grupos_atuais = set(usuario_selecionado.groups.values_list('name', flat=True)) if usuario_selecionado else set()
+    setores_atuais = set(
+        AcessoSetor.objects.filter(usuario=usuario_selecionado).values_list('setor_nome', flat=True)
+    ) if usuario_selecionado else set()
+    nomes_setor = list(dict.fromkeys(Setor.objects.order_by('nome').values_list('nome', flat=True)))
+
+    return render(request, "core_admin/acesso_list.html", {
+        "form": form,
+        "usuarios": User.objects.filter(is_active=True).order_by('username'),
+        "usuario_id": str(usuario_id) if usuario_id else "",
+        "usuario_selecionado": usuario_selecionado,
+        "grupos_modulo": GRUPOS_MODULO,
+        "grupos_atuais": grupos_atuais,
+        "nomes_setor": nomes_setor,
+        "setores_atuais": setores_atuais,
     })

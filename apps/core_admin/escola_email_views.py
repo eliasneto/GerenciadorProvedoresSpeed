@@ -32,6 +32,7 @@ from apps.leads import services as leads_services
 from apps.leads.views import grupo_LastMile_required
 
 from .quotes_views import (
+    MENSAGEM_ERRO_TECNICO_ENVIO_EMAIL,
     _configured_from_email,
     _validate_email_attachments,
     _validate_email_values,
@@ -135,13 +136,13 @@ def _enviar_email_nivel(request, escola, nivel, rede):
                 f"Cc: {cc_raw or '--'}\n"
                 f"Assunto informado: {subject_raw or '--'}\n"
                 f"Codigo de rastreio: {codigo}\n"
-                f"Erro: {exc}"
+                f"Erro: {MENSAGEM_ERRO_TECNICO_ENVIO_EMAIL}"
             ),
             usuario=request.user,
             content_type=content_type,
             object_id=object_id,
         )
-        return f"Nao foi possivel enviar o e-mail: {exc}"
+        return MENSAGEM_ERRO_TECNICO_ENVIO_EMAIL
 
 
 @user_passes_test(grupo_LastMile_required)

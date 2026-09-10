@@ -1130,8 +1130,8 @@ def montar_template_resolucao_os_atendimento_bytes(usuario):
                     "ignore_blank": True,
                     "input_title": "Proxima_Tarefa_ID",
                     "input_message": (
-                        "Preencha somente se a O.S. abrir uma tela de decisao de proxima tarefa no IXC. "
-                        "Consulte a aba Tarefas_Decisao_IXC."
+                        "Normalmente NAO precisa preencher: o sistema resolve a proxima tarefa "
+                        "sozinho. So preencha se o sistema bloquear a linha pedindo esse ID."
                     ),
                     "error_title": "Valor invalido",
                     "error_message": "Proxima_Tarefa_ID aceita somente o ID numerico da tarefa.",

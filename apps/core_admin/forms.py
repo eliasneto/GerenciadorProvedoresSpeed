@@ -1,6 +1,105 @@
 from django import forms
+from django.contrib.auth import get_user_model
+from django.contrib.auth.models import Group
 
-from apps.escolas.models import Campo, Processo, Setor, SetorEscopo, SetorStatus
+from apps.escolas.models import Campo, CampoObrigatoriedadeTransicao, Processo, Setor, SetorEscopo, SetorStatus
+from apps.leads.models import AcessoSetor
+
+User = get_user_model()
+
+# PO-077/RN-058/ADR-030: os 6 grupos/modulos do menu principal hoje
+# existentes (`ops/setup_speed.py`), com o rotulo exibido em `core/base.html`.
+GRUPOS_MODULO = [
+    ('LastMile', 'Projeto'),
+    ('Setor', 'Setores'),
+    ('Parceiro', 'Parceiros'),
+    ('Backoffice', 'Backoffice'),
+    ('Gestao', 'Gestão'),
+    ('Administrador', 'Administrador'),
+]
+
+
+class AcessoForm(forms.Form):
+    """PO-077/RN-058/RN-059/ADR-030: concede/revoga, para um usuario
+    selecionado, pertencimento aos 6 grupos/modulos do menu e Setores
+    individuais (`AcessoSetor`, RN-055), em um formulario so."""
+
+    usuario_id = forms.IntegerField(widget=forms.HiddenInput)
+    grupos = forms.MultipleChoiceField(choices=GRUPOS_MODULO, required=False)
+    confirmar_revogar_administrador = forms.BooleanField(
+        required=False,
+        label="Confirmo a revogação do módulo Administrador",
+    )
+    setores = forms.MultipleChoiceField(required=False)
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        nomes_setor = list(dict.fromkeys(
+            Setor.objects.order_by('nome').values_list('nome', flat=True)
+        ))
+        self.fields['setores'].choices = [(nome, nome) for nome in nomes_setor]
+
+    def clean_usuario_id(self):
+        usuario_id = self.cleaned_data['usuario_id']
+        if not User.objects.filter(pk=usuario_id).exists():
+            raise forms.ValidationError("Usuario nao encontrado.")
+        return usuario_id
+
+    def clean(self):
+        cleaned_data = super().clean()
+        usuario_id = cleaned_data.get('usuario_id')
+        grupos = cleaned_data.get('grupos') or []
+
+        # RN-058: revogar o modulo Administrador de qualquer usuario
+        # (inclusive o proprio usuario logado) exige confirmacao explicita.
+        if usuario_id and 'Administrador' not in grupos:
+            tinha_administrador = User.objects.filter(
+                pk=usuario_id, groups__name='Administrador'
+            ).exists()
+            if tinha_administrador and not cleaned_data.get('confirmar_revogar_administrador'):
+                raise forms.ValidationError(
+                    "Confirme a revogação do módulo Administrador antes de salvar "
+                    "(marque a caixa de confirmação abaixo)."
+                )
+        return cleaned_data
+
+    def save(self):
+        """Aplica as concessoes/revogacoes de grupo (modulo) e de Setor
+        individual (`AcessoSetor`). RN-059: conceder um Setor individual a
+        usuario que ainda nao pertence ao grupo `Setor` o inclui nesse
+        grupo automaticamente, na mesma acao."""
+        usuario = User.objects.get(pk=self.cleaned_data['usuario_id'])
+        grupos_selecionados = set(self.cleaned_data['grupos'])
+        setores_selecionados = set(self.cleaned_data['setores'])
+
+        setores_atuais = set(
+            AcessoSetor.objects.filter(usuario=usuario).values_list('setor_nome', flat=True)
+        )
+        setores_novos = setores_selecionados - setores_atuais
+        pertencia_ao_grupo_setor_antes = usuario.groups.filter(name='Setor').exists()
+
+        for nome_grupo, _rotulo in GRUPOS_MODULO:
+            grupo = Group.objects.get(name=nome_grupo)
+            pertence = usuario.groups.filter(pk=grupo.pk).exists()
+            deveria_pertencer = nome_grupo in grupos_selecionados
+            if deveria_pertencer and not pertence:
+                usuario.groups.add(grupo)
+            elif not deveria_pertencer and pertence:
+                usuario.groups.remove(grupo)
+
+        for nome in setores_novos:
+            AcessoSetor.objects.create(usuario=usuario, setor_nome=nome)
+        AcessoSetor.objects.filter(
+            usuario=usuario, setor_nome__in=setores_atuais - setores_selecionados
+        ).delete()
+
+        if setores_novos and not pertencia_ao_grupo_setor_antes:
+            # RN-059: concessao de Setor individual inclui automaticamente
+            # no grupo Setor, mesmo que o checkbox do modulo nao tenha sido
+            # marcado nesta mesma submissao.
+            usuario.groups.add(Group.objects.get(name='Setor'))
+
+        return usuario
 
 
 class ProcessoForm(forms.ModelForm):
@@ -156,6 +255,36 @@ class CampoForm(forms.ModelForm):
         if commit:
             campo.save()
         return campo
+
+
+class CampoObrigatoriedadeTransicaoForm(forms.ModelForm):
+    """PO-079/RN-061/ADR-031: regra de obrigatoriedade de um Campo
+    (RN-031) ao trocar para outro Setor. `setor_destino_nome` usa o mesmo
+    vocabulario ja cadastrado em `Setor.nome` (RN-025), oferecido como
+    lista — mesmo padrao ja usado em `CampoForm.setor_nome`. O Setor de
+    origem da regra e sempre o Setor dono do Campo (`campo.setor_nome`),
+    por isso nao entra como opcao de destino."""
+
+    setor_destino_nome = forms.ChoiceField(label="Setor de destino")
+
+    class Meta:
+        model = CampoObrigatoriedadeTransicao
+        fields = ['setor_destino_nome']
+
+    def __init__(self, *args, campo=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.campo = campo
+        nomes_setor = Setor.objects.order_by('nome').values_list('nome', flat=True)
+        nomes_destino = [
+            nome for nome in dict.fromkeys(nomes_setor) if not campo or nome != campo.setor_nome
+        ]
+        self.fields['setor_destino_nome'].choices = [(nome, nome) for nome in nomes_destino]
+
+    def clean_setor_destino_nome(self):
+        nome = self.cleaned_data['setor_destino_nome']
+        if self.campo and nome == self.campo.setor_nome:
+            raise forms.ValidationError("O Setor de destino não pode ser igual ao Setor dono do Campo.")
+        return nome
 
 
 class ExcelUploadForm(forms.Form):

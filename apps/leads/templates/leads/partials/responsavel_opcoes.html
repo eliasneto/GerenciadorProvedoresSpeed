@@ -1,0 +1,4 @@
+<option value="">Selecione</option>
+{% for usuario in responsavel_opcoes %}
+<option value="{{ usuario.pk }}">{{ usuario.get_full_name|default:usuario.username }}</option>
+{% endfor %}

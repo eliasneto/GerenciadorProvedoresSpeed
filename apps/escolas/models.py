@@ -185,6 +185,30 @@ class Escola(models.Model):
         (`referencia.parceiro`/`referencia.velocidade_ofertada`)."""
         return {"setor": "", "parceiro": "", "velocidade_ofertada": ""}
 
+    @property
+    def indicador_conectividade(self):
+        """RN-062: bolinha do grid de Enderecos Lastmile, derivada somente
+        da conclusao de RedeExterna (RE) e RedeInterna (RI) — Mapa Calor
+        nunca entra nesse calculo. "Concluida" e comparacao exata do nome
+        do Status (decisao do usuario; RN-025 mantem o catalogo como texto
+        livre por Setor, sem novo campo booleano). Texto comparado e
+        "Concluido" sem acento — mesma grafia usada em 100% do catalogo
+        real e nas migrations de seed do projeto (bug corrigido, RN-062).
+        RE/RI sem registro para a Escola contam como nao concluida (mesmo
+        acesso seguro via `getattr` ja usado em `apps/leads/views.py`)."""
+        def _concluida(rede):
+            status = getattr(rede, "status", None)
+            return bool(status and status.nome == "Concluido")
+
+        re_concluida = _concluida(getattr(self, "rede_externa", None))
+        ri_concluida = _concluida(getattr(self, "rede_interna", None))
+
+        if re_concluida and ri_concluida:
+            return {"cor": "verde", "rotulo": "Conectada"}
+        if re_concluida or ri_concluida:
+            return {"cor": "amarelo", "rotulo": "Parcialmente conectada"}
+        return {"cor": "vermelho", "rotulo": "Desconectada"}
+
 
 class RedeExterna(ProcessoRedeBase):
     """Processo de Rede Externa (RE) da escola (ADR-012, RN-023).
@@ -464,6 +488,46 @@ class Campo(models.Model):
 
     def __str__(self):
         return f"{self.nome} ({self.setor_nome})"
+
+
+class CampoObrigatoriedadeTransicao(models.Model):
+    """RN-061/ADR-031: regra de obrigatoriedade de um Campo (RN-031) ao
+    trocar de Setor. O Setor de origem da regra e sempre `campo.setor_nome`
+    (mesmo Setor dono que ja e o unico a editar o Campo, RN-032) — nao um
+    campo proprio, para nao divergir do dono real do Campo. Um mesmo Campo
+    pode ter varias regras, uma por Setor de destino (`setor_destino_nome`,
+    mesmo vocabulario de `Setor.nome`, RN-025). Enquanto o RE/RI/MapaCalor
+    (RN-023/RN-043) dono do valor estiver trocando do Setor dono do Campo
+    para `setor_destino_nome`, o `CampoValor` desse Campo precisa estar
+    preenchido, ou a troca e bloqueada (RN-061)."""
+
+    campo = models.ForeignKey(
+        Campo, verbose_name="Campo", on_delete=models.CASCADE, related_name="regras_obrigatoriedade",
+    )
+    setor_destino_nome = models.CharField("Setor de destino", max_length=120)
+    criado_em = models.DateTimeField("Criado em", auto_now_add=True)
+
+    class Meta:
+        verbose_name = "Obrigatoriedade de Campo por transição"
+        verbose_name_plural = "Obrigatoriedades de Campo por transição"
+        ordering = ["campo__setor_nome", "campo__nome", "setor_destino_nome"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["campo", "setor_destino_nome"], name="regra_obrigatoriedade_unica_por_campo_e_destino",
+            ),
+        ]
+
+    def clean(self):
+        super().clean()
+        if self.campo_id and self.campo.tipo == Campo.TIPO_CALCULADO:
+            raise ValidationError(
+                "Um Campo do tipo Calculado não pode ter regra de obrigatoriedade — nunca é preenchido manualmente."
+            )
+        if self.campo_id and self.setor_destino_nome == self.campo.setor_nome:
+            raise ValidationError("O Setor de destino não pode ser igual ao Setor dono do Campo.")
+
+    def __str__(self):
+        return f"{self.campo.nome}: obrigatório para {self.setor_destino_nome}"
 
 
 class SetorEscopo(models.Model):

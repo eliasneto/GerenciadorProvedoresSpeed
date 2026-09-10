@@ -159,6 +159,52 @@
             </form>
         </div>
 
+        {% if campo_em_edicao and campo_em_edicao.tipo != 'calculado' %}
+        <div class="bg-white p-8 rounded-[3rem] border border-gray-100 shadow-sm space-y-6">
+            <div>
+                <p class="text-[10px] font-black uppercase tracking-widest text-gray-400">Obrigatoriedade por transição • RN-061</p>
+                <h2 class="mt-1 text-lg font-black italic text-gray-900">Exigir "{{ campo_em_edicao.nome }}" preenchido ao enviar para</h2>
+                <p class="mt-1 text-[11px] text-gray-400 font-bold">Ao trocar do Setor "{{ campo_em_edicao.setor_nome }}" para um dos Setores abaixo, a troca fica bloqueada enquanto este campo estiver vazio.</p>
+                <p class="mt-2 text-[11px] text-amber-700 font-bold bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 inline-flex items-center gap-2">
+                    <i data-lucide="info" class="w-3.5 h-3.5 flex-shrink-0"></i>
+                    Cada Setor adicionado aqui é salvo na hora, pelo botão "Adicionar" abaixo — não depende do botão "Salvar alterações" do formulário acima.
+                </p>
+            </div>
+
+            <div class="flex flex-wrap gap-2">
+                {% for regra in regras_obrigatoriedade %}
+                <span class="inline-flex items-center gap-2 text-[10px] font-black uppercase bg-gray-100 text-gray-600 pl-3 pr-2 py-1.5 rounded-full">
+                    {{ regra.setor_destino_nome }}
+                    <form method="POST" action="{% url 'campo_obrigatoriedade_excluir' campo_pk=campo_em_edicao.pk regra_pk=regra.pk %}" onsubmit="return confirm('Remover a obrigatoriedade de \'{{ campo_em_edicao.nome|escapejs }}\' para o Setor \'{{ regra.setor_destino_nome|escapejs }}\'?');">
+                        {% csrf_token %}
+                        <button type="submit" class="flex items-center justify-center rounded-full p-1 -m-1 text-gray-400 hover:text-red-600 hover:bg-red-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-300 transition" aria-label="Remover obrigatoriedade para {{ regra.setor_destino_nome }}" title="Remover obrigatoriedade">
+                            <i data-lucide="x" class="w-3 h-3"></i>
+                        </button>
+                    </form>
+                </span>
+                {% empty %}
+                <span class="text-[11px] text-gray-400 font-bold italic">Nenhum Setor de destino torna este campo obrigatório ainda.</span>
+                {% endfor %}
+            </div>
+
+            <form method="POST" action="{% url 'campo_obrigatoriedade_criar' campo_pk=campo_em_edicao.pk %}" class="flex gap-3">
+                {% csrf_token %}
+                <select
+                    name="{{ regra_obrigatoriedade_form.setor_destino_nome.html_name }}"
+                    class="flex-grow p-3 bg-gray-50 border border-gray-100 rounded-xl text-sm font-semibold text-gray-800 outline-none focus:ring-2 focus:ring-ageis-yellow"
+                >
+                    <option value="">Selecione um Setor de destino</option>
+                    {% for valor, rotulo in regra_obrigatoriedade_form.setor_destino_nome.field.choices %}
+                    <option value="{{ valor }}">{{ rotulo }}</option>
+                    {% endfor %}
+                </select>
+                <button type="submit" class="px-4 py-3 bg-gray-100 text-gray-600 font-black uppercase text-[11px] rounded-xl hover:bg-gray-200 transition flex items-center gap-2">
+                    <i data-lucide="plus" class="w-4 h-4"></i> Adicionar
+                </button>
+            </form>
+        </div>
+        {% endif %}
+
         <div class="bg-white rounded-[2.5rem] border border-gray-100 shadow-sm overflow-hidden">
             <div class="px-8 py-6 border-b border-gray-100">
                 <p class="text-[10px] font-black uppercase tracking-widest text-gray-400">Cadastrados</p>
@@ -179,6 +225,9 @@
                         {% if campo.status_condicionante_nome %}
                         <p class="text-[11px] text-gray-400 font-bold mt-1">Só aparece no Status "{{ campo.status_condicionante_nome }}"</p>
                         {% endif %}
+                        {% if campo.total_regras %}
+                        <p class="text-[11px] text-gray-400 font-bold mt-1">Obrigatório para enviar a: {% for regra in campo.regras_obrigatoriedade.all %}{{ regra.setor_destino_nome }}{% if not forloop.last %}, {% endif %}{% endfor %}</p>
+                        {% endif %}
                     </div>
                     <div class="flex items-center gap-2 flex-shrink-0">
                         <span class="text-[10px] font-black uppercase bg-gray-100 text-gray-600 px-3 py-1.5 rounded-full">{{ campo.get_tipo_display }}</span>
@@ -191,7 +240,7 @@
                         >
                             <i data-lucide="pencil" class="w-3.5 h-3.5"></i>
                         </a>
-                        <form method="POST" action="{% url 'campo_excluir' pk=campo.pk %}" onsubmit="return confirm('Excluir o campo \'{{ campo.nome|escapejs }}\'? {{ campo.total_valores }} valor(es) preenchido(s) para este campo serão perdidos.');">
+                        <form method="POST" action="{% url 'campo_excluir' pk=campo.pk %}" onsubmit="return confirm('Excluir o campo \'{{ campo.nome|escapejs }}\'? {{ campo.total_valores }} valor(es) preenchido(s){% if campo.total_regras %} e {{ campo.total_regras }} regra(s) de obrigatoriedade{% endif %} para este campo serão perdidos.');">
                             {% csrf_token %}
                             <button
                                 type="submit"

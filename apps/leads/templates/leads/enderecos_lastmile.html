@@ -30,39 +30,108 @@
                 <p class="text-[10px] font-black text-gray-500 uppercase leading-none mb-1">Total de Escolas</p>
                 <p class="text-xl font-black italic text-ageis-yellow">{{ total_enderecos }}</p>
             </div>
+            {% if setor_atual %}
+            <div class="bg-ageis-black px-6 py-3 rounded-2xl shadow-lg text-white flex items-center gap-5">
+                <div>
+                    <p class="text-[10px] font-black text-gray-500 uppercase leading-none mb-1">RE</p>
+                    <p class="text-xl font-black italic text-ageis-yellow">{{ total_rede_externa }}</p>
+                </div>
+                <div class="w-px self-stretch bg-gray-700"></div>
+                <div>
+                    <p class="text-[10px] font-black text-gray-500 uppercase leading-none mb-1">RI</p>
+                    <p class="text-xl font-black italic text-ageis-yellow">{{ total_rede_interna }}</p>
+                </div>
+            </div>
+            {% endif %}
         </div>
     </div>
 
-    <form method="GET" class="bg-white p-4 rounded-[2rem] border border-gray-100 shadow-sm mb-8 flex flex-col lg:flex-row gap-4 items-center">
-        <div class="relative flex-grow w-full">
+    <form method="GET" class="bg-white p-4 rounded-[2rem] border border-gray-100 shadow-sm mb-8 flex flex-col lg:flex-row lg:flex-wrap gap-3 lg:items-center">
+        <div class="relative w-full lg:flex-1 lg:min-w-[12rem]">
             <i data-lucide="search" class="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-300"></i>
             <input type="text" name="q" value="{{ q }}" placeholder="Buscar por nome, INEP, município, UF ou chave..."
                    class="w-full pl-12 pr-4 py-4 bg-gray-50 border-none rounded-2xl outline-none focus:ring-2 focus:ring-ageis-yellow transition-all font-bold text-xs text-gray-800 uppercase">
         </div>
 
         <input type="text" name="cidade" value="{{ cidade }}" placeholder="Município"
-               class="w-full lg:w-56 px-4 py-4 bg-gray-50 border-none rounded-2xl outline-none focus:ring-2 focus:ring-ageis-yellow transition-all font-bold text-xs text-gray-800 uppercase">
+               class="w-full lg:w-36 px-4 py-4 bg-gray-50 border-none rounded-2xl outline-none focus:ring-2 focus:ring-ageis-yellow transition-all font-bold text-xs text-gray-800 uppercase">
 
         <input type="text" name="estado" value="{{ estado }}" placeholder="UF"
-               class="w-full lg:w-28 px-4 py-4 bg-gray-50 border-none rounded-2xl outline-none focus:ring-2 focus:ring-ageis-yellow transition-all font-bold text-xs text-gray-800 uppercase">
+               class="w-full lg:w-20 px-4 py-4 bg-gray-50 border-none rounded-2xl outline-none focus:ring-2 focus:ring-ageis-yellow transition-all font-bold text-xs text-gray-800 uppercase">
 
-        <div class="relative w-full lg:w-56">
-            <i data-lucide="arrow-up-down" class="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400"></i>
-            <select name="sort" class="w-full pl-10 pr-8 py-4 bg-gray-50 border-none rounded-2xl outline-none focus:ring-2 focus:ring-ageis-yellow transition-all cursor-pointer font-black text-xs uppercase tracking-widest text-gray-600 appearance-none">
-                <option value="nome" {% if sort == 'nome' %}selected{% endif %}>Nome da Escola</option>
-                <option value="cidade" {% if sort == 'cidade' %}selected{% endif %}>Município</option>
-                <option value="uf" {% if sort == 'uf' %}selected{% endif %}>UF</option>
-                <option value="inep" {% if sort == 'inep' %}selected{% endif %}>INEP</option>
-            </select>
-            <i data-lucide="chevron-down" class="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none"></i>
+        {% if not setor_atual %}
+        {# RN-067: filtro de cor do indicador de conectividade — exclusivo do grid global, nao aparece na Tela de Setor #}
+        <div class="relative w-full lg:w-44" data-dropdown-multiselect>
+            <button type="button" data-dropdown-toggle
+                    class="w-full flex items-center justify-between gap-2 px-4 py-4 bg-gray-50 border-none rounded-2xl outline-none focus:ring-2 focus:ring-ageis-yellow transition-all cursor-pointer font-bold text-xs uppercase">
+                <span data-dropdown-label class="truncate text-gray-400">Conectividade</span>
+                <i data-lucide="chevron-down" class="w-4 h-4 text-gray-400 shrink-0" data-dropdown-chevron></i>
+            </button>
+            <div data-dropdown-panel class="hidden absolute left-0 top-full z-20 mt-2 w-full min-w-[14rem] bg-white border border-gray-100 rounded-2xl shadow-lg p-2">
+                <label class="flex items-center gap-2 px-2 py-2 rounded-xl hover:bg-gray-50 cursor-pointer">
+                    <input type="checkbox" name="cor" value="verde" data-rotulo="Conectada" {% if 'verde' in cores_conectividade_selecionadas %}checked{% endif %} class="w-4 h-4 rounded border-gray-300 text-ageis-yellow focus:ring-ageis-yellow">
+                    <span class="w-2.5 h-2.5 rounded-full bg-green-500 shrink-0"></span>
+                    <span class="text-xs font-bold text-gray-700 uppercase">Conectada</span>
+                </label>
+                <label class="flex items-center gap-2 px-2 py-2 rounded-xl hover:bg-gray-50 cursor-pointer">
+                    <input type="checkbox" name="cor" value="amarelo" data-rotulo="Parcialmente conectada" {% if 'amarelo' in cores_conectividade_selecionadas %}checked{% endif %} class="w-4 h-4 rounded border-gray-300 text-ageis-yellow focus:ring-ageis-yellow">
+                    <span class="w-2.5 h-2.5 rounded-full bg-yellow-500 shrink-0"></span>
+                    <span class="text-xs font-bold text-gray-700 uppercase">Parcialmente conectada</span>
+                </label>
+                <label class="flex items-center gap-2 px-2 py-2 rounded-xl hover:bg-gray-50 cursor-pointer">
+                    <input type="checkbox" name="cor" value="vermelho" data-rotulo="Desconectada" {% if 'vermelho' in cores_conectividade_selecionadas %}checked{% endif %} class="w-4 h-4 rounded border-gray-300 text-ageis-yellow focus:ring-ageis-yellow">
+                    <span class="w-2.5 h-2.5 rounded-full bg-red-500 shrink-0"></span>
+                    <span class="text-xs font-bold text-gray-700 uppercase">Desconectada</span>
+                </label>
+            </div>
         </div>
+        {% endif %}
+
+        {% if setor_atual %}
+        {# RN-066: filtros exclusivos da Tela de Setor — nao aparecem no grid global de Endereços #}
+        <div class="relative w-full lg:w-40" data-dropdown-multiselect>
+            <button type="button" data-dropdown-toggle
+                    class="w-full flex items-center justify-between gap-2 px-4 py-4 bg-gray-50 border-none rounded-2xl outline-none focus:ring-2 focus:ring-ageis-yellow transition-all cursor-pointer font-bold text-xs uppercase">
+                <span data-dropdown-label class="truncate text-gray-400">Subatividade</span>
+                <i data-lucide="chevron-down" class="w-4 h-4 text-gray-400 shrink-0" data-dropdown-chevron></i>
+            </button>
+            <div data-dropdown-panel class="hidden absolute left-0 top-full z-20 mt-2 w-full min-w-[11rem] bg-white border border-gray-100 rounded-2xl shadow-lg p-2">
+                <label class="flex items-center gap-2 px-2 py-2 rounded-xl hover:bg-gray-50 cursor-pointer">
+                    <input type="checkbox" name="tipo" value="re" data-rotulo="RE" {% if 're' in tipos_subatividade_selecionados %}checked{% endif %} class="w-4 h-4 rounded border-gray-300 text-ageis-yellow focus:ring-ageis-yellow">
+                    <span class="text-xs font-bold text-gray-700 uppercase">RE</span>
+                </label>
+                <label class="flex items-center gap-2 px-2 py-2 rounded-xl hover:bg-gray-50 cursor-pointer">
+                    <input type="checkbox" name="tipo" value="ri" data-rotulo="RI" {% if 'ri' in tipos_subatividade_selecionados %}checked{% endif %} class="w-4 h-4 rounded border-gray-300 text-ageis-yellow focus:ring-ageis-yellow">
+                    <span class="text-xs font-bold text-gray-700 uppercase">RI</span>
+                </label>
+                <label class="flex items-center gap-2 px-2 py-2 rounded-xl hover:bg-gray-50 cursor-pointer">
+                    <input type="checkbox" name="tipo" value="mc" data-rotulo="Mapa Calor" {% if 'mc' in tipos_subatividade_selecionados %}checked{% endif %} class="w-4 h-4 rounded border-gray-300 text-ageis-yellow focus:ring-ageis-yellow">
+                    <span class="text-xs font-bold text-gray-700 uppercase">Mapa Calor</span>
+                </label>
+            </div>
+        </div>
+
+        <select name="responsavel" data-select-placeholder class="w-full lg:w-40 px-4 py-4 bg-gray-50 border-none rounded-2xl outline-none focus:ring-2 focus:ring-ageis-yellow transition-all cursor-pointer font-bold text-xs text-gray-400 uppercase">
+            <option value="">Responsável</option>
+            {% for usuario in responsavel_opcoes_filtro %}
+            <option value="{{ usuario.pk }}" {% if responsavel_filtro_id == usuario.pk %}selected{% endif %}>{{ usuario.get_full_name|default:usuario.username }}</option>
+            {% endfor %}
+        </select>
+
+        <select name="status" data-select-placeholder class="w-full lg:w-36 px-4 py-4 bg-gray-50 border-none rounded-2xl outline-none focus:ring-2 focus:ring-ageis-yellow transition-all cursor-pointer font-bold text-xs text-gray-400 uppercase">
+            <option value="">Status</option>
+            {% for status_opcao in status_opcoes_filtro %}
+            <option value="{{ status_opcao }}" {% if status_filtro_nome == status_opcao %}selected{% endif %}>{{ status_opcao }}</option>
+            {% endfor %}
+        </select>
+        {% endif %}
 
         <div class="flex gap-2 w-full lg:w-auto">
             <button type="submit" class="px-6 py-4 bg-ageis-black text-ageis-yellow font-black uppercase italic text-xs rounded-2xl hover:bg-gray-800 transition shadow-lg flex items-center gap-2 w-full lg:w-auto justify-center">
                 Filtrar
             </button>
 
-            {% if q or cidade or estado or sort != 'nome' %}
+            {% if q or cidade or estado or tipos_subatividade_selecionados or responsavel_filtro_id or status_filtro_nome or cores_conectividade_selecionadas %}
             <a href="{% if setor_atual %}{% url 'setor_detail' nome=setor_atual %}{% else %}{% url 'enderecos_lastmile' %}{% endif %}" class="px-4 py-4 bg-gray-100 text-gray-400 rounded-2xl hover:bg-red-50 hover:text-red-500 transition flex items-center justify-center" title="Limpar filtros">
                 <i data-lucide="x" class="w-5 h-5"></i>
             </a>
@@ -71,7 +140,16 @@
     </form>
 
     <div class="bg-white rounded-[2.5rem] border border-gray-100 shadow-sm overflow-hidden flex flex-col">
-        <div class="overflow-x-auto">
+        {% comment %}
+        Correcao de rolagem horizontal fantasma (pos PO-086): o wrapper ja
+        clipa e rola a tabela internamente (overflow-x-auto), mas sem
+        "contain: layout" o Chromium deixa a largura interna da tabela
+        (maior que a tela em mobile/tablet) vazar para o scrollWidth do
+        documento, criando rolagem horizontal do body mesmo com a tabela
+        corretamente contida no seu proprio scroll. "contain-layout" isola
+        esse calculo de layout sem alterar o scroll interno da tabela.
+        {% endcomment %}
+        <div class="overflow-x-auto contain-layout">
             <table class="min-w-full text-left border-collapse">
                 <thead>
                     <tr class="text-[10px] font-black uppercase text-gray-500 bg-gray-100 border-b border-gray-300 divide-x divide-gray-300">
@@ -80,7 +158,7 @@
                         <th class="px-4 py-1">Estado</th>
                         <th class="px-4 py-1">Município</th>
                         <th class="px-4 py-1">Endereço</th>
-                        <th class="px-4 py-1">Status</th>
+                        <th class="px-4 py-1" title="Verde = RE e RI concluídas · Amarelo = uma das duas concluída · Vermelho = nenhuma concluída">Status</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-gray-300">
@@ -113,7 +191,10 @@
 
                         <td class="px-4 py-1">
                             <div class="flex items-center justify-between gap-2">
-                                <span class="font-black text-gray-800 text-[11px] uppercase">{{ escola.status_escola|default:"--" }}</span>
+                                <span class="inline-flex items-center" title="{{ escola.indicador_conectividade.rotulo }}">
+                                    <span class="w-2.5 h-2.5 rounded-full shrink-0 {% if escola.indicador_conectividade.cor == 'verde' %}bg-green-500{% elif escola.indicador_conectividade.cor == 'amarelo' %}bg-yellow-500{% else %}bg-red-500{% endif %}"></span>
+                                    <span class="sr-only">{{ escola.indicador_conectividade.rotulo }}</span>
+                                </span>
                                 <button type="button" onclick="event.stopPropagation(); window.abrirCamposEscola({{ escola.pk }});"
                                         class="p-1.5 text-gray-400 hover:text-gray-800 hover:bg-gray-100 rounded-lg transition shrink-0" title="Campos da Escola">
                                     <i data-lucide="list-plus" class="w-4 h-4"></i>
@@ -126,13 +207,13 @@
                         </td>
                     </tr>
                     {% if not setor_atual or escola.rede_externa.setor.nome == setor_atual %}
-                    {% include "leads/partials/escola_rede_row.html" with tipo="re" rede=escola.rede_externa processo_padrao=processo_re_padrao referencia=escola.referencia_rede_externa %}
+                    {% include "leads/partials/escola_rede_row.html" with tipo="re" rede=escola.rede_externa processo_padrao=processo_re_padrao referencia=escola.referencia_rede_externa responsavel_opcoes=escola.responsavel_opcoes_re %}
                     {% endif %}
                     {% if not setor_atual or escola.rede_interna.setor.nome == setor_atual %}
-                    {% include "leads/partials/escola_rede_row.html" with tipo="ri" rede=escola.rede_interna processo_padrao=processo_ri_padrao referencia=escola.referencia_rede_interna %}
+                    {% include "leads/partials/escola_rede_row.html" with tipo="ri" rede=escola.rede_interna processo_padrao=processo_ri_padrao referencia=escola.referencia_rede_interna responsavel_opcoes=escola.responsavel_opcoes_ri %}
                     {% endif %}
                     {% if not setor_atual or escola.mapa_calor.setor.nome == setor_atual %}
-                    {% include "leads/partials/escola_rede_row.html" with tipo="mc" rede=escola.mapa_calor processo_padrao=processo_mc_padrao referencia=escola.referencia_mapa_calor %}
+                    {% include "leads/partials/escola_rede_row.html" with tipo="mc" rede=escola.mapa_calor processo_padrao=processo_mc_padrao referencia=escola.referencia_mapa_calor responsavel_opcoes=escola.responsavel_opcoes_mc %}
                     {% endif %}
                     {% empty %}
                     <tr>
@@ -160,12 +241,12 @@
             </span>
             <div class="flex gap-2">
                 {% if page_obj.has_previous %}
-                    <a href="?page={{ page_obj.previous_page_number }}{% if q %}&q={{ q }}{% endif %}{% if cidade %}&cidade={{ cidade }}{% endif %}{% if estado %}&estado={{ estado }}{% endif %}{% if sort %}&sort={{ sort }}{% endif %}" class="p-2.5 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 transition shadow-sm text-gray-600">
+                    <a href="?page={{ page_obj.previous_page_number }}{% if q %}&q={{ q }}{% endif %}{% if cidade %}&cidade={{ cidade }}{% endif %}{% if estado %}&estado={{ estado }}{% endif %}{% for tipo in tipos_subatividade_selecionados %}&tipo={{ tipo }}{% endfor %}{% if responsavel_filtro_id %}&responsavel={{ responsavel_filtro_id }}{% endif %}{% if status_filtro_nome %}&status={{ status_filtro_nome|urlencode }}{% endif %}{% for cor in cores_conectividade_selecionadas %}&cor={{ cor }}{% endfor %}" class="p-2.5 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 transition shadow-sm text-gray-600">
                         <i data-lucide="chevron-left" class="w-5 h-5"></i>
                     </a>
                 {% endif %}
                 {% if page_obj.has_next %}
-                    <a href="?page={{ page_obj.next_page_number }}{% if q %}&q={{ q }}{% endif %}{% if cidade %}&cidade={{ cidade }}{% endif %}{% if estado %}&estado={{ estado }}{% endif %}{% if sort %}&sort={{ sort }}{% endif %}" class="p-2.5 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 transition shadow-sm text-gray-600">
+                    <a href="?page={{ page_obj.next_page_number }}{% if q %}&q={{ q }}{% endif %}{% if cidade %}&cidade={{ cidade }}{% endif %}{% if estado %}&estado={{ estado }}{% endif %}{% for tipo in tipos_subatividade_selecionados %}&tipo={{ tipo }}{% endfor %}{% if responsavel_filtro_id %}&responsavel={{ responsavel_filtro_id }}{% endif %}{% if status_filtro_nome %}&status={{ status_filtro_nome|urlencode }}{% endif %}{% for cor in cores_conectividade_selecionadas %}&cor={{ cor }}{% endfor %}" class="p-2.5 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 transition shadow-sm text-gray-600">
                         <i data-lucide="chevron-right" class="w-5 h-5"></i>
                     </a>
                 {% endif %}
@@ -206,6 +287,63 @@
 
 {% block extra_js %}
 <script>
+// PO-086/RN-066: dropdown fechado por padrao do filtro "Subatividade" (RE/RI/
+// Mapa Calor) — abre ao clicar no botao, fecha ao clicar fora. Os checkboxes
+// mantem o mesmo atributo tipo enviado hoje no GET (sem mudanca em views/services).
+document.querySelectorAll('[data-dropdown-multiselect]').forEach(function (dropdown) {
+    var toggle = dropdown.querySelector('[data-dropdown-toggle]');
+    var painel = dropdown.querySelector('[data-dropdown-panel]');
+    var rotulo = dropdown.querySelector('[data-dropdown-label]');
+    var rotuloPadrao = rotulo.textContent;
+    var checkboxes = dropdown.querySelectorAll('input[type="checkbox"]');
+
+    function atualizarRotulo() {
+        var selecionados = [];
+        checkboxes.forEach(function (checkbox) {
+            if (checkbox.checked) selecionados.push(checkbox.dataset.rotulo || checkbox.value);
+        });
+        rotulo.textContent = selecionados.length ? selecionados.join(', ') : rotuloPadrao;
+        // Ajuste visual: sem selecao, o rotulo fica na mesma cor "apagada" do
+        // placeholder dos demais campos; com selecao, escurece como um campo
+        // preenchido.
+        rotulo.classList.toggle('text-gray-400', !selecionados.length);
+        rotulo.classList.toggle('text-gray-800', !!selecionados.length);
+    }
+
+    toggle.addEventListener('click', function (evento) {
+        evento.stopPropagation();
+        var estavaAberto = !painel.classList.contains('hidden');
+        document.querySelectorAll('[data-dropdown-panel]').forEach(function (outroPainel) {
+            outroPainel.classList.add('hidden');
+        });
+        painel.classList.toggle('hidden', estavaAberto);
+    });
+
+    painel.addEventListener('click', function (evento) { evento.stopPropagation(); });
+    checkboxes.forEach(function (checkbox) { checkbox.addEventListener('change', atualizarRotulo); });
+
+    atualizarRotulo();
+});
+
+// Ajuste visual: os selects nativos de Responsavel e Status comecam com a
+// mesma cor "apagada" do placeholder usado nos demais campos do filtro, e
+// escurecem somente quando o usuario escolhe uma opcao real — mesma logica
+// de cor aplicada acima no rotulo de Subatividade.
+document.querySelectorAll('select[data-select-placeholder]').forEach(function (select) {
+    function atualizarCorSelect() {
+        select.classList.toggle('text-gray-400', !select.value);
+        select.classList.toggle('text-gray-800', !!select.value);
+    }
+    select.addEventListener('change', atualizarCorSelect);
+    atualizarCorSelect();
+});
+
+document.addEventListener('click', function () {
+    document.querySelectorAll('[data-dropdown-panel]').forEach(function (painel) {
+        painel.classList.add('hidden');
+    });
+});
+
 document.querySelectorAll('[data-escola-toggle]').forEach(function (linha) {
     linha.addEventListener('click', function () {
         var linhasRede = [];
@@ -231,8 +369,42 @@ function csrfTokenLastmile() {
     return campo ? campo.value : '';
 }
 
+// PO: erro/sucesso da linha de Rede (Setor/Status/Responsavel) sai da celula
+// estreita da tabela e vira toast no canto superior direito, reaproveitando
+// o mesmo container/estilo de "messages" do core/base.html.
+function exibirToastLastmile(texto, tipo) {
+    var container = document.querySelector('.messages-container');
+    if (!container || !texto) return;
+
+    var sucesso = tipo === 'success';
+    var toast = document.createElement('div');
+    toast.className = 'px-6 py-4 rounded-2xl shadow-2xl border flex items-center gap-3 min-w-[300px] animate-bounce-in ' +
+        (sucesso ? 'bg-green-50 border-green-100 text-green-800' : 'bg-red-50 border-red-100 text-red-800');
+
+    var icone = document.createElement('i');
+    icone.setAttribute('data-lucide', sucesso ? 'check-circle' : 'alert-circle');
+    icone.className = 'w-5 h-5';
+
+    var texto_el = document.createElement('span');
+    texto_el.className = 'text-xs font-bold uppercase tracking-tight';
+    texto_el.textContent = texto;
+
+    toast.appendChild(icone);
+    toast.appendChild(texto_el);
+    container.appendChild(toast);
+    if (window.lucide) lucide.createIcons();
+
+    setTimeout(function () {
+        toast.style.transition = 'opacity 0.6s ease, transform 0.6s ease';
+        toast.style.opacity = '0';
+        toast.style.transform = 'translateY(-20px)';
+        setTimeout(function () { toast.remove(); }, 600);
+    }, 5000);
+}
+
 var URL_ESCOLA_REDE_EDITAR = "{% url 'escola_rede_editar' escola_pk=0 tipo='TIPO' %}";
 var URL_STATUS_OPCOES = "{% url 'setor_status_opcoes' %}";
+var URL_RESPONSAVEL_OPCOES = "{% url 'setor_responsavel_opcoes' %}";
 var SETOR_ATUAL = "{{ setor_atual|default:''|escapejs }}";
 
 function removerLinhaQueSaiuDoSetor(linhaRede) {
@@ -258,11 +430,32 @@ function removerLinhaQueSaiuDoSetor(linhaRede) {
 window.carregarStatusRede = function (selectSetor, tipo, escolaId) {
     var selectStatus = document.getElementById('status-select-' + tipo + '-' + escolaId);
     var selectResponsavel = document.getElementById('responsavel-select-' + tipo + '-' + escolaId);
-    if (!selectStatus) return; // RN-035: grid global nao tem select de Status
 
     var setorId = selectSetor.value;
     var opcaoSelecionada = selectSetor.options[selectSetor.selectedIndex];
     var setorNome = opcaoSelecionada ? (opcaoSelecionada.dataset.nome || '') : '';
+    // RN-033/RN-052: enviando a subatividade para outro Setor (diferente do
+    // Setor atual da tela), o Status trava e vira "Aguardando" ao salvar, e
+    // o Responsavel e zerado no mesmo momento — decidido pelo Setor de
+    // destino, nao por quem esta enviando.
+    var movendoParaOutroSetor = !!(SETOR_ATUAL && setorId && setorNome !== SETOR_ATUAL);
+
+    // RN-060: as opcoes de Responsavel dependem do Setor selecionado —
+    // atualizadas sempre que o Setor muda, tanto no grid global (RN-035,
+    // que nao tem select de Status) quanto na Tela de Setor.
+    if (selectResponsavel) {
+        if (movendoParaOutroSetor) {
+            selectResponsavel.disabled = true;
+            selectResponsavel.value = '';
+        } else {
+            selectResponsavel.disabled = false;
+            fetch(URL_RESPONSAVEL_OPCOES + '?setor=' + setorId)
+                .then(function (resp) { return resp.text(); })
+                .then(function (html) { selectResponsavel.innerHTML = html; });
+        }
+    }
+
+    if (!selectStatus) return; // RN-035: grid global nao tem select de Status
 
     if (!setorId) {
         selectStatus.disabled = false;
@@ -270,22 +463,13 @@ window.carregarStatusRede = function (selectSetor, tipo, escolaId) {
         return;
     }
 
-    // RN-033/RN-052: enviando a subatividade para outro Setor (diferente do
-    // Setor atual da tela), o Status trava e vira "Aguardando" ao salvar, e
-    // o Responsavel e zerado no mesmo momento — decidido pelo Setor de
-    // destino, nao por quem esta enviando.
-    if (SETOR_ATUAL && setorNome !== SETOR_ATUAL) {
+    if (movendoParaOutroSetor) {
         selectStatus.disabled = true;
         selectStatus.innerHTML = '<option value="">Aguardando (automático ao enviar)</option>';
-        if (selectResponsavel) {
-            selectResponsavel.disabled = true;
-            selectResponsavel.value = '';
-        }
         return;
     }
 
     selectStatus.disabled = false;
-    if (selectResponsavel) selectResponsavel.disabled = false;
     fetch(URL_STATUS_OPCOES + '?setor=' + setorId)
         .then(function (resp) { return resp.text(); })
         .then(function (html) { selectStatus.innerHTML = html; });
@@ -318,6 +502,9 @@ window.salvarRede = function (botao, tipo, escolaId) {
             var wrapper = document.createElement('tbody');
             wrapper.innerHTML = html.trim();
             var novaLinha = wrapper.firstElementChild;
+
+            if (novaLinha.dataset.erro) exibirToastLastmile(novaLinha.dataset.erro, 'error');
+            if (novaLinha.dataset.sucesso) exibirToastLastmile(novaLinha.dataset.sucesso, 'success');
 
             if (novaLinha.dataset.pertenceAoSetor === 'nao') {
                 removerLinhaQueSaiuDoSetor(linhaAtual);

@@ -93,7 +93,7 @@
             <div class="flex items-center gap-1.5 text-[9px] font-bold text-gray-400 uppercase mt-1.5 pt-1.5 border-t border-gray-200">
                 <span>{{ item.data|date:"d/m/Y H:i" }}</span>
                 <span>·</span>
-                <span class="truncate">{{ item.usuario.email|default:"Sistema Speed" }}</span>
+                <span class="truncate">{% if item.usuario %}{{ item.usuario.get_full_name|default:item.usuario.username }}{% else %}Sistema Speed{% endif %}</span>
                 {% if item.rotulo %}
                 <span>·</span>
                 <span>{{ item.setor_nome|default:"—" }}</span>

@@ -320,6 +320,25 @@ class TimelineGlobalViewTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Registro de hoje")
 
+    def test_exibe_nome_do_autor_em_vez_do_email(self):
+        """PO-080: card do historico mostra o nome da pessoa, sem o dominio
+        do e-mail/AD (`item.usuario.email` trocado por
+        `get_full_name|default:username`)."""
+        autor = get_user_model().objects.create_user(
+            username="autor.timeline", email="autor.timeline@howbe.local", password="senha-forte-123",
+            first_name="Autor", last_name="Timeline",
+        )
+        RegistroHistorico.objects.create(
+            tipo="comentario", acao="Comentario do autor", usuario=autor,
+            content_type=self.content_type, object_id=self.parceiro.id,
+        )
+        self.client.force_login(self.usuario)
+
+        response = self.client.get(self.url)
+
+        self.assertContains(response, "Autor Timeline")
+        self.assertNotContains(response, "autor.timeline@howbe.local")
+
     def test_post_cria_comentario_e_redireciona(self):
         self.client.force_login(self.usuario)
 

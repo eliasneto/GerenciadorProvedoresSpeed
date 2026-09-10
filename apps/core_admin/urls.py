@@ -31,8 +31,11 @@ urlpatterns = [
     path('campos/', views.campos_list, name='campos_list'),
     path('campos/<int:pk>/editar/', views.campo_editar, name='campo_editar'),
     path('campos/<int:pk>/excluir/', views.campo_excluir, name='campo_excluir'),
+    path('campos/<int:campo_pk>/obrigatoriedade/', views.campo_obrigatoriedade_criar, name='campo_obrigatoriedade_criar'),
+    path('campos/<int:campo_pk>/obrigatoriedade/<int:regra_pk>/excluir/', views.campo_obrigatoriedade_excluir, name='campo_obrigatoriedade_excluir'),
     path('setor-escopo/', views.setor_escopo_list, name='setor_escopo_list'),
     path('setor-escopo/<int:pk>/editar/', views.setor_escopo_editar, name='setor_escopo_editar'),
+    path('acesso/', views.acesso_list, name='acesso_list'),
     path('enderecos/<int:escola_pk>/rede/<str:tipo>/email/', escola_email_views.escola_rede_enviar_email, name='escola_rede_enviar_email'),
     path('enderecos/<int:escola_pk>/email/', escola_email_views.escola_enviar_email, name='escola_enviar_email'),
 ]

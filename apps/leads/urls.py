@@ -35,6 +35,7 @@ urlpatterns = [
     path('enderecos/<int:escola_pk>/historico/', views.escola_historico, name='escola_historico'),
     path('enderecos/<int:escola_pk>/campos/', views.escola_campos, name='escola_campos'),
     path('enderecos/status-opcoes/', views.setor_status_opcoes, name='setor_status_opcoes'),
+    path('enderecos/responsavel-opcoes/', views.setor_responsavel_opcoes, name='setor_responsavel_opcoes'),
     path('setores/', views.setores_list, name='setores_list'),
     path('setores/<str:nome>/', views.setor_detail, name='setor_detail'),
     path('integracoes/modelo/', views.download_modelo_google_view, name='download_modelo_google'),

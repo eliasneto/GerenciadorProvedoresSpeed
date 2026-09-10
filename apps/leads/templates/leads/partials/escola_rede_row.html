@@ -1,8 +1,6 @@
-<tr id="rede-{{ tipo }}-{{ escola.pk }}" class="hidden bg-amber-50/80 divide-x divide-amber-100" data-escola-rede-linha data-pertence-ao-setor="{% if pertence_ao_setor_atual == False %}nao{% else %}sim{% endif %}">
+<tr id="rede-{{ tipo }}-{{ escola.pk }}" class="hidden bg-amber-50/80 divide-x divide-amber-100" data-escola-rede-linha data-pertence-ao-setor="{% if pertence_ao_setor_atual == False %}nao{% else %}sim{% endif %}" data-erro="{{ erro|default:'' }}" data-sucesso="{{ sucesso|default:'' }}">
     <td class="px-4 py-1.5 align-top">
         <span class="text-[9px] font-black uppercase bg-ageis-black text-ageis-yellow px-2 py-0.5 rounded w-fit">{{ tipo|upper }}</span>
-        {% if erro %}<p class="text-[9px] font-bold text-red-600 mt-1">{{ erro }}</p>{% endif %}
-        {% if sucesso %}<p class="text-[9px] font-bold text-emerald-600 mt-1">{{ sucesso }}</p>{% endif %}
     </td>
     {% if setor_atual or not rede.setor_id %}
     <td class="px-4 py-1.5 align-top">
@@ -109,7 +107,7 @@
     <td class="px-4 py-1.5 align-top min-w-[190px]">
         <div class="flex items-center justify-between gap-2">
             <a href="{% url 'setor_detail' nome=rede.setor.nome %}" class="text-[10px] font-bold text-gray-500 hover:text-gray-800 underline">
-                Está no Setor {{ rede.setor.nome }}
+                Ver Setor
             </a>
             <div class="flex items-center gap-1 shrink-0">
                 <button type="button" onclick="window.abrirCamposRede('{{ tipo }}', {{ escola.pk }});"

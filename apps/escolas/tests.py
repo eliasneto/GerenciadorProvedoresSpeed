@@ -12,8 +12,8 @@ from django.db.models import ProtectedError
 from django.test import TestCase
 
 from apps.escolas.models import (
-    Campo, Escola, MapaCalor, Processo, RedeExterna, RedeInterna, Setor, SetorEscopo, SetorStatus,
-    TargetRedeExterna,
+    Campo, CampoObrigatoriedadeTransicao, Escola, MapaCalor, Processo, RedeExterna, RedeInterna, Setor, SetorEscopo,
+    SetorStatus, TargetRedeExterna,
 )
 from apps.escolas.services import extrair_endereco_estruturado, sincronizar_escolas
 from apps.partners.models import Partner
@@ -302,6 +302,74 @@ class RedeExternaRedeInternaTests(TestCase):
 
         self.assertEqual(RedeExterna.objects.count(), 0)
         self.assertEqual(RedeInterna.objects.count(), 0)
+
+
+class IndicadorConectividadeTests(TestCase):
+    """RN-062: bolinha do grid de Enderecos Lastmile, derivada so de RE/RI
+    ("Concluido", sem acento, no nome do Status — mesma grafia do catalogo
+    real, bug corrigido) — Mapa Calor nunca entra no calculo."""
+
+    def setUp(self):
+        self.escola = Escola.objects.create(jira_key="EACE-1", nome="Escola A")
+        self.processo = Processo.objects.create(nome="Processo QA A")
+        self.setor = Setor.objects.create(processo=self.processo, nome="Setor 1")
+        self.status_concluido = SetorStatus.objects.create(setor=self.setor, nome="Concluido")
+        self.status_andamento = SetorStatus.objects.create(setor=self.setor, nome="Em andamento")
+
+    def test_nao_reconhece_concluido_com_acento(self):
+        # RN-062 (bug corrigido em 2026-08-14): o catalogo real usa
+        # "Concluido" sem acento — a comparacao NAO deve reconhecer a
+        # grafia acentuada, para nao voltar a esconder o caso relatado.
+        # Setor separado: o MySQL do projeto usa colacao insensivel a
+        # acento, e o unique_together (setor, nome) rejeitaria "Concluido"
+        # e "Concluído" cadastrados no mesmo Setor.
+        outro_setor = Setor.objects.create(processo=self.processo, nome="Setor 2")
+        status_com_acento = SetorStatus.objects.create(setor=outro_setor, nome="Concluído")
+        RedeExterna.objects.create(escola=self.escola, setor=outro_setor, status=status_com_acento)
+        RedeInterna.objects.create(escola=self.escola, setor=outro_setor, status=status_com_acento)
+
+        self.assertEqual(self.escola.indicador_conectividade["cor"], "vermelho")
+
+    def test_verde_quando_re_e_ri_estao_concluidas(self):
+        RedeExterna.objects.create(escola=self.escola, setor=self.setor, status=self.status_concluido)
+        RedeInterna.objects.create(escola=self.escola, setor=self.setor, status=self.status_concluido)
+
+        self.assertEqual(self.escola.indicador_conectividade["cor"], "verde")
+
+    def test_amarelo_quando_so_re_esta_concluida(self):
+        RedeExterna.objects.create(escola=self.escola, setor=self.setor, status=self.status_concluido)
+        RedeInterna.objects.create(escola=self.escola, setor=self.setor, status=self.status_andamento)
+
+        self.assertEqual(self.escola.indicador_conectividade["cor"], "amarelo")
+
+    def test_amarelo_quando_so_ri_esta_concluida(self):
+        RedeExterna.objects.create(escola=self.escola, setor=self.setor, status=self.status_andamento)
+        RedeInterna.objects.create(escola=self.escola, setor=self.setor, status=self.status_concluido)
+
+        self.assertEqual(self.escola.indicador_conectividade["cor"], "amarelo")
+
+    def test_vermelho_quando_nenhuma_esta_concluida(self):
+        RedeExterna.objects.create(escola=self.escola, setor=self.setor, status=self.status_andamento)
+        RedeInterna.objects.create(escola=self.escola, setor=self.setor, status=self.status_andamento)
+
+        self.assertEqual(self.escola.indicador_conectividade["cor"], "vermelho")
+
+    def test_vermelho_quando_re_e_ri_ainda_nao_existem(self):
+        self.assertEqual(self.escola.indicador_conectividade["cor"], "vermelho")
+
+    def test_mapa_calor_concluido_nao_torna_a_escola_verde(self):
+        RedeExterna.objects.create(escola=self.escola, setor=self.setor, status=self.status_andamento)
+        RedeInterna.objects.create(escola=self.escola, setor=self.setor, status=self.status_andamento)
+        MapaCalor.objects.create(escola=self.escola, setor=self.setor, status=self.status_concluido)
+
+        self.assertEqual(self.escola.indicador_conectividade["cor"], "vermelho")
+
+    def test_mapa_calor_pendente_nao_impede_verde(self):
+        RedeExterna.objects.create(escola=self.escola, setor=self.setor, status=self.status_concluido)
+        RedeInterna.objects.create(escola=self.escola, setor=self.setor, status=self.status_concluido)
+        MapaCalor.objects.create(escola=self.escola, setor=self.setor, status=self.status_andamento)
+
+        self.assertEqual(self.escola.indicador_conectividade["cor"], "verde")
 
 
 class ProcessoRedeBaseResponsavelTests(TestCase):
@@ -906,3 +974,52 @@ class CampoCalculadoModelTests(TestCase):
 
         with self.assertRaises(ProtectedError):
             self.campo_data.delete()
+
+
+class CampoObrigatoriedadeTransicaoModelTests(TestCase):
+    """PO-079/RN-061/ADR-031: regra de obrigatoriedade de um Campo ao
+    trocar de Setor — o Setor de origem e sempre `campo.setor_nome`."""
+
+    def setUp(self):
+        self.campo = Campo.objects.create(nome="Numero do pedido", tipo=Campo.TIPO_TEXTO, setor_nome="Cotacao")
+
+    def test_regra_valida_passa_na_validacao(self):
+        regra = CampoObrigatoriedadeTransicao(campo=self.campo, setor_destino_nome="Suprimentos")
+
+        regra.full_clean()  # nao deve levantar ValidationError
+
+    def test_setor_destino_igual_ao_setor_dono_e_bloqueado(self):
+        regra = CampoObrigatoriedadeTransicao(campo=self.campo, setor_destino_nome="Cotacao")
+
+        with self.assertRaises(ValidationError):
+            regra.full_clean()
+
+    def test_campo_tipo_calculado_nao_pode_ter_regra(self):
+        campo_base = Campo.objects.create(nome="Data Base", tipo=Campo.TIPO_DATA, setor_nome="Cotacao")
+        campo_calculado = Campo.objects.create(
+            nome="Prazo Final", tipo=Campo.TIPO_CALCULADO, setor_nome="Cotacao",
+            campo_base=campo_base, horas_prazo=24,
+        )
+        regra = CampoObrigatoriedadeTransicao(campo=campo_calculado, setor_destino_nome="Suprimentos")
+
+        with self.assertRaises(ValidationError):
+            regra.full_clean()
+
+    def test_duas_regras_para_o_mesmo_destino_e_bloqueado_no_banco(self):
+        CampoObrigatoriedadeTransicao.objects.create(campo=self.campo, setor_destino_nome="Suprimentos")
+
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            CampoObrigatoriedadeTransicao.objects.create(campo=self.campo, setor_destino_nome="Suprimentos")
+
+    def test_mesmo_campo_pode_ter_regras_para_destinos_diferentes(self):
+        CampoObrigatoriedadeTransicao.objects.create(campo=self.campo, setor_destino_nome="Suprimentos")
+        CampoObrigatoriedadeTransicao.objects.create(campo=self.campo, setor_destino_nome="Compras")
+
+        self.assertEqual(self.campo.regras_obrigatoriedade.count(), 2)
+
+    def test_excluir_campo_exclui_regras_em_cascata(self):
+        CampoObrigatoriedadeTransicao.objects.create(campo=self.campo, setor_destino_nome="Suprimentos")
+
+        self.campo.delete()
+
+        self.assertEqual(CampoObrigatoriedadeTransicao.objects.count(), 0)

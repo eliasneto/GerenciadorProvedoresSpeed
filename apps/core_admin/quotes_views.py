@@ -41,6 +41,15 @@ logger = logging.getLogger(__name__)
 EMAIL_ATTACHMENT_TOTAL_LIMIT_BYTES = 10 * 1024 * 1024
 EMAIL_ATTACHMENT_TOTAL_LIMIT_MB = EMAIL_ATTACHMENT_TOTAL_LIMIT_BYTES // (1024 * 1024)
 
+# RN-064: falha tecnica do envio propriamente dito (backend SMTP) mostra
+# so esta mensagem ao usuario, tanto na tela quanto no RegistroHistorico de
+# falha — o erro completo continua indo para o log do servidor via
+# logger.exception, antes desta mensagem ser montada. Nao usar esta
+# constante para erro de validacao de entrada (remetente, e-mail, anexo):
+# esses continuam com a mensagem especifica, pois sao acionaveis pelo
+# usuario.
+MENSAGEM_ERRO_TECNICO_ENVIO_EMAIL = "Erro tecnico no envio do e-mail. Entre em contato com o administrador do sistema."
+
 
 def _split_email_values(raw_value):
     return [
@@ -313,7 +322,7 @@ def minhas_cotacoes_enviar_email(request):
                 f"Para: {to_raw or '--'}\n"
                 f"Cc: {cc_raw or '--'}\n"
                 f"Assunto informado: {subject or '--'}\n"
-                f"Erro: {exc}"
+                f"Erro: {MENSAGEM_ERRO_TECNICO_ENVIO_EMAIL}"
             ),
             usuario=request.user,
             content_type=ContentType.objects.get_for_model(Proposal),
@@ -321,5 +330,5 @@ def minhas_cotacoes_enviar_email(request):
         )
         return JsonResponse({
             'ok': False,
-            'message': f'Nao foi possivel enviar o e-mail: {exc}',
+            'message': MENSAGEM_ERRO_TECNICO_ENVIO_EMAIL,
         }, status=500)

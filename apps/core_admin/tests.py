@@ -28,8 +28,12 @@ from apps.core.automacoes_registry import (
 from apps.core.models import AutomacaoMenu, IntegrationAudit, RegistroHistorico, RestoreBackupAuditoria
 from apps.core_admin.models import AcessoBancoDados
 from apps.core_admin import services as core_admin_services
-from apps.escolas.models import Campo, CampoValor, Escola, MapaCalor, Processo, RedeExterna, RedeInterna, Setor, SetorEscopo, SetorStatus
-from apps.partners.models import Partner
+from apps.escolas.models import (
+    Campo, CampoObrigatoriedadeTransicao, CampoValor, Escola, MapaCalor, Processo, RedeExterna, RedeInterna, Setor,
+    SetorEscopo, SetorStatus,
+)
+from apps.leads.models import AcessoSetor
+from apps.partners.models import Partner, Proposal
 from apps.core_admin.services import _ler_dataframe_upload
 from apps.core_admin.views import (
     download_template_edicao_atendimento_ixc,
@@ -2052,6 +2056,101 @@ class CampoEditarExcluirViewTests(TestCase):
         self.assertFalse(CampoValor.objects.filter(pk=valor.pk).exists())
 
 
+class CampoObrigatoriedadeTransicaoViewTests(TestCase):
+    """PO-079/RN-061/ADR-031: regras de obrigatoriedade por transicao de
+    Setor, cadastradas dentro da tela "Campos" (edicao de um Campo)."""
+
+    def setUp(self):
+        self.admin = get_user_model().objects.create_user(
+            username="admin-campos-obrigatoriedade", password="senha-forte-123", is_superuser=True,
+        )
+        self.sem_permissao = get_user_model().objects.create_user(
+            username="sem-permissao-campos-obrigatoriedade", password="senha-forte-123",
+        )
+        processo = Processo.objects.create(nome="Processo QA Obrigatoriedade")
+        Setor.objects.create(processo=processo, nome="Cotacao QA")
+        Setor.objects.create(processo=processo, nome="Suprimentos QA")
+        self.campo = Campo.objects.create(nome="Numero do pedido", tipo=Campo.TIPO_TEXTO, setor_nome="Cotacao QA")
+        self.client.force_login(self.admin)
+
+    def test_form_de_regra_exclui_o_proprio_setor_dono_das_opcoes_de_destino(self):
+        response = self.client.get(reverse("campo_editar", args=[self.campo.pk]))
+
+        nomes_disponiveis = [nome for nome, _ in response.context["regra_obrigatoriedade_form"].fields["setor_destino_nome"].choices]
+        self.assertIn("Suprimentos QA", nomes_disponiveis)
+        self.assertNotIn("Cotacao QA", nomes_disponiveis)
+
+    def test_post_cria_regra_de_obrigatoriedade(self):
+        response = self.client.post(
+            reverse("campo_obrigatoriedade_criar", args=[self.campo.pk]),
+            {"setor_destino_nome": "Suprimentos QA"},
+        )
+
+        self.assertRedirects(response, reverse("campo_editar", args=[self.campo.pk]))
+        self.assertTrue(
+            CampoObrigatoriedadeTransicao.objects.filter(campo=self.campo, setor_destino_nome="Suprimentos QA").exists()
+        )
+
+    def test_post_cria_regra_para_o_proprio_setor_dono_e_rejeitado(self):
+        self.client.post(
+            reverse("campo_obrigatoriedade_criar", args=[self.campo.pk]),
+            {"setor_destino_nome": "Cotacao QA"},
+        )
+
+        self.assertEqual(CampoObrigatoriedadeTransicao.objects.count(), 0)
+
+    def test_post_cria_regra_duplicada_e_rejeitado(self):
+        CampoObrigatoriedadeTransicao.objects.create(campo=self.campo, setor_destino_nome="Suprimentos QA")
+
+        self.client.post(
+            reverse("campo_obrigatoriedade_criar", args=[self.campo.pk]),
+            {"setor_destino_nome": "Suprimentos QA"},
+        )
+
+        self.assertEqual(CampoObrigatoriedadeTransicao.objects.filter(setor_destino_nome="Suprimentos QA").count(), 1)
+
+    def test_post_cria_regra_para_campo_calculado_e_bloqueado(self):
+        campo_base = Campo.objects.create(nome="Data Base QA", tipo=Campo.TIPO_DATA, setor_nome="Cotacao QA")
+        campo_calculado = Campo.objects.create(
+            nome="Prazo Final QA", tipo=Campo.TIPO_CALCULADO, setor_nome="Cotacao QA",
+            campo_base=campo_base, horas_prazo=24,
+        )
+
+        self.client.post(
+            reverse("campo_obrigatoriedade_criar", args=[campo_calculado.pk]),
+            {"setor_destino_nome": "Suprimentos QA"},
+        )
+
+        self.assertEqual(CampoObrigatoriedadeTransicao.objects.count(), 0)
+
+    def test_post_exclui_regra(self):
+        regra = CampoObrigatoriedadeTransicao.objects.create(campo=self.campo, setor_destino_nome="Suprimentos QA")
+
+        response = self.client.post(reverse("campo_obrigatoriedade_excluir", args=[self.campo.pk, regra.pk]))
+
+        self.assertRedirects(response, reverse("campo_editar", args=[self.campo.pk]))
+        self.assertFalse(CampoObrigatoriedadeTransicao.objects.filter(pk=regra.pk).exists())
+
+    def test_usuario_sem_permissao_e_bloqueado_ao_criar_regra(self):
+        self.client.force_login(self.sem_permissao)
+
+        response = self.client.post(
+            reverse("campo_obrigatoriedade_criar", args=[self.campo.pk]),
+            {"setor_destino_nome": "Suprimentos QA"},
+        )
+
+        self.assertEqual(response.status_code, 403)
+
+    def test_excluir_campo_avisa_quantidade_de_regras_perdidas(self):
+        CampoObrigatoriedadeTransicao.objects.create(campo=self.campo, setor_destino_nome="Suprimentos QA")
+
+        response = self.client.post(reverse("campo_excluir", args=[self.campo.pk]))
+
+        self.assertRedirects(response, reverse("campos_list"))
+        self.assertFalse(Campo.objects.filter(pk=self.campo.pk).exists())
+        self.assertFalse(CampoObrigatoriedadeTransicao.objects.exists())
+
+
 class CampoCalculadoEStatusCondicionanteViewTests(TestCase):
     """PO-063/RN-039/ADR-024: cadastro do tipo Calculado e do Status
     condicionante pela tela "Campos" (Administracao), e protecao contra
@@ -2277,6 +2376,163 @@ class SetorEscopoViewTests(TestCase):
         self.assertTrue(escopo.aplica_ri)
 
 
+class AcessoViewTests(TestCase):
+    """PO-077/RN-058/RN-059/ADR-030: tela "Acesso" (Administracao) —
+    concede/revoga, por usuario selecionado, grupo/modulo do menu e Setor
+    individual (`AcessoSetor`) em um formulario so."""
+
+    def setUp(self):
+        self.admin = get_user_model().objects.create_user(
+            username="admin-acesso", password="senha-forte-123",
+        )
+        self.admin.groups.add(Group.objects.create(name="Administrador"))
+        self.sem_permissao = get_user_model().objects.create_user(
+            username="sem-permissao-acesso", password="senha-forte-123",
+        )
+        self.alvo = get_user_model().objects.create_user(
+            username="alvo-acesso", password="senha-forte-123",
+        )
+        processo = Processo.objects.create(nome="Processo Acesso")
+        self.setor = Setor.objects.create(processo=processo, nome="Implantacao")
+        for nome in ["LastMile", "Setor", "Parceiro", "Backoffice", "Gestao"]:
+            Group.objects.get_or_create(name=nome)
+
+    def test_usuario_sem_permissao_e_bloqueado(self):
+        self.client.force_login(self.sem_permissao)
+
+        response = self.client.get(reverse("acesso_list"))
+
+        self.assertEqual(response.status_code, 403)
+
+    def test_lista_sem_usuario_selecionado(self):
+        self.client.force_login(self.admin)
+
+        response = self.client.get(reverse("acesso_list"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Selecione um usuário")
+
+    def test_selecionar_usuario_mostra_estado_atual(self):
+        self.alvo.groups.add(Group.objects.get(name="LastMile"))
+        AcessoSetor.objects.create(usuario=self.alvo, setor_nome="Implantacao")
+        self.client.force_login(self.admin)
+
+        response = self.client.get(reverse("acesso_list"), {"usuario": self.alvo.pk})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Implantacao")
+
+    def test_post_concede_grupo_e_setor_inclui_automaticamente_no_grupo_setor(self):
+        """RN-059: conceder um Setor individual a quem ainda nao pertence
+        ao grupo Setor o inclui automaticamente, mesmo sem marcar o
+        checkbox do modulo Setor."""
+        self.client.force_login(self.admin)
+
+        response = self.client.post(reverse("acesso_list"), {
+            "usuario_id": self.alvo.pk,
+            "grupos": ["LastMile"],
+            "setores": ["Implantacao"],
+        })
+
+        self.assertRedirects(response, f"{reverse('acesso_list')}?usuario={self.alvo.pk}")
+        self.alvo.refresh_from_db()
+        self.assertEqual(
+            set(self.alvo.groups.values_list("name", flat=True)), {"LastMile", "Setor"},
+        )
+        self.assertTrue(
+            AcessoSetor.objects.filter(usuario=self.alvo, setor_nome="Implantacao").exists(),
+        )
+
+    def test_revogar_setor_individual_nao_remove_do_grupo_setor(self):
+        """RN-059: assimetria deliberada — revogar o nome do Setor nao
+        remove o usuario do grupo Setor (acao independente)."""
+        self.alvo.groups.add(Group.objects.get(name="Setor"))
+        AcessoSetor.objects.create(usuario=self.alvo, setor_nome="Implantacao")
+        self.client.force_login(self.admin)
+
+        self.client.post(reverse("acesso_list"), {
+            "usuario_id": self.alvo.pk,
+            "grupos": ["Setor"],
+            "setores": [],
+        })
+
+        self.alvo.refresh_from_db()
+        self.assertTrue(self.alvo.groups.filter(name="Setor").exists())
+        self.assertFalse(AcessoSetor.objects.filter(usuario=self.alvo).exists())
+
+    def test_revogar_grupo_setor_mantem_acessosetor_dormente(self):
+        """RN-059: revogar o grupo Setor nao apaga os registros de
+        `AcessoSetor` do usuario."""
+        self.alvo.groups.add(Group.objects.get(name="Setor"))
+        AcessoSetor.objects.create(usuario=self.alvo, setor_nome="Implantacao")
+        self.client.force_login(self.admin)
+
+        self.client.post(reverse("acesso_list"), {
+            "usuario_id": self.alvo.pk,
+            "grupos": [],
+            "setores": ["Implantacao"],
+        })
+
+        self.alvo.refresh_from_db()
+        self.assertFalse(self.alvo.groups.filter(name="Setor").exists())
+        self.assertTrue(
+            AcessoSetor.objects.filter(usuario=self.alvo, setor_nome="Implantacao").exists(),
+        )
+
+    def test_revogar_administrador_sem_confirmar_bloqueia_com_erro(self):
+        """RN-058: revogar Administrador exige confirmacao explicita,
+        inclusive do proprio usuario logado."""
+        self.client.force_login(self.admin)
+
+        response = self.client.post(reverse("acesso_list"), {
+            "usuario_id": self.admin.pk,
+            "grupos": [],
+            "setores": [],
+        })
+
+        self.assertEqual(response.status_code, 200)
+        self.admin.refresh_from_db()
+        self.assertTrue(self.admin.groups.filter(name="Administrador").exists())
+        self.assertContains(response, "Confirme a revoga")
+
+    def test_revogar_administrador_confirmando_efetiva(self):
+        self.client.force_login(self.admin)
+
+        response = self.client.post(reverse("acesso_list"), {
+            "usuario_id": self.admin.pk,
+            "grupos": [],
+            "setores": [],
+            "confirmar_revogar_administrador": "on",
+        }, follow=False)
+
+        self.assertRedirects(
+            response, f"{reverse('acesso_list')}?usuario={self.admin.pk}",
+            fetch_redirect_response=False,
+        )
+        self.admin.refresh_from_db()
+        self.assertFalse(self.admin.groups.filter(name="Administrador").exists())
+
+    def test_post_usuario_id_invalido_nao_derruba_a_pagina(self):
+        """Nao deve estourar 500 com um `usuario_id` que nao existe mais."""
+        self.client.force_login(self.admin)
+
+        response = self.client.post(reverse("acesso_list"), {
+            "usuario_id": 999999,
+            "grupos": ["LastMile"],
+            "setores": [],
+        })
+
+        self.assertEqual(response.status_code, 404)
+
+    def test_get_usuario_nao_numerico_nao_derruba_a_pagina(self):
+        """Guarda contra `?usuario=abc`: nao pode gerar 500."""
+        self.client.force_login(self.admin)
+
+        response = self.client.get(reverse("acesso_list"), {"usuario": "abc"})
+
+        self.assertEqual(response.status_code, 200)
+
+
 @override_settings(
     EMAIL_HOST="smtp.teste.local",
     EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend",
@@ -2460,6 +2716,91 @@ class EscolaEnviarEmailTests(TestCase):
 
         response_mc = self.client.get(reverse("escola_rede_historico", args=[self.escola.pk, "mc"]))
         self.assertContains(response_mc, "E-mail enviado pela tela de Mapa Calor (MC)")
+
+    @patch("django.core.mail.EmailMessage.send", side_effect=Exception(
+        "(554, b'5.2.252 SendAsDenied; sistemas@howbe.com.br not allowed to send as admin@speed.com.br')"
+    ))
+    def test_falha_tecnica_no_envio_mostra_mensagem_generica(self, _send_mock):
+        """RN-064: falha tecnica do backend SMTP mostra mensagem generica
+        na tela e no historico, sem o texto bruto da excecao — o detalhe
+        tecnico continua so no log do servidor (logger.exception)."""
+        re = RedeExterna.objects.create(escola=self.escola, processo=self.processo_re)
+
+        response = self.client.post(reverse("escola_rede_enviar_email", args=[self.escola.pk, "re"]), {
+            "to": "destinatario@exemplo.com",
+            "subject": "Assunto",
+            "body": "Mensagem",
+        })
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Erro tecnico no envio do e-mail. Entre em contato com o administrador do sistema.")
+        self.assertNotContains(response, "SendAsDenied")
+        self.assertEqual(len(mail.outbox), 0)
+
+        historico = RegistroHistorico.objects.get(content_type=self._content_type(RedeExterna), object_id=re.id)
+        self.assertIn("Erro tecnico no envio do e-mail. Entre em contato com o administrador do sistema.", historico.acao)
+        self.assertNotIn("SendAsDenied", historico.acao)
+
+
+class MinhasCotacoesEnviarEmailTests(TestCase):
+    """PO-032/RN-064: envio de e-mail pela tela "Minhas Cotacoes"."""
+
+    def setUp(self):
+        self.user = get_user_model().objects.create_user(
+            username="dev-tester-email-cotacao", password="senha-segura", is_superuser=True,
+        )
+        self.client.force_login(self.user)
+
+        partner = Partner.objects.create(
+            nome_fantasia="Parceiro Teste E-mail", razao_social="Parceiro Teste E-mail LTDA",
+            cnpj_cpf="22222222000122", status="ativo",
+        )
+        # codigo_proposta explicito evita o fallback de `codigo_exibicao`
+        # (data_emissao/data_ativacao ausentes -> timezone.localdate()),
+        # que quebra neste ambiente (USE_TZ=False) — bug pre-existente e
+        # fora do escopo desta PO, ver nota na entrega.
+        self.proposal = Proposal.objects.create(partner=partner, status="analise", codigo_proposta="COT-TESTE-064")
+
+    def _content_type(self):
+        return ContentType.objects.get_for_model(Proposal)
+
+    def _post(self, **extra):
+        dados = {
+            "proposal_pk": str(self.proposal.pk),
+            "to": "destinatario@exemplo.com",
+            "subject": "Assunto da cotacao",
+            "body": "Mensagem",
+        }
+        dados.update(extra)
+        return self.client.post(reverse("minhas_cotacoes_enviar_email"), dados)
+
+    def test_erro_de_validacao_continua_com_mensagem_especifica(self):
+        """RN-064: erro de validacao de entrada (acionavel pelo usuario)
+        nao entra na mensagem generica."""
+        response = self._post(to="")
+
+        payload = response.json()
+        self.assertFalse(payload["ok"])
+        self.assertIn("Informe ao menos um destinatario", payload["message"])
+
+    @patch("django.core.mail.EmailMessage.send", side_effect=Exception(
+        "(554, b'5.2.252 SendAsDenied; sistemas@howbe.com.br not allowed to send as admin@speed.com.br')"
+    ))
+    def test_falha_tecnica_no_envio_mostra_mensagem_generica(self, _send_mock):
+        response = self._post()
+
+        payload = response.json()
+        self.assertEqual(response.status_code, 500)
+        self.assertFalse(payload["ok"])
+        self.assertEqual(
+            payload["message"],
+            "Erro tecnico no envio do e-mail. Entre em contato com o administrador do sistema.",
+        )
+        self.assertEqual(len(mail.outbox), 0)
+
+        historico = RegistroHistorico.objects.get(content_type=self._content_type(), object_id=self.proposal.id)
+        self.assertIn("Erro tecnico no envio do e-mail. Entre em contato com o administrador do sistema.", historico.acao)
+        self.assertNotIn("SendAsDenied", historico.acao)
 
 
 class ImportacaoExportacaoViewTests(TestCase):

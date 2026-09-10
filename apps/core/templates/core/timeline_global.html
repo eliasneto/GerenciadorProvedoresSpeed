@@ -107,10 +107,10 @@
 
                         <div class="flex items-center gap-2 mt-4 pt-4 border-t border-gray-200">
                             <div class="w-6 h-6 bg-gray-200 rounded-full flex items-center justify-center text-[10px] font-black text-gray-500">
-                                {{ item.usuario.email|default:"S"|make_list|first|upper }}
+                                {% if item.usuario %}{{ item.usuario.get_full_name|default:item.usuario.username|make_list|first|upper }}{% else %}S{% endif %}
                             </div>
                             <p class="text-[10px] font-bold text-gray-500 uppercase">
-                                Feito por: <span class="text-gray-900">{{ item.usuario.email|default:"Sistema Speed" }}</span>
+                                Feito por: <span class="text-gray-900">{% if item.usuario %}{{ item.usuario.get_full_name|default:item.usuario.username }}{% else %}Sistema Speed{% endif %}</span>
                             </p>
                         </div>
                     </div>

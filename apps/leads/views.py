@@ -327,27 +327,103 @@ def _render_enderecos_lastmile(request, setor_atual=None):
     q = (request.GET.get('q') or '').strip()
     cidade = (request.GET.get('cidade') or '').strip()
     estado = (request.GET.get('estado') or '').strip().upper()
-    sort = (request.GET.get('sort') or 'nome').strip()
 
-    escolas = services.filtrar_escolas_lastmile(q=q, cidade=cidade, estado=estado, sort=sort, setor_nome=setor_atual)
+    # RN-066: filtros exclusivos da Tela de Setor (tipo de subatividade,
+    # Responsavel e Status) — lidos sempre, mas so tem efeito quando
+    # `setor_atual` esta presente (aplicado dentro do service). O grid
+    # global nunca os recebe do template (RN-066), e o service tambem os
+    # ignora sem `setor_nome` como segunda camada de protecao.
+    tipos_subatividade = [
+        tipo for tipo in request.GET.getlist('tipo') if tipo in ('re', 'ri', 'mc')
+    ]
+    responsavel_filtro_raw = (request.GET.get('responsavel') or '').strip()
+    responsavel_filtro_id = int(responsavel_filtro_raw) if responsavel_filtro_raw.isdigit() else None
+    status_filtro_nome = (request.GET.get('status') or '').strip()
+
+    # RN-067: filtro de cor do indicador de conectividade (RN-062) —
+    # exclusivo do grid global. Lido sempre (mesmo padrao do RN-066
+    # acima), mas so tem efeito quando `setor_atual` esta ausente
+    # (segunda camada de protecao aplicada dentro do service).
+    cores_conectividade = [
+        cor for cor in request.GET.getlist('cor') if cor in ('verde', 'amarelo', 'vermelho')
+    ]
+
+    escolas = services.filtrar_escolas_lastmile(
+        q=q, cidade=cidade, estado=estado, setor_nome=setor_atual,
+        tipos_subatividade=tipos_subatividade, responsavel_id=responsavel_filtro_id, status_nome=status_filtro_nome,
+        cores_conectividade=cores_conectividade,
+    )
+
+    # RN-065: card de RE/RI so existe na tela de Setor (setor_atual
+    # presente) — evita a consulta extra no grid global.
+    total_rede_externa = total_rede_interna = 0
+    if setor_atual:
+        total_rede_externa, total_rede_interna = services.contar_rede_externa_interna_por_setor(escolas, setor_atual)
 
     paginator = Paginator(escolas, 10)
     page_number = request.GET.get('page')
     page_obj = paginator.get_page(page_number)
 
+    processo_re_padrao = Processo.objects.filter(nome=RedeExterna.NOME_PROCESSO_PADRAO).prefetch_related('setores').first()
+    processo_ri_padrao = Processo.objects.filter(nome=RedeInterna.NOME_PROCESSO_PADRAO).prefetch_related('setores').first()
+    processo_mc_padrao = Processo.objects.filter(nome=MapaCalor.NOME_PROCESSO_PADRAO).prefetch_related('setores').first()
+
+    # RN-060: Responsavel filtrado por AcessoSetor do Setor de cada linha.
+    # Pre-calcula a lista elegivel por Setor do catalogo (uma unica vez por
+    # pagina, nao por linha/escola) para nao gerar N+1 (CLAUDE.md secao 7).
+    todos_ativos = list(get_user_model().objects.filter(is_active=True).order_by('first_name', 'last_name', 'username'))
+    setores_catalogo = [
+        setor
+        for processo in (processo_re_padrao, processo_ri_padrao, processo_mc_padrao)
+        if processo
+        for setor in processo.setores.all()
+    ]
+    responsavel_opcoes_por_setor = services.responsavel_opcoes_por_setor(setores_catalogo)
+
+    def _opcoes_responsavel(rede):
+        if rede and rede.setor_id:
+            return responsavel_opcoes_por_setor.get(rede.setor_id, todos_ativos)
+        return todos_ativos
+
+    for escola in page_obj:
+        # RedeExterna/RedeInterna/MapaCalor sao OneToOne reverso — sem
+        # registro para a escola, o acesso direto (fora do template)
+        # levanta RelatedObjectDoesNotExist; getattr com default trata
+        # esse caso como "sem rede ainda", igual ao template.
+        escola.responsavel_opcoes_re = _opcoes_responsavel(getattr(escola, 'rede_externa', None))
+        escola.responsavel_opcoes_ri = _opcoes_responsavel(getattr(escola, 'rede_interna', None))
+        escola.responsavel_opcoes_mc = _opcoes_responsavel(getattr(escola, 'mapa_calor', None))
+
+    # RN-066: opcoes dos filtros exclusivos da Tela de Setor — so calculadas
+    # com `setor_atual` presente (evita consulta extra no grid global).
+    responsavel_opcoes_filtro = []
+    status_opcoes_filtro = []
+    if setor_atual:
+        setores_do_nome_atual = [setor for setor in setores_catalogo if setor.nome == setor_atual]
+        if setores_do_nome_atual:
+            responsavel_opcoes_filtro = responsavel_opcoes_por_setor.get(setores_do_nome_atual[0].id, [])
+        status_opcoes_filtro = services.status_opcoes_por_nome_setor(setor_atual)
+
     return render(request, 'leads/enderecos_lastmile.html', {
         'page_obj': page_obj,
         'total_enderecos': paginator.count,
-        'processo_re_padrao': Processo.objects.filter(nome=RedeExterna.NOME_PROCESSO_PADRAO).prefetch_related('setores').first(),
-        'processo_ri_padrao': Processo.objects.filter(nome=RedeInterna.NOME_PROCESSO_PADRAO).prefetch_related('setores').first(),
-        'processo_mc_padrao': Processo.objects.filter(nome=MapaCalor.NOME_PROCESSO_PADRAO).prefetch_related('setores').first(),
+        'total_rede_externa': total_rede_externa,
+        'total_rede_interna': total_rede_interna,
+        'processo_re_padrao': processo_re_padrao,
+        'processo_ri_padrao': processo_ri_padrao,
+        'processo_mc_padrao': processo_mc_padrao,
         'setor_atual': setor_atual,
         'editavel_parceiro': setor_atual == SETOR_PARCEIRO_EDITAVEL,
-        'responsavel_opcoes': get_user_model().objects.filter(is_active=True).order_by('first_name', 'last_name', 'username'),
+        'responsavel_opcoes': todos_ativos,
         'q': q,
         'cidade': cidade,
         'estado': estado,
-        'sort': sort,
+        'tipos_subatividade_selecionados': tipos_subatividade,
+        'responsavel_opcoes_filtro': responsavel_opcoes_filtro,
+        'responsavel_filtro_id': responsavel_filtro_id,
+        'status_opcoes_filtro': status_opcoes_filtro,
+        'status_filtro_nome': status_filtro_nome,
+        'cores_conectividade_selecionadas': cores_conectividade,
     })
 
 
@@ -676,7 +752,15 @@ def escola_rede_editar(request, escola_pk, tipo):
     (`enviado_a_outro_setor` abaixo). Isso vale tambem para a primeira
     atribuicao de Setor pelo grid global (subatividade que ainda nao tinha
     nenhum): quem atribui por ali nao esta necessariamente dentro do Setor
-    de destino, entao nao ha como exigir que ja saiba o Responsavel."""
+    de destino, entao nao ha como exigir que ja saiba o Responsavel.
+
+    RN-061/ADR-031: enviar a subatividade a outro Setor (`enviado_a_outro_setor`)
+    tambem verifica se ha Campo do Setor de origem com regra de
+    obrigatoriedade cadastrada (tela "Campos") para o Setor de destino
+    escolhido; havendo algum `CampoValor` ainda vazio, a troca inteira e
+    bloqueada (nada e salvo), com erro indicando o(s) Campo(s) faltante(s).
+    So se aplica numa troca real (Setor de origem ja definido) — nunca na
+    primeira atribuicao de Setor."""
     modelo = _MODELO_REDE_POR_TIPO.get(tipo)
     if modelo is None:
         raise Http404("Tipo de rede invalido.")
@@ -713,6 +797,14 @@ def escola_rede_editar(request, escola_pk, tipo):
             rede.setor = Setor.objects.filter(pk=setor_id).first() if setor_id else None
 
             enviado_a_outro_setor = bool(setor_atual) and bool(rede.setor) and rede.setor.nome != setor_atual
+            # RN-061/ADR-031: enviar a outro Setor pode exigir Campos do
+            # Setor de origem preenchidos (regra cadastrada na tela
+            # "Campos") — calculado aqui, antes de aplicar qualquer mudanca,
+            # para bloquear a troca inteira quando houver pendencia.
+            campos_obrigatorios_pendentes = (
+                services.campos_obrigatorios_pendentes(rede, setor_atual, rede.setor.nome)
+                if enviado_a_outro_setor else []
+            )
             # RN-056: Responsavel so e obrigatorio dentro da Tela do proprio
             # Setor, permanecendo nesse mesmo Setor — nunca no grid global
             # (setor_atual vazio), nem ao enviar a outro Setor.
@@ -743,26 +835,45 @@ def escola_rede_editar(request, escola_pk, tipo):
                 parceiro_id = request.POST.get("parceiro") or None
                 rede.parceiro = Partner.objects.filter(pk=parceiro_id).first() if parceiro_id else None
 
-            try:
-                rede.full_clean()
-            except ValidationError as exc:
-                erro = " ".join(sum(exc.message_dict.values(), []))
+            # RN-060: Responsavel so pode ser um usuario com AcessoSetor
+            # concedido para o Setor que a subatividade tem agora (ou
+            # superusuario) — validado no servidor, nao so no HTML do
+            # <select>, para nao aceitar um responsavel_id fora da lista
+            # permitida mesmo que o formulario tenha sido manipulado.
+            responsavel_valido = (
+                not rede.responsavel_id
+                or services.usuarios_responsavel_opcoes(rede.setor).filter(pk=rede.responsavel_id).exists()
+            )
+
+            if not responsavel_valido:
+                erro = "Este usuário não tem acesso a este Setor para ser Responsável."
+            elif campos_obrigatorios_pendentes:
+                erro = (
+                    f"Preencha antes de enviar para o Setor '{rede.setor.nome}': "
+                    f"{', '.join(campos_obrigatorios_pendentes)} (RN-061)."
+                )
             else:
-                # RN-052/RN-056: Setor e Status continuam opcionais no banco,
-                # mas dentro da Tela do proprio Setor, permanecendo nele,
-                # Responsavel tambem precisa estar preenchido quando Setor e
-                # Status ja estao preenchidos. Fora dai — grid global (RN-035)
-                # ou envio a outro Setor, que zera Responsavel de proposito —
-                # a obrigatoriedade nao se aplica (ver acima).
-                if permanece_no_setor_atual and rede.setor_id and rede.status_id and not rede.responsavel_id:
-                    erro = "Selecione um Responsável para salvar — Setor, Status e Responsável são obrigatórios juntos."
+                try:
+                    rede.full_clean()
+                except ValidationError as exc:
+                    erro = " ".join(sum(exc.message_dict.values(), []))
                 else:
-                    rede.save()
-                    services.registrar_historico_alteracao_rede(
-                        rede, request.user, setor_anterior_nome, status_anterior_nome, parceiro_anterior_nome,
-                        responsavel_anterior_nome=responsavel_anterior_nome, setor_atual=setor_atual,
-                    )
-                    sucesso = _MENSAGEM_ATUALIZACAO_POR_TIPO[tipo]
+                    # RN-052/RN-056: Setor e Status continuam opcionais no
+                    # banco, mas dentro da Tela do proprio Setor,
+                    # permanecendo nele, Responsavel tambem precisa estar
+                    # preenchido quando Setor e Status ja estao preenchidos.
+                    # Fora dai — grid global (RN-035) ou envio a outro Setor,
+                    # que zera Responsavel de proposito — a obrigatoriedade
+                    # nao se aplica (ver acima).
+                    if permanece_no_setor_atual and rede.setor_id and rede.status_id and not rede.responsavel_id:
+                        erro = "Selecione um Responsável para salvar — Setor, Status e Responsável são obrigatórios juntos."
+                    else:
+                        rede.save()
+                        services.registrar_historico_alteracao_rede(
+                            rede, request.user, setor_anterior_nome, status_anterior_nome, parceiro_anterior_nome,
+                            responsavel_anterior_nome=responsavel_anterior_nome, setor_atual=setor_atual,
+                        )
+                        sucesso = _MENSAGEM_ATUALIZACAO_POR_TIPO[tipo]
 
     if tipo == "re":
         referencia = escola.referencia_rede_externa
@@ -770,7 +881,16 @@ def escola_rede_editar(request, escola_pk, tipo):
         referencia = escola.referencia_rede_interna
     else:
         referencia = escola.referencia_mapa_calor
-    pertence_ao_setor_atual = (not setor_atual) or bool(rede and rede.setor_id and rede.setor.nome == setor_atual)
+    # PO: quando ha erro, nada foi salvo — o pertencimento ao Setor atual da
+    # tela precisa refletir o valor persistido antes da tentativa
+    # (setor_anterior_nome), nao o Setor que o usuario tentou atribuir em
+    # memoria (`rede.setor`, ja alterado pelo POST antes do bloqueio).
+    # Sem isso, uma troca de Setor bloqueada por erro (ex.: RN-061) fazia o
+    # front remover a linha da tela como se a subatividade tivesse saido do
+    # Setor, embora nada tenha sido salvo — so um refresh de pagina trazia
+    # os inputs de volta.
+    setor_nome_persistido = setor_anterior_nome if erro else (rede.setor.nome if rede and rede.setor_id else None)
+    pertence_ao_setor_atual = (not setor_atual) or (setor_nome_persistido == setor_atual)
 
     return render(request, "leads/partials/escola_rede_row.html", {
         "escola": escola,
@@ -780,9 +900,17 @@ def escola_rede_editar(request, escola_pk, tipo):
         "referencia": referencia,
         "erro": erro,
         "sucesso": sucesso,
+        # PO: faltava aqui — sem isso, o template (`{% if setor_atual or not
+        # rede.setor_id %}`) sempre caia no ramo somente-leitura quando a
+        # subatividade ja tinha Setor, fazendo os selects sumirem apos
+        # qualquer Salvar (erro ou sucesso) dentro da Tela do Setor, so
+        # voltando com um refresh de pagina inteira.
+        "setor_atual": setor_atual,
         "pertence_ao_setor_atual": pertence_ao_setor_atual,
         "editavel_parceiro": editavel_parceiro,
-        "responsavel_opcoes": User.objects.filter(is_active=True).order_by("first_name", "last_name", "username"),
+        # RN-060: opcoes de Responsavel do Setor atual da linha (ou de
+        # todos os usuarios ativos, sem Setor definido).
+        "responsavel_opcoes": services.usuarios_responsavel_opcoes(rede.setor if rede and rede.setor_id else None),
     })
 
 
@@ -1092,6 +1220,21 @@ def setor_status_opcoes(request):
     status_opcoes = SetorStatus.objects.filter(setor_id=setor_id).order_by('nome') if setor_id else SetorStatus.objects.none()
 
     return render(request, "leads/partials/status_opcoes.html", {"status_opcoes": status_opcoes})
+
+
+@user_passes_test(grupo_LastMile_required)
+@login_required
+def setor_responsavel_opcoes(request):
+    """RN-060: usado pelo cascata Setor->Responsavel do grid de Enderecos
+    Lastmile (`carregarStatusRede`, `enderecos_lastmile.html`) para
+    atualizar as opcoes de Responsavel quando o Setor selecionado muda,
+    sem submeter o formulario."""
+    setor_id = request.GET.get("setor") or None
+    setor = Setor.objects.filter(pk=setor_id).first() if setor_id else None
+
+    return render(request, "leads/partials/responsavel_opcoes.html", {
+        "responsavel_opcoes": services.usuarios_responsavel_opcoes(setor),
+    })
 
 
 @user_passes_test(grupo_Setor_required)
