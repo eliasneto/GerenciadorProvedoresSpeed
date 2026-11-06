@@ -221,12 +221,35 @@ def localizar_anexo_no_zip(zip_arquivos, nome_anexo):
         return None, None, "Nenhum arquivo ZIP de anexos foi importado nesta execucao."
 
     nome_normalizado = _normalizar_nome_comparacao(nome_anexo)
-    for nome_no_zip in zip_arquivos.namelist():
-        if nome_no_zip.endswith("/"):
-            continue
-        nome_base = nome_no_zip.rsplit("/", 1)[-1]
-        if _normalizar_nome_comparacao(nome_base) != nome_normalizado:
-            continue
+    arquivos_no_zip = [
+        (nome_no_zip, nome_no_zip.rsplit("/", 1)[-1])
+        for nome_no_zip in zip_arquivos.namelist()
+        if not nome_no_zip.endswith("/")
+    ]
+    encontrados = [
+        (nome_no_zip, nome_base)
+        for nome_no_zip, nome_base in arquivos_no_zip
+        if _normalizar_nome_comparacao(nome_base) == nome_normalizado
+    ]
+    if not encontrados and not _extensao_arquivo(nome_anexo):
+        # Nome_Anexo preenchido sem extensao (ex.: "Proposta" para "Proposta.pdf"):
+        # so aceita quando exatamente um arquivo do ZIP tem esse nome.
+        encontrados = [
+            (nome_no_zip, nome_base)
+            for nome_no_zip, nome_base in arquivos_no_zip
+            if _extensao_arquivo(nome_base)
+            and _normalizar_nome_comparacao(nome_base.rsplit(".", 1)[0]) == nome_normalizado
+        ]
+        if len(encontrados) > 1:
+            nomes = ", ".join(nome_base for _, nome_base in encontrados)
+            return (
+                None,
+                None,
+                f"Mais de um arquivo no ZIP corresponde a '{nome_anexo}' ({nomes}). "
+                "Informe o nome com a extensao em Nome_Anexo.",
+            )
+
+    for nome_no_zip, nome_base in encontrados:
         if _extensao_arquivo(nome_base) not in CONTENT_TYPES_ANEXO_PERMITIDOS:
             return (
                 None,

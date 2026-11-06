@@ -1469,6 +1469,25 @@ class LocalizarAnexoNoZipTests(SimpleTestCase):
         self.assertEqual(nome_real, "dados.csv")
         self.assertEqual(conteudo, b"col1,col2\n1,2")
 
+    def test_localiza_arquivo_quando_nome_anexo_vem_sem_extensao(self):
+        zip_arquivos = _zip_com_pdf("PROPOSTA COMERCIAL GIGA+ - HOWBE - BOMBEIROS.pdf")
+        conteudo, nome_real, erro = localizar_anexo_no_zip(
+            zip_arquivos, "PROPOSTA COMERCIAL GIGA+ - HOWBE - BOMBEIROS"
+        )
+        self.assertIsNone(erro)
+        self.assertEqual(nome_real, "PROPOSTA COMERCIAL GIGA+ - HOWBE - BOMBEIROS.pdf")
+        self.assertEqual(conteudo, b"conteudo do pdf")
+
+    def test_erro_quando_nome_sem_extensao_e_ambiguo(self):
+        buffer = BytesIO()
+        with zipfile.ZipFile(buffer, "w") as zf:
+            zf.writestr("proposta.pdf", b"pdf")
+            zf.writestr("proposta.xlsx", b"xlsx")
+        buffer.seek(0)
+        conteudo, nome_real, erro = localizar_anexo_no_zip(zipfile.ZipFile(buffer), "proposta")
+        self.assertIsNone(conteudo)
+        self.assertIn("Mais de um arquivo", erro)
+
     def test_erro_quando_nenhum_zip_foi_informado(self):
         conteudo, nome_real, erro = localizar_anexo_no_zip(None, "comunicado.pdf")
         self.assertIsNone(conteudo)
