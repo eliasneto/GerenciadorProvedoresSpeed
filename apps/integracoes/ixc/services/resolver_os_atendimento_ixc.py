@@ -25,14 +25,16 @@ STATUS_ATENDIMENTO_EM_PROGRESSO = "EP"
 
 # RN-008: alem de PDF, o anexo tambem aceita planilha (Excel/CSV) — solicitado
 # pelo usuario em 2026-08-28. Cada extensao mapeia para o content-type enviado
-# ao IXC junto com o arquivo.
+# ao IXC junto com o arquivo. Word (.doc/.docx) liberado em 2026-11-06.
 CONTENT_TYPES_ANEXO_PERMITIDOS = {
     ".pdf": "application/pdf",
     ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     ".xls": "application/vnd.ms-excel",
     ".csv": "text/csv",
+    ".doc": "application/msword",
+    ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
 }
-DESCRICAO_FORMATOS_ANEXO_PERMITIDOS = "PDF, Excel (.xlsx/.xls) ou CSV"
+DESCRICAO_FORMATOS_ANEXO_PERMITIDOS = "PDF, Word (.docx/.doc), Excel (.xlsx/.xls) ou CSV"
 
 COLUNAS_OBRIGATORIAS_RESOLUCAO_OS_ATENDIMENTO_IXC = [
     "Atendimento_ID",
@@ -95,7 +97,7 @@ INSTRUCOES_RESOLUCAO_OS_ATENDIMENTO_IXC = [
         "Descricao": "Nome do arquivo (dentro do ZIP importado) a anexar neste atendimento.",
         "Tipo de dado": "Texto",
         "Obrigatorio?": "Somente quando Tem_Anexo = SIM",
-        "Regras / Exemplo": "Deve corresponder a um arquivo PDF, Excel (.xlsx/.xls) ou CSV dentro do ZIP. Ex.: contrato_cliente123.pdf",
+        "Regras / Exemplo": "Deve corresponder a um arquivo PDF, Word (.docx/.doc), Excel (.xlsx/.xls) ou CSV dentro do ZIP. Ex.: contrato_cliente123.pdf",
     },
     {
         "Campo": "Mais_de_um_anexo",
@@ -109,14 +111,14 @@ INSTRUCOES_RESOLUCAO_OS_ATENDIMENTO_IXC = [
         "Descricao": "Nome do segundo arquivo (dentro do ZIP importado) a anexar neste atendimento.",
         "Tipo de dado": "Texto",
         "Obrigatorio?": "Somente quando Mais_de_um_anexo = SIM e houver um segundo arquivo",
-        "Regras / Exemplo": "Deve corresponder a um arquivo PDF, Excel (.xlsx/.xls) ou CSV dentro do ZIP. Ignorado se Mais_de_um_anexo = NAO.",
+        "Regras / Exemplo": "Deve corresponder a um arquivo PDF, Word (.docx/.doc), Excel (.xlsx/.xls) ou CSV dentro do ZIP. Ignorado se Mais_de_um_anexo = NAO.",
     },
     {
         "Campo": "Nome_Anexo_3",
         "Descricao": "Nome do terceiro arquivo (dentro do ZIP importado) a anexar neste atendimento.",
         "Tipo de dado": "Texto",
         "Obrigatorio?": "Somente quando Mais_de_um_anexo = SIM e houver um terceiro arquivo",
-        "Regras / Exemplo": "Deve corresponder a um arquivo PDF, Excel (.xlsx/.xls) ou CSV dentro do ZIP. Ignorado se Mais_de_um_anexo = NAO.",
+        "Regras / Exemplo": "Deve corresponder a um arquivo PDF, Word (.docx/.doc), Excel (.xlsx/.xls) ou CSV dentro do ZIP. Ignorado se Mais_de_um_anexo = NAO.",
     },
     {
         "Campo": "Mensagem",

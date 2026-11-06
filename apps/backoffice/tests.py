@@ -1450,8 +1450,8 @@ class LocalizarAnexoNoZipTests(SimpleTestCase):
         self.assertIn("Nenhum arquivo chamado", erro)
 
     def test_erro_quando_arquivo_nao_e_formato_aceito(self):
-        zip_arquivos = _zip_com_pdf("comunicado.docx")
-        conteudo, nome_real, erro = localizar_anexo_no_zip(zip_arquivos, "comunicado.docx")
+        zip_arquivos = _zip_com_pdf("comunicado.zip")
+        conteudo, nome_real, erro = localizar_anexo_no_zip(zip_arquivos, "comunicado.zip")
         self.assertIsNone(conteudo)
         self.assertIn("nao e um formato aceito", erro)
 
@@ -1461,6 +1461,15 @@ class LocalizarAnexoNoZipTests(SimpleTestCase):
         self.assertIsNone(erro)
         self.assertEqual(nome_real, "proposta.xlsx")
         self.assertEqual(conteudo, b"conteudo do excel")
+
+    def test_aceita_documento_word_docx(self):
+        zip_arquivos = _zip_com_pdf("PROPOSTA COMERCIAL ELO - HOW BE - BOMBEIROS.docx", conteudo=b"conteudo do word")
+        conteudo, nome_real, erro = localizar_anexo_no_zip(
+            zip_arquivos, "PROPOSTA COMERCIAL ELO - HOW BE - BOMBEIROS"
+        )
+        self.assertIsNone(erro)
+        self.assertEqual(nome_real, "PROPOSTA COMERCIAL ELO - HOW BE - BOMBEIROS.docx")
+        self.assertEqual(conteudo, b"conteudo do word")
 
     def test_aceita_planilha_csv(self):
         zip_arquivos = _zip_com_pdf("dados.csv", conteudo=b"col1,col2\n1,2")
